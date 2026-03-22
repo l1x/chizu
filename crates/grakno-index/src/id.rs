@@ -22,6 +22,18 @@ pub fn bench_id(crate_name: &str, fn_name: &str) -> String {
     format!("bench::{crate_name}::{fn_name}")
 }
 
+pub fn feature_id(crate_name: &str, feature_name: &str) -> String {
+    format!("feature::{crate_name}::{feature_name}")
+}
+
+pub fn doc_id(crate_name: &str, path: &str) -> String {
+    format!("doc::{crate_name}::{path}")
+}
+
+pub fn task_id(task_name: &str) -> String {
+    format!("task::{task_name}")
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -46,5 +58,14 @@ mod tests {
             bench_id("grakno-core", "bench_bar"),
             "bench::grakno-core::bench_bar"
         );
+        assert_eq!(
+            feature_id("grakno-core", "default"),
+            "feature::grakno-core::default"
+        );
+        assert_eq!(
+            doc_id("grakno-core", "README.md"),
+            "doc::grakno-core::README.md"
+        );
+        assert_eq!(task_id("build"), "task::build");
     }
 }

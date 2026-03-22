@@ -241,11 +241,7 @@ impl Store {
         }
     }
 
-    pub fn vector_search(
-        &self,
-        _query: &[f32],
-        _k: usize,
-    ) -> Result<Vec<VectorSearchResult>> {
+    pub fn vector_search(&self, _query: &[f32], _k: usize) -> Result<Vec<VectorSearchResult>> {
         match self {
             #[cfg(feature = "usearch")]
             Self::Sqlite(s) => s.vector_search(_query, _k),

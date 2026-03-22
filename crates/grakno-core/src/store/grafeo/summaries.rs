@@ -143,11 +143,7 @@ mod tests {
     fn keywords_round_trip() {
         let store = GrafeoStore::open_in_memory().unwrap();
         let s = Summary {
-            keywords: vec![
-                "alpha".to_string(),
-                "beta".to_string(),
-                "gamma".to_string(),
-            ],
+            keywords: vec!["alpha".to_string(), "beta".to_string(), "gamma".to_string()],
             ..test_summary("comp::kw")
         };
         store.upsert_summary(&s).unwrap();

@@ -17,6 +17,13 @@ pub struct DiscoveredWorkspace {
 pub struct DiscoveredCrate {
     pub name: String,
     pub manifest_dir: PathBuf,
+    pub features: Vec<DiscoveredFeature>,
+}
+
+#[derive(Debug, Clone)]
+pub struct DiscoveredFeature {
+    pub name: String,
+    pub enables: Vec<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -61,9 +68,19 @@ pub fn discover(path: &Path) -> Result<DiscoveredWorkspace, IndexError> {
             .map(|p| p.as_std_path().to_path_buf())
             .unwrap_or_default();
 
+        let features = pkg
+            .features
+            .iter()
+            .map(|(name, enables)| DiscoveredFeature {
+                name: name.clone(),
+                enables: enables.clone(),
+            })
+            .collect();
+
         crates.push(DiscoveredCrate {
             name: pkg.name.clone(),
             manifest_dir,
+            features,
         });
 
         for dep in &pkg.dependencies {

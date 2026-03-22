@@ -76,10 +76,7 @@ impl GrafeoStore {
 
         let mut out = Vec::new();
         for row in &result.rows {
-            let vector = row[3]
-                .as_vector()
-                .map(|v| v.to_vec())
-                .unwrap_or_default();
+            let vector = row[3].as_vector().map(|v| v.to_vec()).unwrap_or_default();
             out.push(EmbeddingRecord {
                 entity_id: val_to_string(&row[0]),
                 model: val_to_string(&row[1]),
@@ -233,4 +230,3 @@ mod tests {
         assert!(results[0].distance < 0.01);
     }
 }
-

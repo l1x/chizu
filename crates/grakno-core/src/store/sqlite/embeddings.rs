@@ -15,7 +15,13 @@ impl SqliteStore {
             "INSERT OR REPLACE INTO embeddings
              (entity_id, model, dimensions, updated_at, usearch_key)
              VALUES (?1, ?2, ?3, ?4, ?5)",
-            rusqlite::params![emb.entity_id, emb.model, emb.dimensions, emb.updated_at, key],
+            rusqlite::params![
+                emb.entity_id,
+                emb.model,
+                emb.dimensions,
+                emb.updated_at,
+                key
+            ],
         )?;
 
         #[cfg(feature = "usearch")]

@@ -24,9 +24,23 @@ pub struct ExtractedSymbol {
     pub visibility: String,
     pub is_test: bool,
     pub is_bench: bool,
+    pub trait_name: Option<String>,
 }
 
-pub fn parse_rust_file(source: &str) -> Result<Vec<ExtractedSymbol>, IndexError> {
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ExtractedUse {
+    pub path: String,
+    pub visibility: String,
+    pub line: usize,
+}
+
+#[derive(Debug, Clone)]
+pub struct ParseResult {
+    pub symbols: Vec<ExtractedSymbol>,
+    pub uses: Vec<ExtractedUse>,
+}
+
+pub fn parse_rust_file(source: &str) -> Result<ParseResult, IndexError> {
     let mut parser = Parser::new();
     let language: tree_sitter::Language = tree_sitter_rust::LANGUAGE.into();
     parser
@@ -38,11 +52,17 @@ pub fn parse_rust_file(source: &str) -> Result<Vec<ExtractedSymbol>, IndexError>
         .ok_or_else(|| IndexError::Parse("tree-sitter failed to parse".to_string()))?;
 
     let mut symbols = Vec::new();
-    extract_toplevel(&tree.root_node(), source, &mut symbols);
-    Ok(symbols)
+    let mut uses = Vec::new();
+    extract_toplevel(&tree.root_node(), source, &mut symbols, &mut uses);
+    Ok(ParseResult { symbols, uses })
 }
 
-fn extract_toplevel(root: &Node, source: &str, symbols: &mut Vec<ExtractedSymbol>) {
+fn extract_toplevel(
+    root: &Node,
+    source: &str,
+    symbols: &mut Vec<ExtractedSymbol>,
+    uses: &mut Vec<ExtractedUse>,
+) {
     let mut cursor = root.walk();
     for child in root.children(&mut cursor) {
         match child.kind() {
@@ -89,6 +109,11 @@ fn extract_toplevel(root: &Node, source: &str, symbols: &mut Vec<ExtractedSymbol
             "impl_item" => {
                 extract_impl(&child, source, symbols);
             }
+            "use_declaration" => {
+                if let Some(u) = extract_use(&child, source) {
+                    uses.push(u);
+                }
+            }
             _ => {}
         }
     }
@@ -100,14 +125,21 @@ fn extract_impl(node: &Node, source: &str, symbols: &mut Vec<ExtractedSymbol>) {
         None => return,
     };
 
+    let trait_name = impl_trait_name(node, source);
+    let display_name = match &trait_name {
+        Some(t) => format!("impl {t} for {type_name}"),
+        None => format!("impl {type_name}"),
+    };
+
     symbols.push(ExtractedSymbol {
-        name: format!("impl {type_name}"),
+        name: display_name,
         kind: SymbolKind::Impl,
         line_start: node.start_position().row + 1,
         line_end: node.end_position().row + 1,
         visibility: "private".to_string(),
         is_test: false,
         is_bench: false,
+        trait_name,
     });
 
     if let Some(body) = node.child_by_field_name("body") {
@@ -146,6 +178,7 @@ fn extract_item(
         visibility,
         is_test,
         is_bench,
+        trait_name: None,
     })
 }
 
@@ -159,6 +192,37 @@ fn item_name(node: &Node, source: &str) -> Option<String> {
 fn impl_type_name(node: &Node, source: &str) -> Option<String> {
     let type_node = node.child_by_field_name("type")?;
     first_type_identifier(&type_node, source)
+}
+
+fn impl_trait_name(node: &Node, source: &str) -> Option<String> {
+    let trait_node = node.child_by_field_name("trait")?;
+    first_type_identifier(&trait_node, source)
+}
+
+fn extract_use(node: &Node, source: &str) -> Option<ExtractedUse> {
+    let visibility = get_visibility(node, source);
+    // Only track pub use (reexports)
+    if visibility == "private" {
+        return None;
+    }
+    // Get the use path — everything after visibility modifier and `use` keyword
+    let text = &source[node.byte_range()];
+    // Strip "pub use " or "pub(crate) use " prefix and trailing ";"
+    let path = text
+        .find("use ")
+        .map(|i| &text[i + 4..])
+        .unwrap_or("")
+        .trim_end_matches(';')
+        .trim()
+        .to_string();
+    if path.is_empty() {
+        return None;
+    }
+    Some(ExtractedUse {
+        path,
+        visibility,
+        line: node.start_position().row + 1,
+    })
 }
 
 fn first_type_identifier(node: &Node, source: &str) -> Option<String> {
@@ -228,7 +292,8 @@ enum Color {
     Blue,
 }
 "#;
-        let symbols = parse_rust_file(src).unwrap();
+        let result = parse_rust_file(src).unwrap();
+        let symbols = &result.symbols;
         assert_eq!(symbols.len(), 4);
 
         assert_eq!(symbols[0].name, "hello");
@@ -261,14 +326,16 @@ impl Greet for MyStruct {
     }
 }
 "#;
-        let symbols = parse_rust_file(src).unwrap();
+        let result = parse_rust_file(src).unwrap();
+        let symbols = &result.symbols;
         assert_eq!(symbols.len(), 3);
 
         assert_eq!(symbols[0].name, "Greet");
         assert_eq!(symbols[0].kind, SymbolKind::Trait);
 
-        assert_eq!(symbols[1].name, "impl MyStruct");
+        assert_eq!(symbols[1].name, "impl Greet for MyStruct");
         assert_eq!(symbols[1].kind, SymbolKind::Impl);
+        assert_eq!(symbols[1].trait_name, Some("Greet".to_string()));
 
         assert_eq!(symbols[2].name, "MyStruct::greet");
         assert_eq!(symbols[2].kind, SymbolKind::Function);
@@ -287,7 +354,8 @@ fn not_a_test() {}
 
 fn regular() {}
 "#;
-        let symbols = parse_rust_file(src).unwrap();
+        let result = parse_rust_file(src).unwrap();
+        let symbols = &result.symbols;
         assert_eq!(symbols.len(), 3);
 
         assert_eq!(symbols[0].name, "my_test");
@@ -313,7 +381,8 @@ macro_rules! my_macro {
     () => {};
 }
 "#;
-        let symbols = parse_rust_file(src).unwrap();
+        let result = parse_rust_file(src).unwrap();
+        let symbols = &result.symbols;
         assert_eq!(symbols.len(), 4);
 
         assert_eq!(symbols[0].name, "MAX");
@@ -331,16 +400,53 @@ macro_rules! my_macro {
 
     #[test]
     fn parse_empty_file() {
-        let symbols = parse_rust_file("").unwrap();
-        assert!(symbols.is_empty());
+        let result = parse_rust_file("").unwrap();
+        assert!(result.symbols.is_empty());
+        assert!(result.uses.is_empty());
     }
 
     #[test]
     fn parse_line_numbers() {
         let src = "pub fn foo() {}\n\npub fn bar() {}\n";
-        let symbols = parse_rust_file(src).unwrap();
+        let result = parse_rust_file(src).unwrap();
+        let symbols = &result.symbols;
         assert_eq!(symbols.len(), 2);
         assert_eq!(symbols[0].line_start, 1);
         assert_eq!(symbols[1].line_start, 3);
+    }
+
+    #[test]
+    fn parse_reexports() {
+        let src = r#"
+pub use crate::model::Entity;
+pub use crate::store::Store;
+use std::collections::HashMap;
+pub(crate) use internal::Helper;
+"#;
+        let result = parse_rust_file(src).unwrap();
+        // Only pub use items are captured (not private use)
+        assert_eq!(result.uses.len(), 3);
+
+        assert_eq!(result.uses[0].path, "crate::model::Entity");
+        assert_eq!(result.uses[0].visibility, "pub");
+
+        assert_eq!(result.uses[1].path, "crate::store::Store");
+        assert_eq!(result.uses[1].visibility, "pub");
+
+        assert_eq!(result.uses[2].path, "internal::Helper");
+        assert_eq!(result.uses[2].visibility, "pub(crate)");
+    }
+
+    #[test]
+    fn parse_impl_without_trait() {
+        let src = r#"
+impl MyStruct {
+    pub fn new() -> Self { Self {} }
+}
+"#;
+        let result = parse_rust_file(src).unwrap();
+        let symbols = &result.symbols;
+        assert_eq!(symbols[0].name, "impl MyStruct");
+        assert_eq!(symbols[0].trait_name, None);
     }
 }
