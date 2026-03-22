@@ -1,0 +1,10 @@
+[package]
+name = "grakno"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+argh = "0.1"
+grakno-core = { path = "../grakno-core" }
+grakno-index = { path = "../grakno-index" }
+grakno-summarize = { path = "../grakno-summarize" }

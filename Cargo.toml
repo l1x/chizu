@@ -1,0 +1,11 @@
+[workspace]
+resolver = "2"
+members = ["crates/grakno-core", "crates/grakno-index", "crates/grakno-summarize", "crates/grakno"]
+
+[workspace.dependencies]
+rusqlite = { version = "0.39", features = ["bundled"] }
+thiserror = "2.0"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+blake3 = "1"
+reqwest = { version = "0.12", features = ["blocking", "json", "rustls-tls"], default-features = false }

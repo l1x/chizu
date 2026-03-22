@@ -1,0 +1,12 @@
+[package]
+name = "grakno-summarize"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+grakno-core = { path = "../grakno-core" }
+thiserror = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+blake3 = { workspace = true }
+reqwest = { workspace = true }

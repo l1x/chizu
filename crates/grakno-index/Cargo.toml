@@ -1,0 +1,12 @@
+[package]
+name = "grakno-index"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+grakno-core = { path = "../grakno-core" }
+thiserror = { workspace = true }
+blake3 = { workspace = true }
+tree-sitter = "0.24"
+tree-sitter-rust = "0.23"
+cargo_metadata = "0.19"
