@@ -6,7 +6,7 @@ pub mod summary;
 pub mod task_route;
 
 pub use edge::{Edge, EdgeKind};
-pub use embedding::EmbeddingRecord;
+pub use embedding::{EmbeddingRecord, VectorSearchResult};
 pub use entity::{Entity, EntityKind};
 pub use file::FileRecord;
 pub use summary::Summary;

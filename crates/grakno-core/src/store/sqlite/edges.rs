@@ -1,8 +1,8 @@
+use super::SqliteStore;
 use crate::error::Result;
 use crate::model::{Edge, EdgeKind};
-use crate::store::Store;
 
-impl Store {
+impl SqliteStore {
     pub fn insert_edge(&self, edge: &Edge) -> Result<()> {
         self.conn.execute(
             "INSERT OR REPLACE INTO edges (src_id, rel, dst_id, provenance_path, provenance_line)
@@ -81,6 +81,7 @@ impl Store {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::model::EdgeKind;
 
     fn test_edge(src: &str, dst: &str) -> Edge {
         Edge {
@@ -94,7 +95,7 @@ mod tests {
 
     #[test]
     fn insert_and_query_edges() {
-        let store = Store::open_in_memory().unwrap();
+        let store = SqliteStore::open_in_memory().unwrap();
         store.insert_edge(&test_edge("a", "b")).unwrap();
         store.insert_edge(&test_edge("a", "c")).unwrap();
         store
@@ -114,7 +115,7 @@ mod tests {
 
     #[test]
     fn delete_edge() {
-        let store = Store::open_in_memory().unwrap();
+        let store = SqliteStore::open_in_memory().unwrap();
         store.insert_edge(&test_edge("x", "y")).unwrap();
         assert!(store.delete_edge("x", EdgeKind::Contains, "y").unwrap());
         assert!(!store.delete_edge("x", EdgeKind::Contains, "y").unwrap());
@@ -122,7 +123,7 @@ mod tests {
 
     #[test]
     fn delete_edges_from() {
-        let store = Store::open_in_memory().unwrap();
+        let store = SqliteStore::open_in_memory().unwrap();
         store.insert_edge(&test_edge("a", "b")).unwrap();
         store.insert_edge(&test_edge("a", "c")).unwrap();
         store.insert_edge(&test_edge("d", "a")).unwrap();
@@ -130,13 +131,12 @@ mod tests {
         let deleted = store.delete_edges_from("a").unwrap();
         assert_eq!(deleted, 2);
         assert!(store.edges_from("a").unwrap().is_empty());
-        // Edge from d→a should still exist
         assert_eq!(store.edges_to("a").unwrap().len(), 1);
     }
 
     #[test]
     fn delete_edges_to() {
-        let store = Store::open_in_memory().unwrap();
+        let store = SqliteStore::open_in_memory().unwrap();
         store.insert_edge(&test_edge("a", "b")).unwrap();
         store.insert_edge(&test_edge("c", "b")).unwrap();
         store.insert_edge(&test_edge("b", "d")).unwrap();
@@ -144,13 +144,12 @@ mod tests {
         let deleted = store.delete_edges_to("b").unwrap();
         assert_eq!(deleted, 2);
         assert!(store.edges_to("b").unwrap().is_empty());
-        // Edge from b→d should still exist
         assert_eq!(store.edges_from("b").unwrap().len(), 1);
     }
 
     #[test]
     fn insert_replaces_edge() {
-        let store = Store::open_in_memory().unwrap();
+        let store = SqliteStore::open_in_memory().unwrap();
         store.insert_edge(&test_edge("a", "b")).unwrap();
         let updated = Edge {
             provenance_line: Some(99),

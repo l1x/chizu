@@ -3,9 +3,13 @@ use argh::FromArgs;
 /// Grakno — a code knowledge graph
 #[derive(FromArgs)]
 pub struct TopLevel {
-    /// path to the SQLite database (default: grakno.db)
+    /// path to the database (default: grakno.db)
     #[argh(option, default = "String::from(\"grakno.db\")")]
     pub db: String,
+
+    /// storage backend: sqlite or grafeo (default: sqlite)
+    #[argh(option, default = "String::from(\"sqlite\")")]
+    pub backend: String,
 
     #[argh(subcommand)]
     pub command: Command,

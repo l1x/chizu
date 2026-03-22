@@ -1,8 +1,8 @@
+use super::SqliteStore;
 use crate::error::{GraknoError, Result};
 use crate::model::{Entity, EntityKind};
-use crate::store::Store;
 
-impl Store {
+impl SqliteStore {
     pub fn insert_entity(&self, entity: &Entity) -> Result<()> {
         self.conn.execute(
             "INSERT OR REPLACE INTO entities
@@ -124,6 +124,7 @@ impl Store {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::model::EntityKind;
 
     fn test_entity(id: &str) -> Entity {
         Entity {
@@ -142,7 +143,7 @@ mod tests {
 
     #[test]
     fn insert_get_entity() {
-        let store = Store::open_in_memory().unwrap();
+        let store = SqliteStore::open_in_memory().unwrap();
         let e = test_entity("component::test");
         store.insert_entity(&e).unwrap();
         let got = store.get_entity("component::test").unwrap();
@@ -151,14 +152,14 @@ mod tests {
 
     #[test]
     fn get_missing_entity() {
-        let store = Store::open_in_memory().unwrap();
+        let store = SqliteStore::open_in_memory().unwrap();
         let err = store.get_entity("nope").unwrap_err();
         assert!(matches!(err, GraknoError::NotFound(_)));
     }
 
     #[test]
     fn list_by_component() {
-        let store = Store::open_in_memory().unwrap();
+        let store = SqliteStore::open_in_memory().unwrap();
         store.insert_entity(&test_entity("a")).unwrap();
         store
             .insert_entity(&Entity {
@@ -174,7 +175,7 @@ mod tests {
 
     #[test]
     fn list_by_path() {
-        let store = Store::open_in_memory().unwrap();
+        let store = SqliteStore::open_in_memory().unwrap();
         store
             .insert_entity(&Entity {
                 path: Some("src/lib.rs".to_string()),
@@ -202,7 +203,7 @@ mod tests {
 
     #[test]
     fn delete_entity() {
-        let store = Store::open_in_memory().unwrap();
+        let store = SqliteStore::open_in_memory().unwrap();
         store.insert_entity(&test_entity("x")).unwrap();
         assert!(store.delete_entity("x").unwrap());
         assert!(!store.delete_entity("x").unwrap());

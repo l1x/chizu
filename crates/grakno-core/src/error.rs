@@ -11,6 +11,10 @@ pub enum GraknoError {
     #[error("not found: {0}")]
     NotFound(String),
 
+    #[cfg(feature = "grafeo")]
+    #[error("grafeo error: {0}")]
+    Grafeo(String),
+
     #[error("{0}")]
     Other(String),
 }

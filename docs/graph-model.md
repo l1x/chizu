@@ -11,7 +11,7 @@ The model is designed to be:
 
 - local
 - explainable
-- SQLite-backed
+- backed by sqlite+usearch or grafeo
 - useful without embeddings
 - broad enough for both Harrow and Panzerotti
 
@@ -27,13 +27,30 @@ These should not be collapsed into one mechanism.
 
 ## Storage Layout
 
+### sqlite+usearch backend
+
 ```text
 .agent/
-  index.sqlite
+  index.sqlite        # graph, summaries, embedding metadata, task routes
+  index.sqlite.usearch # usearch HNSW index (vectors only)
   build.json
   config.toml
-  vectors.usearch
 ```
+
+SQLite stores all structured data. Vectors live exclusively in the usearch HNSW
+index file — they are not duplicated in SQLite.
+
+### grafeo backend
+
+```text
+.agent/
+  index.grafeo/       # GrafeoDB persistent storage (graph + vectors + HNSW)
+  build.json
+  config.toml
+```
+
+Grafeo stores everything — nodes, edges, vectors, and HNSW index — in a single
+graph database.
 
 ## Core Entity Kinds
 
@@ -69,7 +86,7 @@ These should not be collapsed into one mechanism.
 - `feature_enables`
 - `mentions`
 
-## SQLite Schema
+## SQLite Schema (v4)
 
 ```sql
 CREATE TABLE files (
@@ -108,7 +125,8 @@ CREATE TABLE summaries (
   short_summary TEXT NOT NULL,
   detailed_summary TEXT,
   keywords_json TEXT,
-  updated_at TEXT NOT NULL
+  updated_at TEXT NOT NULL,
+  source_hash TEXT
 );
 
 CREATE TABLE task_routes (
@@ -118,13 +136,39 @@ CREATE TABLE task_routes (
   PRIMARY KEY (task_name, entity_id)
 );
 
+-- Vectors live in usearch, not in SQLite.
+-- usearch_key is blake3(entity_id) truncated to i64,
+-- used to map usearch search results back to entity_ids.
 CREATE TABLE embeddings (
   entity_id TEXT PRIMARY KEY,
   model TEXT NOT NULL,
   dimensions INTEGER NOT NULL,
-  vector_ref TEXT,
-  updated_at TEXT NOT NULL
+  updated_at TEXT NOT NULL,
+  usearch_key INTEGER
 );
+```
+
+## Grafeo Data Model
+
+In the grafeo backend, the same logical model is stored as labeled property
+graph nodes and edges using GQL:
+
+- **`:entity`** nodes with properties: `eid`, `kind`, `name`, `component_id`,
+  `path`, `language`, `line_start`, `line_end`, `visibility`, `exported`
+- **`:file`** nodes with properties: `path`, `component_id`, `kind`, `hash`,
+  `indexed`, `ignore_reason`
+- **`:summary`** nodes with properties: `entity_id`, `short_summary`,
+  `detailed_summary`, `keywords_json`, `updated_at`, `source_hash`
+- **`:embedding`** nodes with properties: `entity_id`, `model`, `dimensions`,
+  `vector` (native vector type), `updated_at`
+- **`:task_route`** nodes with properties: `task_name`, `entity_id`, `priority`
+- **Edges** between `:entity` nodes use dynamic relationship types matching
+  the edge kinds (`contains`, `depends_on`, etc.) with optional `provenance_path`
+  and `provenance_line` properties.
+
+Vector search uses a native HNSW index:
+```sql
+CREATE VECTOR INDEX idx_embedding_vector ON :embedding(vector) METRIC 'cosine'
 ```
 
 ## What Drives The Graph
@@ -154,8 +198,10 @@ the design driver.
 ## Initial Query Flow
 
 1. classify the query
-2. prefilter with SQL using component, task, and exact-match signals
+2. prefilter using component, task, and exact-match signals
+   (SQL for sqlite+usearch, GQL for grafeo)
 3. run optional vector lookup over summaries
+   (usearch HNSW for sqlite+usearch, grafeo HNSW for grafeo)
 4. expand one hop in the graph
 5. rerank using graph-aware signals
 6. return a reading plan

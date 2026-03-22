@@ -6,10 +6,7 @@ use grakno_core::Store;
 fn main() {
     let args: TopLevel = argh::from_env();
 
-    let store = Store::open(&args.db).unwrap_or_else(|e| {
-        eprintln!("error: failed to open store at {}: {e}", args.db);
-        std::process::exit(1);
-    });
+    let store = open_store(&args.backend, &args.db);
 
     match args.command {
         Command::Index(cmd) => {
@@ -36,6 +33,33 @@ fn main() {
             None => cmd_inspect_overview(&store),
         },
         Command::Summarize(cmd) => cmd_summarize(&store, cmd),
+    }
+}
+
+fn open_store(backend: &str, db: &str) -> Store {
+    match backend {
+        "sqlite" => Store::open(db).unwrap_or_else(|e| {
+            eprintln!("error: failed to open sqlite store at {db}: {e}");
+            std::process::exit(1);
+        }),
+        "grafeo" => {
+            #[cfg(feature = "grafeo")]
+            {
+                Store::open_grafeo(db).unwrap_or_else(|e| {
+                    eprintln!("error: failed to open grafeo store at {db}: {e}");
+                    std::process::exit(1);
+                })
+            }
+            #[cfg(not(feature = "grafeo"))]
+            {
+                eprintln!("error: grafeo backend not available; rebuild with --features grafeo");
+                std::process::exit(1);
+            }
+        }
+        other => {
+            eprintln!("error: unknown backend '{other}'; expected 'sqlite' or 'grafeo'");
+            std::process::exit(1);
+        }
     }
 }
 
@@ -149,7 +173,10 @@ fn cmd_inspect_overview(store: &Store) {
         std::process::exit(1);
     });
 
-    println!("grakno graph (schema v{version})");
+    match version {
+        Some(v) => println!("grakno graph (schema v{v})"),
+        None => println!("grakno graph (grafeo backend)"),
+    }
     println!("  entities:    {}", stats.entities);
     println!("  edges:       {}", stats.edges);
     println!("  files:       {}", stats.files);

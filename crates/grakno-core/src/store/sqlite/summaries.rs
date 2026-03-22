@@ -1,8 +1,8 @@
+use super::SqliteStore;
 use crate::error::{GraknoError, Result};
 use crate::model::Summary;
-use crate::store::Store;
 
-impl Store {
+impl SqliteStore {
     pub fn upsert_summary(&self, summary: &Summary) -> Result<()> {
         let keywords_json = serde_json::to_string(&summary.keywords)?;
         self.conn.execute(
@@ -76,7 +76,7 @@ mod tests {
 
     #[test]
     fn upsert_get_summary() {
-        let store = Store::open_in_memory().unwrap();
+        let store = SqliteStore::open_in_memory().unwrap();
         let s = test_summary("comp::a");
         store.upsert_summary(&s).unwrap();
         let got = store.get_summary("comp::a").unwrap();
@@ -85,7 +85,7 @@ mod tests {
 
     #[test]
     fn upsert_replaces_summary() {
-        let store = Store::open_in_memory().unwrap();
+        let store = SqliteStore::open_in_memory().unwrap();
         store.upsert_summary(&test_summary("comp::a")).unwrap();
         let updated = Summary {
             short_summary: "Updated summary".to_string(),
@@ -98,7 +98,7 @@ mod tests {
 
     #[test]
     fn keywords_round_trip() {
-        let store = Store::open_in_memory().unwrap();
+        let store = SqliteStore::open_in_memory().unwrap();
         let s = test_summary("comp::b");
         store.upsert_summary(&s).unwrap();
         let got = store.get_summary("comp::b").unwrap();
@@ -107,7 +107,7 @@ mod tests {
 
     #[test]
     fn delete_summary() {
-        let store = Store::open_in_memory().unwrap();
+        let store = SqliteStore::open_in_memory().unwrap();
         store.upsert_summary(&test_summary("comp::x")).unwrap();
         assert!(store.delete_summary("comp::x").unwrap());
         assert!(!store.delete_summary("comp::x").unwrap());
@@ -115,7 +115,7 @@ mod tests {
 
     #[test]
     fn get_missing_summary() {
-        let store = Store::open_in_memory().unwrap();
+        let store = SqliteStore::open_in_memory().unwrap();
         let err = store.get_summary("nope").unwrap_err();
         assert!(matches!(err, GraknoError::NotFound(_)));
     }

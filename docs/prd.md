@@ -56,11 +56,24 @@ the model itself.
 source inputs
   -> adapters
   -> graph extraction
-  -> SQLite graph store
+  -> store backend (sqlite+usearch | grafeo)
   -> summary generation
-  -> optional vector index
+  -> vector search (usearch HNSW | grafeo HNSW)
   -> query / expansion / rerank
 ```
+
+Two store backends are supported:
+
+- **sqlite+usearch** — SQLite stores the structured graph (entities, edges, files,
+  summaries, task routes, embedding metadata). usearch provides HNSW-based
+  approximate nearest neighbor search over embedding vectors. Vectors live only
+  in usearch, not duplicated in SQLite.
+- **grafeo** — A graph-native backend using GrafeoDB (GQL query language). Stores
+  all data as labeled property graph nodes and edges. Provides built-in HNSW
+  vector indexing on embedding nodes.
+
+Both backends expose the same `Store` API. The choice is a compile-time feature
+flag (`grafeo` or `usearch`).
 
 ## Core Model
 

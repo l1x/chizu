@@ -1,8 +1,8 @@
+use super::SqliteStore;
 use crate::error::{GraknoError, Result};
 use crate::model::FileRecord;
-use crate::store::Store;
 
-impl Store {
+impl SqliteStore {
     pub fn insert_file(&self, file: &FileRecord) -> Result<()> {
         self.conn.execute(
             "INSERT OR REPLACE INTO files (path, component_id, kind, hash, indexed, ignore_reason)
@@ -114,7 +114,7 @@ mod tests {
 
     #[test]
     fn insert_get_file() {
-        let store = Store::open_in_memory().unwrap();
+        let store = SqliteStore::open_in_memory().unwrap();
         let f = test_file("src/main.rs");
         store.insert_file(&f).unwrap();
         let got = store.get_file("src/main.rs").unwrap();
@@ -123,14 +123,14 @@ mod tests {
 
     #[test]
     fn get_missing_file_returns_not_found() {
-        let store = Store::open_in_memory().unwrap();
+        let store = SqliteStore::open_in_memory().unwrap();
         let err = store.get_file("nope").unwrap_err();
         assert!(matches!(err, GraknoError::NotFound(_)));
     }
 
     #[test]
     fn list_files_by_component() {
-        let store = Store::open_in_memory().unwrap();
+        let store = SqliteStore::open_in_memory().unwrap();
         store.insert_file(&test_file("a.rs")).unwrap();
         store
             .insert_file(&FileRecord {
@@ -149,7 +149,7 @@ mod tests {
 
     #[test]
     fn delete_file() {
-        let store = Store::open_in_memory().unwrap();
+        let store = SqliteStore::open_in_memory().unwrap();
         store.insert_file(&test_file("x.rs")).unwrap();
         assert!(store.delete_file("x.rs").unwrap());
         assert!(!store.delete_file("x.rs").unwrap());
@@ -157,7 +157,7 @@ mod tests {
 
     #[test]
     fn insert_replaces_on_conflict() {
-        let store = Store::open_in_memory().unwrap();
+        let store = SqliteStore::open_in_memory().unwrap();
         store.insert_file(&test_file("lib.rs")).unwrap();
         let updated = FileRecord {
             hash: "new_hash".to_string(),

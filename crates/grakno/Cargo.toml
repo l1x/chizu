@@ -3,6 +3,10 @@ name = "grakno"
 version = "0.1.0"
 edition = "2021"
 
+[features]
+grafeo = ["grakno-core/grafeo"]
+usearch = ["grakno-core/usearch"]
+
 [dependencies]
 argh = "0.1"
 grakno-core = { path = "../grakno-core" }

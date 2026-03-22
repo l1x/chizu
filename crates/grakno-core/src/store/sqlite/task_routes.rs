@@ -1,8 +1,8 @@
+use super::SqliteStore;
 use crate::error::Result;
 use crate::model::TaskRoute;
-use crate::store::Store;
 
-impl Store {
+impl SqliteStore {
     pub fn insert_task_route(&self, route: &TaskRoute) -> Result<()> {
         self.conn.execute(
             "INSERT OR REPLACE INTO task_routes (task_name, entity_id, priority)
@@ -65,7 +65,7 @@ mod tests {
 
     #[test]
     fn insert_and_query_routes() {
-        let store = Store::open_in_memory().unwrap();
+        let store = SqliteStore::open_in_memory().unwrap();
         store
             .insert_task_route(&TaskRoute {
                 task_name: "build".to_string(),
@@ -90,7 +90,7 @@ mod tests {
 
         let build_routes = store.routes_for_task("build").unwrap();
         assert_eq!(build_routes.len(), 2);
-        assert_eq!(build_routes[0].entity_id, "comp::a"); // higher priority first
+        assert_eq!(build_routes[0].entity_id, "comp::a");
 
         let entity_routes = store.routes_for_entity("comp::a").unwrap();
         assert_eq!(entity_routes.len(), 2);
@@ -98,7 +98,7 @@ mod tests {
 
     #[test]
     fn delete_route() {
-        let store = Store::open_in_memory().unwrap();
+        let store = SqliteStore::open_in_memory().unwrap();
         store
             .insert_task_route(&TaskRoute {
                 task_name: "build".to_string(),

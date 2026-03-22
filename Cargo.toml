@@ -9,3 +9,4 @@ serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 blake3 = "1"
 reqwest = { version = "0.12", features = ["blocking", "json", "rustls-tls"], default-features = false }
+grafeo = "0.5"

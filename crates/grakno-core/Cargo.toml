@@ -3,8 +3,15 @@ name = "grakno-core"
 version = "0.1.0"
 edition = "2021"
 
+[features]
+grafeo = ["dep:grafeo"]
+usearch = ["dep:usearch"]
+
 [dependencies]
 rusqlite = { workspace = true }
 thiserror = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
+blake3 = { workspace = true }
+grafeo = { workspace = true, optional = true }
+usearch = { version = "2", optional = true }
