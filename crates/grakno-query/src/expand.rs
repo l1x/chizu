@@ -11,10 +11,16 @@ const USEFUL_EDGE_KINDS: &[EdgeKind] = &[
     EdgeKind::DependsOn,
     EdgeKind::Implements,
     EdgeKind::TestedBy,
+    EdgeKind::BenchmarkedBy,
     EdgeKind::DocumentedBy,
     EdgeKind::Reexports,
     EdgeKind::ConfiguredBy,
     EdgeKind::RelatedTo,
+    EdgeKind::Migrates,
+    EdgeKind::Specifies,
+    EdgeKind::Renders,
+    EdgeKind::Deploys,
+    EdgeKind::Builds,
 ];
 
 /// Expand candidates by 1-hop graph traversal.
@@ -125,7 +131,7 @@ mod tests {
 
     /// Build a graph: A --Contains--> B --DependsOn--> C
     ///                A <--TestedBy-- D
-    ///                A --Builds--> E  (Builds is NOT in USEFUL_EDGE_KINDS)
+    ///                A --OwnsTask--> E  (OwnsTask is NOT in USEFUL_EDGE_KINDS)
     ///                A --Contains--> F, G, H, I, J, K  (6 extra for cap testing)
     fn build_expand_store() -> (Store, HashMap<String, Candidate>) {
         let store = Store::open_in_memory().unwrap();
@@ -190,11 +196,11 @@ mod tests {
             })
             .unwrap();
 
-        // A --Builds--> E (Builds is not in USEFUL_EDGE_KINDS)
+        // A --OwnsTask--> E (OwnsTask is not in USEFUL_EDGE_KINDS)
         store
             .insert_edge(&Edge {
                 src_id: "e::A".to_string(),
-                rel: EdgeKind::Builds,
+                rel: EdgeKind::OwnsTask,
                 dst_id: "e::E".to_string(),
                 provenance_path: None,
                 provenance_line: None,
@@ -251,10 +257,10 @@ mod tests {
         let (store, seeds) = build_expand_store();
         let neighbors = expand(&store, &seeds, 10).unwrap();
 
-        // A --Builds--> E, but Builds is not in USEFUL_EDGE_KINDS
+        // A --OwnsTask--> E, but OwnsTask is not in USEFUL_EDGE_KINDS
         assert!(
             !neighbors.contains_key("e::E"),
-            "E should be skipped (Builds not useful)"
+            "E should be skipped (OwnsTask not useful)"
         );
     }
 

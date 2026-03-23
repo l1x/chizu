@@ -73,25 +73,42 @@ impl TaskCategory {
                 EntityKind::SourceUnit,
                 EntityKind::Doc,
                 EntityKind::Symbol,
+                EntityKind::ContentPage,
+                EntityKind::AgentConfig,
             ],
-            TaskCategory::Debug => &[EntityKind::SourceUnit, EntityKind::Symbol, EntityKind::Test],
+            TaskCategory::Debug => &[
+                EntityKind::SourceUnit,
+                EntityKind::Symbol,
+                EntityKind::Test,
+                EntityKind::Spec,
+            ],
             TaskCategory::Build => &[
                 EntityKind::Component,
                 EntityKind::SourceUnit,
                 EntityKind::Symbol,
                 EntityKind::Feature,
+                EntityKind::Template,
+                EntityKind::Migration,
             ],
-            TaskCategory::Test => &[EntityKind::Test, EntityKind::Bench, EntityKind::SourceUnit],
+            TaskCategory::Test => &[
+                EntityKind::Test,
+                EntityKind::Bench,
+                EntityKind::SourceUnit,
+                EntityKind::Spec,
+            ],
             TaskCategory::Deploy => &[
                 EntityKind::Deployable,
                 EntityKind::InfraRoot,
                 EntityKind::Task,
                 EntityKind::Command,
+                EntityKind::Site,
             ],
             TaskCategory::Configure => &[
                 EntityKind::Component,
                 EntityKind::Feature,
                 EntityKind::InfraRoot,
+                EntityKind::AgentConfig,
+                EntityKind::Workflow,
             ],
             TaskCategory::General => &[
                 EntityKind::Component,
@@ -349,6 +366,34 @@ mod tests {
         assert!(TaskCategory::Deploy
             .preferred_kinds()
             .contains(&EntityKind::Deployable));
+    }
+
+    #[test]
+    fn preferred_kinds_deploy_includes_site() {
+        assert!(TaskCategory::Deploy
+            .preferred_kinds()
+            .contains(&EntityKind::Site));
+    }
+
+    #[test]
+    fn preferred_kinds_configure_includes_agent_config() {
+        assert!(TaskCategory::Configure
+            .preferred_kinds()
+            .contains(&EntityKind::AgentConfig));
+    }
+
+    #[test]
+    fn preferred_kinds_understand_includes_content_page() {
+        assert!(TaskCategory::Understand
+            .preferred_kinds()
+            .contains(&EntityKind::ContentPage));
+    }
+
+    #[test]
+    fn preferred_kinds_build_includes_template() {
+        assert!(TaskCategory::Build
+            .preferred_kinds()
+            .contains(&EntityKind::Template));
     }
 
     // --- as_str() / Display ---

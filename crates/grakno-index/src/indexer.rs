@@ -31,6 +31,8 @@ pub struct IndexStats {
     pub infra_roots_indexed: usize,
     pub deployables_indexed: usize,
     pub commands_indexed: usize,
+    pub sites_detected: usize,
+    pub content_pages_indexed: usize,
 }
 
 impl fmt::Display for IndexStats {
@@ -51,6 +53,8 @@ impl fmt::Display for IndexStats {
         writeln!(f, "infra_roots:   {}", self.infra_roots_indexed)?;
         writeln!(f, "deployables:   {}", self.deployables_indexed)?;
         writeln!(f, "commands:      {}", self.commands_indexed)?;
+        writeln!(f, "sites:         {}", self.sites_detected)?;
+        writeln!(f, "content_pages: {}", self.content_pages_indexed)?;
         writeln!(f, "routes:        {}", self.task_routes_generated)?;
         write!(f, "edges:         {}", self.edges_created)
     }
@@ -385,6 +389,71 @@ pub fn index_project(store: &Store, path: &Path) -> Result<IndexStats, IndexErro
     )?;
     stats.commands_indexed += count;
     stats.edges_created += edge_count;
+
+    // Detect sites and scan content pages
+    let sites = detect_sites(&workspace.root);
+    for (site_name, site_path) in &sites {
+        let site_entity_id = id::site_id(site_name);
+        let rel_site_path = site_path.strip_prefix(&workspace.root).unwrap_or(site_path);
+        let rel_site_str = rel_site_path.display().to_string();
+
+        store.insert_entity(&Entity {
+            id: site_entity_id.clone(),
+            kind: EntityKind::Site,
+            name: site_name.clone(),
+            component_id: None,
+            path: Some(if rel_site_str.is_empty() {
+                ".".to_string()
+            } else {
+                rel_site_str
+            }),
+            language: None,
+            line_start: None,
+            line_end: None,
+            visibility: None,
+            exported: true,
+        })?;
+
+        store.insert_edge(&Edge {
+            src_id: repo_id.clone(),
+            rel: EdgeKind::Contains,
+            dst_id: site_entity_id.clone(),
+            provenance_path: None,
+            provenance_line: None,
+        })?;
+        stats.edges_created += 1;
+        stats.sites_detected += 1;
+
+        // Site → Deploys → InfraRoot (if paired infra/ dir has main.tf)
+        let infra_dir = site_path.join("infra");
+        if infra_dir.join("main.tf").exists() {
+            let rel_infra = infra_dir
+                .strip_prefix(&workspace.root)
+                .unwrap_or(&infra_dir)
+                .display()
+                .to_string();
+            let infra_entity_id = id::infra_root_id(&rel_infra);
+            store.insert_edge(&Edge {
+                src_id: site_entity_id.clone(),
+                rel: EdgeKind::Deploys,
+                dst_id: infra_entity_id,
+                provenance_path: None,
+                provenance_line: None,
+            })?;
+            stats.edges_created += 1;
+        }
+
+        // Scan content pages for this site
+        let (count, edge_count) = scan_content_pages(
+            store,
+            site_path,
+            &workspace.root,
+            &site_entity_id,
+            site_name,
+        )?;
+        stats.content_pages_indexed += count;
+        stats.edges_created += edge_count;
+    }
 
     // Generate heuristic task routes
     generate_task_routes(store, &mut stats)?;
@@ -1077,6 +1146,186 @@ fn scan_infra_roots(
     Ok((items, edges))
 }
 
+/// Detect SSG sites at workspace root and one level deep.
+/// Returns Vec of (site_name, site_path).
+fn detect_sites(workspace_root: &Path) -> Vec<(String, std::path::PathBuf)> {
+    let mut sites = Vec::new();
+
+    // Check workspace root itself
+    if is_site_root(workspace_root) {
+        let name = workspace_root
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("site")
+            .to_string();
+        sites.push((name, workspace_root.to_path_buf()));
+    }
+
+    // Check immediate subdirectories (monorepo pattern)
+    let entries = match std::fs::read_dir(workspace_root) {
+        Ok(e) => e,
+        Err(_) => return sites,
+    };
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if !path.is_dir() {
+            continue;
+        }
+        let name = path
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("")
+            .to_string();
+        if name.starts_with('.') || name == "target" || name == "node_modules" {
+            continue;
+        }
+        if is_site_root(&path) {
+            sites.push((name, path));
+        }
+    }
+
+    sites
+}
+
+/// Check if a directory is an SSG site root.
+fn is_site_root(dir: &Path) -> bool {
+    // Custom SSG (site.toml)
+    if dir.join("site.toml").exists() {
+        return true;
+    }
+    // Astro (astro.config.mjs or astro.config.ts)
+    if dir.join("astro.config.mjs").exists() || dir.join("astro.config.ts").exists() {
+        return true;
+    }
+    // Hugo (config.toml with baseURL or [params])
+    let hugo_config = dir.join("config.toml");
+    if hugo_config.exists() {
+        if let Ok(content) = std::fs::read_to_string(&hugo_config) {
+            if content.contains("baseURL") || content.contains("[params]") {
+                return true;
+            }
+        }
+    }
+    false
+}
+
+const CONTENT_DIRS: &[&str] = &["content", "posts", "blog", "articles", "src/content"];
+
+/// Scan content directories for markdown files with frontmatter.
+/// Returns (content_pages_indexed, edges_created).
+fn scan_content_pages(
+    store: &Store,
+    site_root: &Path,
+    workspace_root: &Path,
+    site_entity_id: &str,
+    site_name: &str,
+) -> Result<(usize, usize), IndexError> {
+    let mut md_files = Vec::new();
+    for content_dir in CONTENT_DIRS {
+        let dir = site_root.join(content_dir);
+        if dir.is_dir() {
+            collect_files(
+                &dir,
+                &|p: &Path| p.extension().is_some_and(|e| e == "md"),
+                &mut md_files,
+            );
+        }
+    }
+
+    let mut items = 0;
+    let mut edges = 0;
+
+    for path in &md_files {
+        let content = std::fs::read_to_string(path)?;
+
+        // Only process files with frontmatter
+        if !content.starts_with("+++") && !content.starts_with("---") {
+            continue;
+        }
+
+        let rel_path = path.strip_prefix(workspace_root).unwrap_or(path);
+        let rel_path_str = rel_path.display().to_string();
+
+        let hash = format!("blake3:{}", blake3::hash(content.as_bytes()).to_hex());
+
+        if let Ok(existing) = store.get_file(&rel_path_str) {
+            if existing.hash == hash {
+                continue;
+            }
+        }
+
+        store.insert_file(&FileRecord {
+            path: rel_path_str.clone(),
+            component_id: None,
+            kind: "content".to_string(),
+            hash,
+            indexed: true,
+            ignore_reason: None,
+        })?;
+
+        let entity_id = id::content_page_id(site_name, &rel_path_str);
+        let name = parse_frontmatter_title(&content).unwrap_or_else(|| {
+            path.file_stem()
+                .and_then(|n| n.to_str())
+                .unwrap_or(&rel_path_str)
+                .to_string()
+        });
+
+        store.insert_entity(&Entity {
+            id: entity_id.clone(),
+            kind: EntityKind::ContentPage,
+            name,
+            component_id: None,
+            path: Some(rel_path_str.clone()),
+            language: Some("markdown".to_string()),
+            line_start: None,
+            line_end: None,
+            visibility: None,
+            exported: true,
+        })?;
+
+        store.insert_edge(&Edge {
+            src_id: site_entity_id.to_string(),
+            rel: EdgeKind::Contains,
+            dst_id: entity_id,
+            provenance_path: Some(rel_path_str),
+            provenance_line: None,
+        })?;
+        edges += 1;
+        items += 1;
+    }
+
+    Ok((items, edges))
+}
+
+/// Extract title from TOML (+++) or YAML (---) frontmatter.
+fn parse_frontmatter_title(content: &str) -> Option<String> {
+    if let Some(rest) = content.strip_prefix("+++") {
+        // TOML frontmatter
+        let end = rest.find("+++")?;
+        let fm = &rest[..end];
+        for line in fm.lines() {
+            let trimmed = line.trim();
+            if let Some(val) = trimmed.strip_prefix("title") {
+                let val = val.trim_start().strip_prefix('=')?.trim();
+                return Some(val.trim_matches('"').to_string());
+            }
+        }
+    } else if let Some(rest) = content.strip_prefix("---") {
+        // YAML frontmatter
+        let end = rest.find("---")?;
+        let fm = &rest[..end];
+        for line in fm.lines() {
+            let trimmed = line.trim();
+            if let Some(val) = trimmed.strip_prefix("title") {
+                let val = val.trim_start().strip_prefix(':')?.trim();
+                return Some(val.trim_matches('"').to_string());
+            }
+        }
+    }
+    None
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1272,5 +1521,43 @@ mod tests {
         if root.join("README.md").exists() {
             assert!(stats.docs_indexed > 0, "should index at least README.md");
         }
+    }
+
+    #[test]
+    fn parse_toml_frontmatter_title() {
+        let content = "+++\ntitle = \"My Post\"\ndate = 2024-01-01\n+++\n\nBody here.";
+        assert_eq!(
+            parse_frontmatter_title(content),
+            Some("My Post".to_string())
+        );
+    }
+
+    #[test]
+    fn parse_yaml_frontmatter_title() {
+        let content = "---\ntitle: \"Hello World\"\ndate: 2024-01-01\n---\n\nBody here.";
+        assert_eq!(
+            parse_frontmatter_title(content),
+            Some("Hello World".to_string())
+        );
+    }
+
+    #[test]
+    fn parse_yaml_frontmatter_unquoted_title() {
+        let content = "---\ntitle: Hello World\ndate: 2024-01-01\n---\n\nBody.";
+        assert_eq!(
+            parse_frontmatter_title(content),
+            Some("Hello World".to_string())
+        );
+    }
+
+    #[test]
+    fn parse_frontmatter_no_frontmatter() {
+        assert_eq!(parse_frontmatter_title("Just plain text"), None);
+    }
+
+    #[test]
+    fn parse_frontmatter_no_title() {
+        let content = "+++\ndate = 2024-01-01\n+++\n\nBody.";
+        assert_eq!(parse_frontmatter_title(content), None);
     }
 }

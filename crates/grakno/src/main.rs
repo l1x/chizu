@@ -305,14 +305,17 @@ fn cmd_watch(store: &Store, cmd: WatchCmd) {
     let relevant_ext = |p: &Path| -> bool {
         matches!(
             p.extension().and_then(|e| e.to_str()),
-            Some("rs" | "toml" | "md")
-        )
+            Some("rs" | "toml" | "md" | "tf" | "tla" | "astro" | "sql" | "yml" | "yaml" | "html")
+        ) || p
+            .file_name()
+            .and_then(|n| n.to_str())
+            .is_some_and(|n| n.contains("Dockerfile"))
     };
 
     let ignored = |p: &Path| -> bool {
         for component in p.components() {
             let s = component.as_os_str().to_string_lossy();
-            if s == "target" || s == ".git" {
+            if s == "target" || s == ".git" || s == "node_modules" {
                 return true;
             }
         }
