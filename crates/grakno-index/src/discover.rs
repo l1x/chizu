@@ -51,7 +51,7 @@ pub fn discover(path: &Path) -> Result<DiscoveredWorkspace, IndexError> {
         .packages
         .iter()
         .filter(|p| member_ids.contains(&p.id))
-        .map(|p| p.name.clone())
+        .map(|p| p.name.to_string())
         .collect();
 
     let mut crates = Vec::new();
@@ -72,22 +72,23 @@ pub fn discover(path: &Path) -> Result<DiscoveredWorkspace, IndexError> {
             .features
             .iter()
             .map(|(name, enables)| DiscoveredFeature {
-                name: name.clone(),
-                enables: enables.clone(),
+                name: name.to_string(),
+                enables: enables.iter().map(|e| e.to_string()).collect(),
             })
             .collect();
 
         crates.push(DiscoveredCrate {
-            name: pkg.name.clone(),
+            name: pkg.name.to_string(),
             manifest_dir,
             features,
         });
 
         for dep in &pkg.dependencies {
-            if member_names.contains(&dep.name) {
+            let dep_name = dep.name.to_string();
+            if member_names.contains(&dep_name) {
                 deps.push(CrateDep {
-                    from: pkg.name.clone(),
-                    to: dep.name.clone(),
+                    from: pkg.name.to_string(),
+                    to: dep_name,
                 });
             }
         }

@@ -1,7 +1,7 @@
 # Grakno PRD
 
-**Status:** Draft
-**Date:** 2026-03-21
+**Status:** v1 complete
+**Date:** 2026-03-23
 
 ## Problem
 
@@ -90,16 +90,16 @@ flag (`grafeo` or `usearch`).
 | `bench` | Benchmark function or file | Rust AST | Implemented |
 | `task` | Build/dev task from mise.toml or similar | mise.toml | Implemented |
 | `feature` | Cargo feature flag | Cargo metadata | Implemented |
-| `deployable` | Dockerfile, docker-compose service | Dockerfile parser | Not implemented |
-| `infra_root` | Terraform root module (directory with `main.tf`) | Terraform scanner | Not implemented |
-| `command` | Ansible playbook | Ansible scanner | Not implemented |
-| `content_page` | Frontmatter markdown content (blog post, article, course page) | Frontmatter parser | Not implemented |
-| `template` | Rendering template (HTML, Hugo layout, `.astro` component) | Filesystem | Not implemented |
-| `site` | Website deployment unit (domain + SSG + infra + content) | site.toml / astro.config / config.toml | Not implemented |
-| `migration` | SQL schema migration file | Filesystem | Not implemented |
-| `spec` | Formal specification (TLA+) | Filesystem | Not implemented |
-| `workflow` | Agent workflow definition (`.toml`) | Filesystem | Not implemented |
-| `agent_config` | Agent instruction file (AGENTS.md, CLAUDE.md, SKILL.md) | Filesystem | Not implemented |
+| `deployable` | Dockerfile, docker-compose service | Filesystem scanner | Implemented |
+| `infra_root` | Terraform root module (directory with `main.tf`) | Terraform scanner | Implemented |
+| `command` | Ansible playbook | Ansible scanner | Implemented |
+| `content_page` | Frontmatter markdown content (blog post, article, course page) | Frontmatter parser | Implemented |
+| `template` | Rendering template (HTML, Hugo layout, `.astro` component) | Filesystem scanner | Implemented |
+| `site` | Website deployment unit (domain + SSG + infra + content) | Site detector | Implemented |
+| `migration` | SQL schema migration file | Filesystem scanner | Implemented |
+| `spec` | Formal specification (TLA+) | Filesystem scanner | Implemented |
+| `workflow` | Agent workflow definition (`.toml`, `.yml`) | Filesystem scanner | Implemented |
+| `agent_config` | Agent instruction file (AGENTS.md, CLAUDE.md, SKILL.md) | Filesystem scanner | Implemented |
 
 ### Edge Kinds
 
@@ -111,23 +111,23 @@ flag (`grafeo` or `usearch`).
 | `reexports` | SourceUnit → Symbol | Implemented |
 | `documented_by` | Component → Doc, Site → Doc | Implemented |
 | `tested_by` | SourceUnit → Test | Implemented |
-| `benchmarked_by` | SourceUnit → Bench | Defined, not emitted |
+| `benchmarked_by` | SourceUnit → Bench | Implemented |
 | `related_to` | Any → Any | Defined, not emitted |
-| `configured_by` | Component → Feature | Implemented |
+| `configured_by` | Component → Feature, Repo → AgentConfig | Implemented |
 | `builds` | Task → Deployable | Defined, not emitted |
-| `deploys` | Deployable → InfraRoot, InfraRoot → Site | Defined, not emitted |
+| `deploys` | Site → InfraRoot | Implemented |
 | `implements` | Impl → Trait | Implemented |
 | `owns_task` | Repo → Task | Implemented |
 | `declares_feature` | Component → Feature | Implemented |
 | `feature_enables` | Feature → Feature | Implemented |
 | `mentions` | Doc → Symbol, ContentPage → Symbol | Defined, not emitted |
-| `migrates` | Migration → Component | Not defined |
-| `specifies` | Spec → Component | Not defined |
-| `renders` | Template → ContentPage, Template → Site | Not defined |
+| `migrates` | Repo → Migration | Defined, used for containment |
+| `specifies` | Repo → Spec | Defined, used for containment |
+| `renders` | Template → ContentPage, Template → Site | Defined, not emitted |
 
 ## Adapters
 
-### Implemented (v0)
+### Implemented
 
 | Adapter | Entities produced | Source |
 |---------|-------------------|--------|
@@ -135,21 +135,16 @@ flag (`grafeo` or `usearch`).
 | Cargo metadata | `repo`, `component`, `feature` | `cargo_metadata` crate |
 | Docs | `doc` | `.md` files in root, crate dirs, `docs/` |
 | mise.toml | `task` | TOML task definitions |
-
-### Planned (v1)
-
-| Adapter | Entities produced | Source |
-|---------|-------------------|--------|
 | Terraform scanner | `infra_root` | Directories containing `main.tf` |
-| Dockerfile parser | `deployable` | `Dockerfile`, `docker-compose.yml` |
-| Ansible scanner | `command` | Playbook `.yml` files |
-| Frontmatter parser | `content_page` | Markdown with TOML/YAML frontmatter |
-| Template scanner | `template` | `.html` templates, Hugo layouts, `.astro` components |
+| Dockerfile scanner | `deployable` | `Dockerfile*`, `docker-compose*.yml` |
+| Ansible scanner | `command` | `**/playbooks/*.yml` |
+| Frontmatter parser | `content_page` | Markdown with TOML/YAML frontmatter in content dirs |
+| Template scanner | `template` | `templates/**/*.html`, `layouts/**/*.html`, `*.astro` |
 | Site detector | `site` | `site.toml`, `astro.config.*`, Hugo `config.toml` |
-| Migration scanner | `migration` | `migrations/` directories with `.sql` files |
-| Spec scanner | `spec` | `.tla` files |
-| Workflow scanner | `workflow` | `.toml` workflow definitions |
-| Agent config scanner | `agent_config` | `AGENTS.md`, `CLAUDE.md`, `SKILL.md` |
+| Migration scanner | `migration` | `**/migrations/*.sql` |
+| Spec scanner | `spec` | `**/*.tla` |
+| Workflow scanner | `workflow` | `**/workflows/*.{toml,yml,yaml}` |
+| Agent config scanner | `agent_config` | `CLAUDE.md`, `AGENTS.md`, `SKILL.md` |
 
 ### Future
 
@@ -157,10 +152,14 @@ flag (`grafeo` or `usearch`).
 - TypeScript package graphs
 - C# project/solution files
 - Additional build systems
+- Non-Rust workspace discovery (index sites/repos without Cargo.toml)
+- `mentions` edge emission (parse markdown for code references)
+- `renders` edge emission (link templates to content pages)
+- `builds` edge emission (link tasks to deployables)
 
 ## Query Model
 
-The intended query flow is:
+The query pipeline is a five-stage process:
 
 1. classify the task
 2. prefilter with SQL and task routes
@@ -168,8 +167,50 @@ The intended query flow is:
 4. expand neighbors in the graph
 5. rerank and return a reading plan
 
-The output should tell an agent which files or components to read first and
-why.
+The output tells an agent which files or components to read first and why.
+
+### Task Categories
+
+| Category | Route names | Preferred entity kinds |
+|----------|-------------|----------------------|
+| understand | understand, architecture | Component, SourceUnit, Doc, Symbol, ContentPage, AgentConfig |
+| debug | debug, fix | SourceUnit, Symbol, Test, Spec |
+| build | build, implement | Component, SourceUnit, Symbol, Feature, Template, Migration |
+| test | test, bench | Test, Bench, SourceUnit, Spec |
+| deploy | deploy, release | Deployable, InfraRoot, Task, Command, Site |
+| configure | configure, setup | Component, Feature, InfraRoot, AgentConfig, Workflow |
+| general | (none) | Component, SourceUnit, Symbol |
+
+### Task Route Heuristics
+
+Entities are assigned to task routes with priority scores during indexing:
+
+| Entity Kind | Routes (task → priority) |
+|-------------|--------------------------|
+| Component | understand(80), architecture(80), build(70), implement(70) |
+| SourceUnit (mod.rs/lib.rs) | understand(60), architecture(60), debug(50), fix(50), build(40), implement(40) |
+| SourceUnit (other) | understand(30), architecture(30), debug(50), fix(50), build(40), implement(40) |
+| Doc | understand(70), architecture(70) |
+| Test | test(80), bench(40), debug(60), fix(60) |
+| Bench | test(40), bench(80) |
+| Symbol (pub) | build(50), implement(50) |
+| Task (deploy/release/ci) | deploy(80), release(80) |
+| Task (test) | test(70), bench(40) |
+| Task (build) | build(70), implement(40) |
+| Deployable | deploy(80), release(80) |
+| Feature | configure(70), setup(70) |
+| InfraRoot | deploy(80), release(80), configure(60) |
+| Command | deploy(70), configure(60) |
+| ContentPage | understand(60), build(40) |
+| Template | build(60), understand(40) |
+| Site | understand(70), deploy(70), build(60) |
+| Migration | build(60), debug(50) |
+| Spec | understand(70), test(60), debug(50) |
+| Workflow | configure(60), build(40) |
+| AgentConfig | configure(70), understand(60) |
+
+Cross-cutting: entities with "config" in name or path also get configure(60),
+setup(60).
 
 ## Watch Mode
 
@@ -197,8 +238,9 @@ Behavior:
 - Uses OS-native filesystem notifications (via `notify`) to detect changes
 - Debounces rapid saves — coalesces events within a configurable window
   (default 500 ms) before triggering a re-index
-- Filters to relevant file types: `.rs`, `.toml`, `.md`
-- Ignores `target/`, `.git/`, and database files (`*.db`)
+- Filters to relevant file types: `.rs`, `.toml`, `.md`, `.tf`, `.tla`,
+  `.astro`, `.sql`, `.yml`, `.yaml`, `.html`, `Dockerfile`
+- Ignores `target/`, `.git/`, `node_modules/`, and database files (`*.db`)
 - Re-runs `index_project` on each trigger (unchanged files are skipped via
   hash comparison)
 - Prints index stats after each cycle
@@ -228,8 +270,9 @@ grakno plan "how does the store work" [--limit 15] [--format text|json]
 
 3. **Expand** — 1-hop graph traversal from each seed candidate, following
    useful edge kinds (contains, defines, depends_on, implements, tested_by,
-   documented_by, reexports, configured_by, related_to). Capped at 5
-   neighbors per seed, deduped against seeds and other neighbors.
+   benchmarked_by, documented_by, reexports, configured_by, related_to,
+   migrates, specifies, renders, deploys, builds). Capped at 5 neighbors per
+   seed, deduped against seeds and other neighbors.
 
 4. **Rerank** — Multi-signal weighted scoring combining task route priority
    (0.30), keyword match (0.20), vector similarity (0.20), name match (0.15),
