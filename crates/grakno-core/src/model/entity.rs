@@ -16,6 +16,13 @@ pub enum EntityKind {
     InfraRoot,
     Command,
     Feature,
+    ContentPage,
+    Template,
+    Site,
+    Migration,
+    Spec,
+    Workflow,
+    AgentConfig,
 }
 
 impl EntityKind {
@@ -33,6 +40,13 @@ impl EntityKind {
             Self::InfraRoot => "infra_root",
             Self::Command => "command",
             Self::Feature => "feature",
+            Self::ContentPage => "content_page",
+            Self::Template => "template",
+            Self::Site => "site",
+            Self::Migration => "migration",
+            Self::Spec => "spec",
+            Self::Workflow => "workflow",
+            Self::AgentConfig => "agent_config",
         }
     }
 
@@ -50,6 +64,13 @@ impl EntityKind {
             "infra_root" => Some(Self::InfraRoot),
             "command" => Some(Self::Command),
             "feature" => Some(Self::Feature),
+            "content_page" => Some(Self::ContentPage),
+            "template" => Some(Self::Template),
+            "site" => Some(Self::Site),
+            "migration" => Some(Self::Migration),
+            "spec" => Some(Self::Spec),
+            "workflow" => Some(Self::Workflow),
+            "agent_config" => Some(Self::AgentConfig),
             _ => None,
         }
     }
@@ -94,6 +115,13 @@ mod tests {
             EntityKind::InfraRoot,
             EntityKind::Command,
             EntityKind::Feature,
+            EntityKind::ContentPage,
+            EntityKind::Template,
+            EntityKind::Site,
+            EntityKind::Migration,
+            EntityKind::Spec,
+            EntityKind::Workflow,
+            EntityKind::AgentConfig,
         ];
         for kind in &kinds {
             let s = kind.as_str();

@@ -2,7 +2,7 @@ use std::collections::HashSet;
 use std::fmt;
 use std::path::Path;
 
-use grakno_core::model::{Edge, EdgeKind, Entity, EntityKind, FileRecord};
+use grakno_core::model::{Edge, EdgeKind, Entity, EntityKind, FileRecord, TaskRoute};
 use grakno_core::Store;
 
 use crate::discover::discover;
@@ -22,6 +22,7 @@ pub struct IndexStats {
     pub features_extracted: usize,
     pub docs_indexed: usize,
     pub tasks_extracted: usize,
+    pub task_routes_generated: usize,
 }
 
 impl fmt::Display for IndexStats {
@@ -34,6 +35,7 @@ impl fmt::Display for IndexStats {
         writeln!(f, "features: {}", self.features_extracted)?;
         writeln!(f, "docs:     {}", self.docs_indexed)?;
         writeln!(f, "tasks:    {}", self.tasks_extracted)?;
+        writeln!(f, "routes:   {}", self.task_routes_generated)?;
         write!(f, "edges:    {}", self.edges_created)
     }
 }
@@ -117,6 +119,16 @@ pub fn index_project(store: &Store, path: &Path) -> Result<IndexStats, IndexErro
             stats.edges_created += 1;
             stats.features_extracted += 1;
 
+            // Component → ConfiguredBy → Feature
+            store.insert_edge(&Edge {
+                src_id: comp_id.clone(),
+                rel: EdgeKind::ConfiguredBy,
+                dst_id: feat_id.clone(),
+                provenance_path: Some("Cargo.toml".to_string()),
+                provenance_line: None,
+            })?;
+            stats.edges_created += 1;
+
             // Feature → FeatureEnables → Feature (for same-crate feature deps)
             for dep in &feat.enables {
                 // Only link features within the same crate (not dep:/path features)
@@ -135,13 +147,14 @@ pub fn index_project(store: &Store, path: &Path) -> Result<IndexStats, IndexErro
         }
 
         // Index docs (.md files) in crate directory
-        index_docs(
+        let indexed_doc_paths = index_docs(
             store,
             &krate.manifest_dir,
             &workspace.root,
             &comp_id,
             &mut stats,
         )?;
+        cleanup_deleted_docs(store, &comp_id, &krate.name, &indexed_doc_paths, &mut stats)?;
 
         // Walk .rs files under src/
         let src_dir = krate.manifest_dir.join("src");
@@ -173,13 +186,14 @@ pub fn index_project(store: &Store, path: &Path) -> Result<IndexStats, IndexErro
     }
 
     // Index workspace-root docs (README.md, docs/*.md)
-    index_docs(
+    let ws_doc_paths = index_docs(
         store,
         &workspace.root,
         &workspace.root,
         &repo_id,
         &mut stats,
     )?;
+    cleanup_deleted_docs(store, &repo_id, &workspace.name, &ws_doc_paths, &mut stats)?;
 
     // Index mise.toml tasks
     if let Some(mise_config) = parse_mise_toml(&workspace.root)? {
@@ -210,6 +224,9 @@ pub fn index_project(store: &Store, path: &Path) -> Result<IndexStats, IndexErro
             stats.tasks_extracted += 1;
         }
     }
+
+    // Generate heuristic task routes
+    generate_task_routes(store, &mut stats)?;
 
     Ok(stats)
 }
@@ -356,6 +373,30 @@ fn index_file(
         stats.edges_created += 1;
         stats.symbols_extracted += 1;
 
+        // SourceUnit → TestedBy → Test
+        if entity_kind == EntityKind::Test {
+            store.insert_edge(&Edge {
+                src_id: su_id.clone(),
+                rel: EdgeKind::TestedBy,
+                dst_id: entity_id.clone(),
+                provenance_path: Some(rel_path_str.clone()),
+                provenance_line: Some(sym.line_start as i64),
+            })?;
+            stats.edges_created += 1;
+        }
+
+        // SourceUnit → BenchmarkedBy → Bench
+        if entity_kind == EntityKind::Bench {
+            store.insert_edge(&Edge {
+                src_id: su_id.clone(),
+                rel: EdgeKind::BenchmarkedBy,
+                dst_id: entity_id.clone(),
+                provenance_path: Some(rel_path_str.clone()),
+                provenance_line: Some(sym.line_start as i64),
+            })?;
+            stats.edges_created += 1;
+        }
+
         // Impl → Implements → Trait (best-effort by name within same crate)
         if sym.kind == SymbolKind::Impl {
             if let Some(ref trait_name) = sym.trait_name {
@@ -395,7 +436,7 @@ fn index_docs(
     workspace_root: &Path,
     parent_id: &str,
     stats: &mut IndexStats,
-) -> Result<(), IndexError> {
+) -> Result<HashSet<String>, IndexError> {
     // Determine component_id from parent: if it starts with "component::" use it, otherwise None
     let component_id = if parent_id.starts_with("component::") {
         Some(parent_id.to_string())
@@ -417,9 +458,13 @@ fn index_docs(
         collect_md_files(&docs_dir, &mut md_files, true);
     }
 
+    let mut indexed_doc_paths = HashSet::new();
+
     for md_path in &md_files {
         let rel_path = md_path.strip_prefix(workspace_root).unwrap_or(md_path);
         let rel_path_str = rel_path.display().to_string();
+
+        indexed_doc_paths.insert(rel_path_str.clone());
 
         let content = std::fs::read_to_string(md_path)?;
         let hash = format!("blake3:{}", blake3::hash(content.as_bytes()).to_hex());
@@ -472,7 +517,7 @@ fn index_docs(
         stats.docs_indexed += 1;
     }
 
-    Ok(())
+    Ok(indexed_doc_paths)
 }
 
 fn collect_md_files(dir: &Path, out: &mut Vec<std::path::PathBuf>, recurse: bool) {
@@ -523,6 +568,149 @@ fn cleanup_source_unit(
     Ok(())
 }
 
+/// Generate heuristic task routes for all entities in the graph.
+fn generate_task_routes(store: &Store, stats: &mut IndexStats) -> Result<(), IndexError> {
+    let entities = store.list_entities()?;
+
+    for entity in &entities {
+        let name_lower = entity.name.to_lowercase();
+        let path_lower = entity.path.as_deref().unwrap_or("").to_lowercase();
+        let has_config = name_lower.contains("config") || path_lower.contains("config");
+
+        let routes: &[(&str, i64)] = match entity.kind {
+            EntityKind::Component => &[
+                ("understand", 80),
+                ("architecture", 80),
+                ("build", 70),
+                ("implement", 70),
+            ],
+            EntityKind::SourceUnit => {
+                let fname = entity
+                    .path
+                    .as_deref()
+                    .and_then(|p| p.rsplit('/').next())
+                    .unwrap_or("");
+                if fname == "mod.rs" || fname == "lib.rs" {
+                    &[
+                        ("understand", 60),
+                        ("architecture", 60),
+                        ("debug", 50),
+                        ("fix", 50),
+                        ("build", 40),
+                        ("implement", 40),
+                    ]
+                } else {
+                    &[
+                        ("understand", 30),
+                        ("architecture", 30),
+                        ("debug", 50),
+                        ("fix", 50),
+                        ("build", 40),
+                        ("implement", 40),
+                    ]
+                }
+            }
+            EntityKind::Doc => &[("understand", 70), ("architecture", 70)],
+            EntityKind::Test => &[("test", 80), ("bench", 40), ("debug", 60), ("fix", 60)],
+            EntityKind::Bench => &[("test", 40), ("bench", 80)],
+            EntityKind::Symbol => {
+                if entity.exported {
+                    &[("build", 50), ("implement", 50)]
+                } else {
+                    &[]
+                }
+            }
+            EntityKind::Task => {
+                if name_lower.contains("deploy")
+                    || name_lower.contains("release")
+                    || name_lower.contains("ci")
+                {
+                    &[("deploy", 80), ("release", 80)]
+                } else if name_lower.contains("test") {
+                    &[("test", 70), ("bench", 40)]
+                } else if name_lower.contains("build") {
+                    &[("build", 70), ("implement", 40)]
+                } else {
+                    &[]
+                }
+            }
+            EntityKind::Deployable => &[("deploy", 80), ("release", 80)],
+            EntityKind::Feature => &[("configure", 70), ("setup", 70)],
+            EntityKind::InfraRoot => &[("deploy", 80), ("release", 80), ("configure", 60)],
+            EntityKind::Command => &[("deploy", 70), ("configure", 60)],
+            EntityKind::ContentPage => &[("understand", 60), ("build", 40)],
+            EntityKind::Template => &[("build", 60), ("understand", 40)],
+            EntityKind::Site => &[("understand", 70), ("deploy", 70), ("build", 60)],
+            EntityKind::Migration => &[("build", 60), ("debug", 50)],
+            EntityKind::Spec => &[("understand", 70), ("test", 60), ("debug", 50)],
+            EntityKind::Workflow => &[("configure", 60), ("build", 40)],
+            EntityKind::AgentConfig => &[("configure", 70), ("understand", 60)],
+            EntityKind::Repo => &[],
+        };
+
+        for &(task_name, priority) in routes {
+            store.insert_task_route(&TaskRoute {
+                task_name: task_name.to_string(),
+                entity_id: entity.id.clone(),
+                priority,
+            })?;
+            stats.task_routes_generated += 1;
+        }
+
+        // Cross-cutting: entities with "config" in name/path
+        if has_config {
+            for &(task_name, priority) in &[("configure", 60), ("setup", 60)] {
+                store.insert_task_route(&TaskRoute {
+                    task_name: task_name.to_string(),
+                    entity_id: entity.id.clone(),
+                    priority,
+                })?;
+                stats.task_routes_generated += 1;
+            }
+        }
+    }
+
+    Ok(())
+}
+
+/// Remove doc files that no longer exist on disk.
+fn cleanup_deleted_docs(
+    store: &Store,
+    parent_id: &str,
+    crate_name: &str,
+    indexed_doc_paths: &HashSet<String>,
+    stats: &mut IndexStats,
+) -> Result<(), IndexError> {
+    let is_component = parent_id.starts_with("component::");
+    let stored_files = if is_component {
+        store.list_files(Some(parent_id))?
+    } else {
+        store.list_files(None)?
+    };
+
+    for file in &stored_files {
+        if file.kind != "markdown" {
+            continue;
+        }
+        // For repo-level docs, skip files that belong to a component
+        if !is_component && file.component_id.is_some() {
+            continue;
+        }
+        if indexed_doc_paths.contains(&file.path) {
+            continue;
+        }
+        // Stale doc — clean up
+        let doc_entity_id = id::doc_id(crate_name, &file.path);
+        store.delete_edges_from(&doc_entity_id)?;
+        store.delete_edges_to(&doc_entity_id)?;
+        store.delete_entity(&doc_entity_id)?;
+        store.delete_file(&file.path)?;
+        stats.files_removed += 1;
+    }
+
+    Ok(())
+}
+
 /// Remove stored files that no longer exist on disk for a given component.
 fn cleanup_deleted_files(
     store: &Store,
@@ -533,6 +721,9 @@ fn cleanup_deleted_files(
 ) -> Result<(), IndexError> {
     let stored_files = store.list_files(Some(comp_id))?;
     for file in &stored_files {
+        if file.kind != "rust" {
+            continue;
+        }
         if !indexed_files.contains(&file.path) {
             let su_id = id::source_unit_id(crate_name, &file.path);
             cleanup_source_unit(store, comp_id, &su_id, &file.path)?;
@@ -583,6 +774,74 @@ mod tests {
         assert!(graph_stats.entities > 0);
         assert!(graph_stats.edges > 0);
         assert!(graph_stats.files > 0);
+
+        // Verify TestedBy edges exist (tests in the workspace should produce TestedBy edges)
+        let all_entities = store.list_entities().unwrap();
+        let test_entities: Vec<_> = all_entities
+            .iter()
+            .filter(|e| e.kind == EntityKind::Test)
+            .collect();
+        assert!(
+            !test_entities.is_empty(),
+            "workspace should have test entities"
+        );
+        // At least one SourceUnit should have a TestedBy edge
+        let su_entities: Vec<_> = all_entities
+            .iter()
+            .filter(|e| e.kind == EntityKind::SourceUnit)
+            .collect();
+        let has_tested_by = su_entities.iter().any(|su| {
+            store
+                .edges_from(&su.id)
+                .unwrap_or_default()
+                .iter()
+                .any(|e| e.rel == EdgeKind::TestedBy)
+        });
+        assert!(has_tested_by, "should have TestedBy edges from SourceUnits");
+
+        // Verify ConfiguredBy edges exist (if features were extracted)
+        if stats.features_extracted > 0 {
+            let comp_entities: Vec<_> = all_entities
+                .iter()
+                .filter(|e| e.kind == EntityKind::Component)
+                .collect();
+            let has_configured_by = comp_entities.iter().any(|comp| {
+                store
+                    .edges_from(&comp.id)
+                    .unwrap_or_default()
+                    .iter()
+                    .any(|e| e.rel == EdgeKind::ConfiguredBy)
+            });
+            assert!(
+                has_configured_by,
+                "should have ConfiguredBy edges from Components"
+            );
+        }
+    }
+
+    #[test]
+    fn index_generates_task_routes() {
+        let store = Store::open_in_memory().unwrap();
+        let root = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .parent()
+            .unwrap()
+            .parent()
+            .unwrap();
+
+        let stats = index_project(&store, root).unwrap();
+        assert!(
+            stats.task_routes_generated > 0,
+            "should generate task routes"
+        );
+
+        let understand_routes = store.routes_for_task("understand").unwrap();
+        assert!(
+            !understand_routes.is_empty(),
+            "should have 'understand' routes"
+        );
+
+        let test_routes = store.routes_for_task("test").unwrap();
+        assert!(!test_routes.is_empty(), "should have 'test' routes");
     }
 
     #[test]

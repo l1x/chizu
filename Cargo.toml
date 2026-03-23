@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["crates/grakno-core", "crates/grakno-index", "crates/grakno-summarize", "crates/grakno"]
+members = ["crates/grakno-core", "crates/grakno-index", "crates/grakno-summarize", "crates/grakno-query", "crates/grakno"]
 
 [workspace.dependencies]
 rusqlite = { version = "0.39", features = ["bundled"] }

@@ -37,6 +37,8 @@ pub struct SummarizeOptions {
     pub component: Option<String>,
     /// Force re-summarization even if up to date.
     pub force: bool,
+    /// Workspace root for resolving relative file paths.
+    pub workspace_root: Option<std::path::PathBuf>,
 }
 
 /// Summarize source units and components in the graph.
@@ -82,7 +84,11 @@ pub fn summarize_graph(
             };
 
             // Compute current file hash for staleness detection
-            let current_hash = compute_file_hash(&file_path).ok();
+            let abs_path = match &options.workspace_root {
+                Some(root) => root.join(&file_path).display().to_string(),
+                None => file_path.clone(),
+            };
+            let current_hash = compute_file_hash(&abs_path).ok();
 
             // Check staleness
             if !options.force {

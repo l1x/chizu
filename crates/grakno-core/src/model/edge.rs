@@ -20,6 +20,9 @@ pub enum EdgeKind {
     DeclaresFeature,
     FeatureEnables,
     Mentions,
+    Migrates,
+    Specifies,
+    Renders,
 }
 
 impl EdgeKind {
@@ -41,6 +44,9 @@ impl EdgeKind {
             Self::DeclaresFeature => "declares_feature",
             Self::FeatureEnables => "feature_enables",
             Self::Mentions => "mentions",
+            Self::Migrates => "migrates",
+            Self::Specifies => "specifies",
+            Self::Renders => "renders",
         }
     }
 
@@ -62,6 +68,9 @@ impl EdgeKind {
             "declares_feature" => Some(Self::DeclaresFeature),
             "feature_enables" => Some(Self::FeatureEnables),
             "mentions" => Some(Self::Mentions),
+            "migrates" => Some(Self::Migrates),
+            "specifies" => Some(Self::Specifies),
+            "renders" => Some(Self::Renders),
             _ => None,
         }
     }
@@ -105,6 +114,9 @@ mod tests {
             EdgeKind::DeclaresFeature,
             EdgeKind::FeatureEnables,
             EdgeKind::Mentions,
+            EdgeKind::Migrates,
+            EdgeKind::Specifies,
+            EdgeKind::Renders,
         ];
         for kind in &kinds {
             let s = kind.as_str();

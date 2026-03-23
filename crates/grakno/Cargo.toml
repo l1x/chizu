@@ -12,3 +12,6 @@ argh = "0.1"
 grakno-core = { path = "../grakno-core" }
 grakno-index = { path = "../grakno-index" }
 grakno-summarize = { path = "../grakno-summarize" }
+grakno-query = { path = "../grakno-query" }
+serde_json = { workspace = true }
+notify = "7"

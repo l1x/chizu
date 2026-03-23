@@ -114,6 +114,12 @@ fn extract_toplevel(
                     uses.push(u);
                 }
             }
+            "mod_item" => {
+                // Recurse into module blocks (e.g. mod tests { ... })
+                if let Some(body) = child.child_by_field_name("body") {
+                    extract_toplevel(&body, source, symbols, uses);
+                }
+            }
             _ => {}
         }
     }

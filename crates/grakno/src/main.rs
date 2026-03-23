@@ -1,6 +1,6 @@
 mod cli;
 
-use cli::{Command, QuerySub, SummarizeCmd, TopLevel};
+use cli::{Command, EmbedCmd, PlanCmd, QuerySub, SearchCmd, SummarizeCmd, TopLevel, WatchCmd};
 use grakno_core::Store;
 
 fn main() {
@@ -33,6 +33,10 @@ fn main() {
             None => cmd_inspect_overview(&store),
         },
         Command::Summarize(cmd) => cmd_summarize(&store, cmd),
+        Command::Embed(cmd) => cmd_embed(&store, cmd),
+        Command::Search(cmd) => cmd_search(&store, cmd),
+        Command::Watch(cmd) => cmd_watch(&store, cmd),
+        Command::Plan(cmd) => cmd_plan(&store, cmd),
     }
 }
 
@@ -73,6 +77,7 @@ fn cmd_summarize(store: &Store, cmd: SummarizeCmd) {
     let options = grakno_summarize::summarizer::SummarizeOptions {
         component: cmd.component,
         force: cmd.force,
+        workspace_root: Some(std::env::current_dir().unwrap_or_default()),
     };
 
     match grakno_summarize::summarize_graph(store, &config, &options) {
@@ -221,6 +226,232 @@ fn cmd_inspect_entity(store: &Store, id: &str) {
         println!("\nsummary: {}", s.short_summary);
         if !s.keywords.is_empty() {
             println!("keywords: {}", s.keywords.join(", "));
+        }
+    }
+}
+
+fn cmd_embed(store: &Store, cmd: EmbedCmd) {
+    let config = grakno_summarize::SummarizeConfig::new(cmd.base_url, cmd.api_key, cmd.model);
+    let client = match grakno_summarize::EmbeddingClient::new(&config) {
+        Ok(c) => c,
+        Err(e) => {
+            eprintln!("error: {e}");
+            std::process::exit(1);
+        }
+    };
+    let options = grakno_summarize::EmbedOptions {
+        component: cmd.component,
+        force: cmd.force,
+    };
+
+    match grakno_summarize::embedding::embed_graph(store, &client, &options) {
+        Ok(stats) => {
+            println!("embedding complete:\n{stats}");
+        }
+        Err(e) => {
+            eprintln!("error: {e}");
+            std::process::exit(1);
+        }
+    }
+}
+
+fn cmd_watch(store: &Store, cmd: WatchCmd) {
+    use notify::{Event, RecursiveMode, Watcher};
+    use std::path::Path;
+    use std::sync::mpsc;
+    use std::time::{Duration, Instant};
+
+    let root = Path::new(&cmd.path).canonicalize().unwrap_or_else(|e| {
+        eprintln!("error: invalid path '{}': {e}", cmd.path);
+        std::process::exit(1);
+    });
+
+    // Initial index
+    println!("running initial index of {}…", root.display());
+    match grakno_index::index_project(store, &root) {
+        Ok(stats) => println!("initial index complete:\n{stats}"),
+        Err(e) => {
+            eprintln!("error during initial index: {e}");
+            std::process::exit(1);
+        }
+    }
+
+    let debounce = Duration::from_millis(cmd.debounce_ms);
+    let (tx, rx) = mpsc::channel::<Event>();
+
+    let mut watcher = notify::recommended_watcher(move |res: Result<Event, notify::Error>| {
+        if let Ok(event) = res {
+            let _ = tx.send(event);
+        }
+    })
+    .unwrap_or_else(|e| {
+        eprintln!("error: failed to create watcher: {e}");
+        std::process::exit(1);
+    });
+
+    watcher
+        .watch(&root, RecursiveMode::Recursive)
+        .unwrap_or_else(|e| {
+            eprintln!("error: failed to watch '{}': {e}", root.display());
+            std::process::exit(1);
+        });
+
+    println!(
+        "watching {} (debounce {}ms, Ctrl+C to stop)",
+        root.display(),
+        cmd.debounce_ms
+    );
+
+    let relevant_ext = |p: &Path| -> bool {
+        matches!(
+            p.extension().and_then(|e| e.to_str()),
+            Some("rs" | "toml" | "md")
+        )
+    };
+
+    let ignored = |p: &Path| -> bool {
+        for component in p.components() {
+            let s = component.as_os_str().to_string_lossy();
+            if s == "target" || s == ".git" {
+                return true;
+            }
+        }
+        matches!(p.extension().and_then(|e| e.to_str()), Some("db"))
+    };
+
+    loop {
+        // Block until we get the first relevant event
+        loop {
+            match rx.recv() {
+                Ok(event) => {
+                    if event.paths.iter().any(|p| !ignored(p) && relevant_ext(p)) {
+                        break;
+                    }
+                }
+                Err(_) => {
+                    // Channel closed, watcher dropped
+                    return;
+                }
+            }
+        }
+
+        // Debounce: drain events for the debounce window
+        let deadline = Instant::now() + debounce;
+        loop {
+            let remaining = deadline.saturating_duration_since(Instant::now());
+            if remaining.is_zero() {
+                break;
+            }
+            match rx.recv_timeout(remaining) {
+                Ok(_) => {} // coalesce
+                Err(mpsc::RecvTimeoutError::Timeout) => break,
+                Err(mpsc::RecvTimeoutError::Disconnected) => return,
+            }
+        }
+
+        println!("\nchange detected, re-indexing…");
+        match grakno_index::index_project(store, &root) {
+            Ok(stats) => println!("re-index complete:\n{stats}"),
+            Err(e) => eprintln!("re-index error: {e}"),
+        }
+    }
+}
+
+fn cmd_plan(store: &Store, cmd: PlanCmd) {
+    let config = grakno_query::PipelineConfig {
+        limit: cmd.limit,
+        ..Default::default()
+    };
+
+    // Optionally embed the query if all three embedding options are provided
+    let query_embedding = match (&cmd.base_url, &cmd.api_key, &cmd.model) {
+        (Some(base_url), Some(api_key), Some(model)) => {
+            let embed_config = grakno_summarize::SummarizeConfig::new(
+                base_url.clone(),
+                api_key.clone(),
+                model.clone(),
+            );
+            match grakno_summarize::EmbeddingClient::new(&embed_config) {
+                Ok(client) => match client.embed(&[&cmd.query]) {
+                    Ok(mut vecs) if !vecs.is_empty() => Some(vecs.remove(0)),
+                    Ok(_) => {
+                        eprintln!(
+                            "warning: embedding returned no vectors, falling back to keyword-only"
+                        );
+                        None
+                    }
+                    Err(e) => {
+                        eprintln!("warning: embedding failed ({e}), falling back to keyword-only");
+                        None
+                    }
+                },
+                Err(e) => {
+                    eprintln!("warning: failed to create embedding client ({e}), falling back to keyword-only");
+                    None
+                }
+            }
+        }
+        _ => None,
+    };
+
+    let embedding_ref = query_embedding.as_deref();
+
+    match grakno_query::QueryPipeline::run(store, &cmd.query, embedding_ref, &config) {
+        Ok(plan) => match cmd.format.as_str() {
+            "json" => {
+                let json = serde_json::to_string_pretty(&plan).unwrap_or_else(|e| {
+                    eprintln!("error serializing plan: {e}");
+                    std::process::exit(1);
+                });
+                println!("{json}");
+            }
+            _ => {
+                print!("{}", plan.display());
+            }
+        },
+        Err(e) => {
+            eprintln!("error: {e}");
+            std::process::exit(1);
+        }
+    }
+}
+
+fn cmd_search(store: &Store, cmd: SearchCmd) {
+    let config = grakno_summarize::SummarizeConfig::new(cmd.base_url, cmd.api_key, cmd.model);
+    let client = match grakno_summarize::EmbeddingClient::new(&config) {
+        Ok(c) => c,
+        Err(e) => {
+            eprintln!("error: {e}");
+            std::process::exit(1);
+        }
+    };
+
+    match grakno_summarize::embedding::search(store, &client, &cmd.query, cmd.k) {
+        Ok(results) if results.is_empty() => {
+            println!("no results found");
+        }
+        Ok(results) => {
+            for (i, r) in results.iter().enumerate() {
+                println!("{}. {}  (distance: {:.3})", i + 1, r.entity_id, r.distance);
+                let location = match (&r.path, r.line_start) {
+                    (Some(p), Some(l)) => format!("{p}:{l}"),
+                    (Some(p), None) => p.clone(),
+                    _ => String::new(),
+                };
+                if !location.is_empty() {
+                    println!("   [{}] {}", r.entity_kind, location);
+                } else {
+                    println!("   [{}]", r.entity_kind);
+                }
+                if !r.short_summary.is_empty() {
+                    println!("   {}", r.short_summary);
+                }
+                println!();
+            }
+        }
+        Err(e) => {
+            eprintln!("error: {e}");
+            std::process::exit(1);
         }
     }
 }

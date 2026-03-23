@@ -246,9 +246,7 @@ impl Store {
             #[cfg(feature = "usearch")]
             Self::Sqlite(s) => s.vector_search(_query, _k),
             #[cfg(not(feature = "usearch"))]
-            Self::Sqlite(_) => Err(crate::error::GraknoError::Other(
-                "vector search requires the 'usearch' feature".into(),
-            )),
+            Self::Sqlite(_) => Ok(Vec::new()),
             #[cfg(feature = "grafeo")]
             Self::Grafeo(g) => g.vector_search(_query, _k),
         }
@@ -307,6 +305,13 @@ mod tests {
     fn store_open_in_memory() {
         let store = Store::open_in_memory().unwrap();
         assert_eq!(store.schema_version().unwrap(), Some(4));
+    }
+
+    #[test]
+    fn vector_search_without_usearch_returns_empty() {
+        let store = Store::open_in_memory().unwrap();
+        let result = store.vector_search(&[0.1, 0.2, 0.3], 10).unwrap();
+        assert!(result.is_empty());
     }
 
     #[cfg(feature = "grafeo")]
