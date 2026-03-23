@@ -34,6 +34,46 @@ pub fn task_id(task_name: &str) -> String {
     format!("task::{task_name}")
 }
 
+pub fn migration_id(component_name: &str, path: &str) -> String {
+    format!("migration::{component_name}::{path}")
+}
+
+pub fn spec_id(component_name: &str, path: &str) -> String {
+    format!("spec::{component_name}::{path}")
+}
+
+pub fn workflow_id(path: &str) -> String {
+    format!("workflow::{path}")
+}
+
+pub fn agent_config_id(path: &str) -> String {
+    format!("agent_config::{path}")
+}
+
+pub fn template_id(path: &str) -> String {
+    format!("template::{path}")
+}
+
+pub fn infra_root_id(path: &str) -> String {
+    format!("infra_root::{path}")
+}
+
+pub fn deployable_id(path: &str) -> String {
+    format!("deployable::{path}")
+}
+
+pub fn command_id(path: &str) -> String {
+    format!("command::{path}")
+}
+
+pub fn site_id(name: &str) -> String {
+    format!("site::{name}")
+}
+
+pub fn content_page_id(site_name: &str, path: &str) -> String {
+    format!("content_page::{site_name}::{path}")
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -67,5 +107,33 @@ mod tests {
             "doc::grakno-core::README.md"
         );
         assert_eq!(task_id("build"), "task::build");
+        assert_eq!(
+            migration_id("myapp", "migrations/001.sql"),
+            "migration::myapp::migrations/001.sql"
+        );
+        assert_eq!(
+            spec_id("myapp", "specs/main.tla"),
+            "spec::myapp::specs/main.tla"
+        );
+        assert_eq!(
+            workflow_id("workflows/deploy.toml"),
+            "workflow::workflows/deploy.toml"
+        );
+        assert_eq!(agent_config_id("CLAUDE.md"), "agent_config::CLAUDE.md");
+        assert_eq!(
+            template_id("templates/base.html"),
+            "template::templates/base.html"
+        );
+        assert_eq!(infra_root_id("infra/prod"), "infra_root::infra/prod");
+        assert_eq!(deployable_id("Dockerfile"), "deployable::Dockerfile");
+        assert_eq!(
+            command_id("playbooks/deploy.yml"),
+            "command::playbooks/deploy.yml"
+        );
+        assert_eq!(site_id("dev.l1x.be"), "site::dev.l1x.be");
+        assert_eq!(
+            content_page_id("dev.l1x.be", "content/blog/post.md"),
+            "content_page::dev.l1x.be::content/blog/post.md"
+        );
     }
 }

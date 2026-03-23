@@ -23,20 +23,36 @@ pub struct IndexStats {
     pub docs_indexed: usize,
     pub tasks_extracted: usize,
     pub task_routes_generated: usize,
+    pub migrations_indexed: usize,
+    pub specs_indexed: usize,
+    pub workflows_indexed: usize,
+    pub agent_configs_indexed: usize,
+    pub templates_indexed: usize,
+    pub infra_roots_indexed: usize,
+    pub deployables_indexed: usize,
+    pub commands_indexed: usize,
 }
 
 impl fmt::Display for IndexStats {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        writeln!(f, "crates:   {}", self.crates_found)?;
-        writeln!(f, "files:    {}", self.files_indexed)?;
-        writeln!(f, "skipped:  {}", self.files_skipped)?;
-        writeln!(f, "removed:  {}", self.files_removed)?;
-        writeln!(f, "symbols:  {}", self.symbols_extracted)?;
-        writeln!(f, "features: {}", self.features_extracted)?;
-        writeln!(f, "docs:     {}", self.docs_indexed)?;
-        writeln!(f, "tasks:    {}", self.tasks_extracted)?;
-        writeln!(f, "routes:   {}", self.task_routes_generated)?;
-        write!(f, "edges:    {}", self.edges_created)
+        writeln!(f, "crates:        {}", self.crates_found)?;
+        writeln!(f, "files:         {}", self.files_indexed)?;
+        writeln!(f, "skipped:       {}", self.files_skipped)?;
+        writeln!(f, "removed:       {}", self.files_removed)?;
+        writeln!(f, "symbols:       {}", self.symbols_extracted)?;
+        writeln!(f, "features:      {}", self.features_extracted)?;
+        writeln!(f, "docs:          {}", self.docs_indexed)?;
+        writeln!(f, "tasks:         {}", self.tasks_extracted)?;
+        writeln!(f, "migrations:    {}", self.migrations_indexed)?;
+        writeln!(f, "specs:         {}", self.specs_indexed)?;
+        writeln!(f, "workflows:     {}", self.workflows_indexed)?;
+        writeln!(f, "agent_configs: {}", self.agent_configs_indexed)?;
+        writeln!(f, "templates:     {}", self.templates_indexed)?;
+        writeln!(f, "infra_roots:   {}", self.infra_roots_indexed)?;
+        writeln!(f, "deployables:   {}", self.deployables_indexed)?;
+        writeln!(f, "commands:      {}", self.commands_indexed)?;
+        writeln!(f, "routes:        {}", self.task_routes_generated)?;
+        write!(f, "edges:         {}", self.edges_created)
     }
 }
 
@@ -224,6 +240,151 @@ pub fn index_project(store: &Store, path: &Path) -> Result<IndexStats, IndexErro
             stats.tasks_extracted += 1;
         }
     }
+
+    // Scan migrations (**/migrations/*.sql)
+    let (count, edge_count) = scan_files(
+        store,
+        &workspace.root,
+        &repo_id,
+        |p| {
+            p.extension().is_some_and(|e| e == "sql")
+                && p.parent()
+                    .is_some_and(|d| d.file_name().is_some_and(|n| n == "migrations"))
+        },
+        "sql",
+        EntityKind::Migration,
+        EdgeKind::Contains,
+        Some("sql"),
+        id::migration_id,
+    )?;
+    stats.migrations_indexed += count;
+    stats.edges_created += edge_count;
+
+    // Scan specs (**/*.tla)
+    let (count, edge_count) = scan_files(
+        store,
+        &workspace.root,
+        &repo_id,
+        |p| p.extension().is_some_and(|e| e == "tla"),
+        "tla",
+        EntityKind::Spec,
+        EdgeKind::Contains,
+        Some("tla+"),
+        id::spec_id,
+    )?;
+    stats.specs_indexed += count;
+    stats.edges_created += edge_count;
+
+    // Scan workflows (**/workflows/*.toml, .github/workflows/*.yml)
+    let (count, edge_count) = scan_files(
+        store,
+        &workspace.root,
+        &repo_id,
+        |p| {
+            let in_workflows = p
+                .parent()
+                .is_some_and(|d| d.file_name().is_some_and(|n| n == "workflows"));
+            in_workflows
+                && p.extension()
+                    .is_some_and(|e| e == "toml" || e == "yml" || e == "yaml")
+        },
+        "workflow",
+        EntityKind::Workflow,
+        EdgeKind::Contains,
+        None,
+        |_name, path| id::workflow_id(path),
+    )?;
+    stats.workflows_indexed += count;
+    stats.edges_created += edge_count;
+
+    // Scan agent configs (CLAUDE.md, AGENTS.md, SKILL.md)
+    let (count, edge_count) = scan_files(
+        store,
+        &workspace.root,
+        &repo_id,
+        |p| {
+            let fname = p.file_name().and_then(|n| n.to_str()).unwrap_or("");
+            fname == "CLAUDE.md" || fname == "AGENTS.md" || fname == "SKILL.md"
+        },
+        "agent_config",
+        EntityKind::AgentConfig,
+        EdgeKind::ConfiguredBy,
+        Some("markdown"),
+        |_name, path| id::agent_config_id(path),
+    )?;
+    stats.agent_configs_indexed += count;
+    stats.edges_created += edge_count;
+
+    // Scan templates (templates/**/*.html, layouts/**/*.html, *.astro)
+    let (count, edge_count) = scan_files(
+        store,
+        &workspace.root,
+        &repo_id,
+        |p| {
+            let ext = p.extension().and_then(|e| e.to_str()).unwrap_or("");
+            if ext == "astro" {
+                return true;
+            }
+            if ext != "html" {
+                return false;
+            }
+            p.ancestors().any(|a| {
+                a.file_name()
+                    .is_some_and(|n| n == "templates" || n == "layouts")
+            })
+        },
+        "template",
+        EntityKind::Template,
+        EdgeKind::Contains,
+        Some("html"),
+        |_name, path| id::template_id(path),
+    )?;
+    stats.templates_indexed += count;
+    stats.edges_created += edge_count;
+
+    // Scan infra roots (directories containing main.tf)
+    let (count, edge_count) = scan_infra_roots(store, &workspace.root, &repo_id)?;
+    stats.infra_roots_indexed += count;
+    stats.edges_created += edge_count;
+
+    // Scan deployables (Dockerfile*, docker-compose*.yml)
+    let (count, edge_count) = scan_files(
+        store,
+        &workspace.root,
+        &repo_id,
+        |p| {
+            let fname = p.file_name().and_then(|n| n.to_str()).unwrap_or("");
+            fname.contains("Dockerfile")
+                || (fname.starts_with("docker-compose")
+                    && (fname.ends_with(".yml") || fname.ends_with(".yaml")))
+        },
+        "docker",
+        EntityKind::Deployable,
+        EdgeKind::Contains,
+        Some("dockerfile"),
+        |_name, path| id::deployable_id(path),
+    )?;
+    stats.deployables_indexed += count;
+    stats.edges_created += edge_count;
+
+    // Scan commands (**/playbooks/*.yml)
+    let (count, edge_count) = scan_files(
+        store,
+        &workspace.root,
+        &repo_id,
+        |p| {
+            p.extension().is_some_and(|e| e == "yml" || e == "yaml")
+                && p.parent()
+                    .is_some_and(|d| d.file_name().is_some_and(|n| n == "playbooks"))
+        },
+        "ansible",
+        EntityKind::Command,
+        EdgeKind::Contains,
+        Some("yaml"),
+        |_name, path| id::command_id(path),
+    )?;
+    stats.commands_indexed += count;
+    stats.edges_created += edge_count;
 
     // Generate heuristic task routes
     generate_task_routes(store, &mut stats)?;
@@ -731,6 +892,189 @@ fn cleanup_deleted_files(
         }
     }
     Ok(())
+}
+
+/// Recursively collect files matching a predicate, skipping .git/target/node_modules.
+fn collect_files<F>(dir: &Path, predicate: &F, out: &mut Vec<std::path::PathBuf>)
+where
+    F: Fn(&Path) -> bool,
+{
+    let entries = match std::fs::read_dir(dir) {
+        Ok(e) => e,
+        Err(_) => return,
+    };
+    let mut sorted: Vec<_> = entries.filter_map(|e| e.ok()).collect();
+    sorted.sort_by_key(|e| e.path());
+    for entry in sorted {
+        let path = entry.path();
+        if path.is_dir() {
+            let name = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
+            if matches!(name, ".git" | "target" | "node_modules") {
+                continue;
+            }
+            collect_files(&path, predicate, out);
+        } else if predicate(&path) {
+            out.push(path);
+        }
+    }
+}
+
+/// Generic file scanner: collects files matching predicate, inserts entities and edges.
+/// Returns (items_indexed, edges_created).
+#[allow(clippy::too_many_arguments)]
+fn scan_files(
+    store: &Store,
+    workspace_root: &Path,
+    parent_id: &str,
+    predicate: impl Fn(&Path) -> bool,
+    file_kind: &str,
+    entity_kind: EntityKind,
+    edge_kind: EdgeKind,
+    language: Option<&str>,
+    id_fn: impl Fn(&str, &str) -> String,
+) -> Result<(usize, usize), IndexError> {
+    let parent_name = parent_id.split("::").nth(1).unwrap_or(parent_id);
+
+    let mut files = Vec::new();
+    collect_files(workspace_root, &predicate, &mut files);
+
+    let mut items = 0;
+    let mut edges = 0;
+
+    for path in &files {
+        let rel_path = path.strip_prefix(workspace_root).unwrap_or(path);
+        let rel_path_str = rel_path.display().to_string();
+
+        let content = std::fs::read(path)?;
+        let hash = format!("blake3:{}", blake3::hash(&content).to_hex());
+
+        if let Ok(existing) = store.get_file(&rel_path_str) {
+            if existing.hash == hash {
+                continue;
+            }
+        }
+
+        store.insert_file(&FileRecord {
+            path: rel_path_str.clone(),
+            component_id: None,
+            kind: file_kind.to_string(),
+            hash,
+            indexed: true,
+            ignore_reason: None,
+        })?;
+
+        let entity_id = id_fn(parent_name, &rel_path_str);
+        let name = path
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or(&rel_path_str)
+            .to_string();
+
+        store.insert_entity(&Entity {
+            id: entity_id.clone(),
+            kind: entity_kind,
+            name,
+            component_id: None,
+            path: Some(rel_path_str.clone()),
+            language: language.map(|s| s.to_string()),
+            line_start: None,
+            line_end: None,
+            visibility: None,
+            exported: true,
+        })?;
+
+        store.insert_edge(&Edge {
+            src_id: parent_id.to_string(),
+            rel: edge_kind,
+            dst_id: entity_id,
+            provenance_path: Some(rel_path_str),
+            provenance_line: None,
+        })?;
+        edges += 1;
+        items += 1;
+    }
+
+    Ok((items, edges))
+}
+
+/// Scan directories containing main.tf as infrastructure roots.
+/// Returns (items_indexed, edges_created).
+fn scan_infra_roots(
+    store: &Store,
+    workspace_root: &Path,
+    repo_id: &str,
+) -> Result<(usize, usize), IndexError> {
+    let mut tf_files = Vec::new();
+    collect_files(
+        workspace_root,
+        &|p: &Path| p.file_name().is_some_and(|n| n == "main.tf"),
+        &mut tf_files,
+    );
+
+    let mut items = 0;
+    let mut edges = 0;
+
+    for tf_path in &tf_files {
+        let dir = match tf_path.parent() {
+            Some(d) => d,
+            None => continue,
+        };
+        let rel_dir = dir.strip_prefix(workspace_root).unwrap_or(dir);
+        let rel_dir_str = rel_dir.display().to_string();
+
+        let rel_path = tf_path.strip_prefix(workspace_root).unwrap_or(tf_path);
+        let rel_path_str = rel_path.display().to_string();
+
+        let content = std::fs::read(tf_path)?;
+        let hash = format!("blake3:{}", blake3::hash(&content).to_hex());
+
+        if let Ok(existing) = store.get_file(&rel_path_str) {
+            if existing.hash == hash {
+                continue;
+            }
+        }
+
+        store.insert_file(&FileRecord {
+            path: rel_path_str.clone(),
+            component_id: None,
+            kind: "terraform".to_string(),
+            hash,
+            indexed: true,
+            ignore_reason: None,
+        })?;
+
+        let entity_id = id::infra_root_id(&rel_dir_str);
+        let name = if rel_dir_str.is_empty() {
+            "root".to_string()
+        } else {
+            rel_dir_str.clone()
+        };
+
+        store.insert_entity(&Entity {
+            id: entity_id.clone(),
+            kind: EntityKind::InfraRoot,
+            name,
+            component_id: None,
+            path: Some(rel_dir_str),
+            language: Some("terraform".to_string()),
+            line_start: None,
+            line_end: None,
+            visibility: None,
+            exported: true,
+        })?;
+
+        store.insert_edge(&Edge {
+            src_id: repo_id.to_string(),
+            rel: EdgeKind::Contains,
+            dst_id: entity_id,
+            provenance_path: Some(rel_path_str),
+            provenance_line: None,
+        })?;
+        edges += 1;
+        items += 1;
+    }
+
+    Ok((items, edges))
 }
 
 #[cfg(test)]
