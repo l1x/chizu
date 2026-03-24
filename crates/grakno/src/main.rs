@@ -1,7 +1,11 @@
 mod cli;
+mod config;
 mod observability;
 
-use cli::{Command, EmbedCmd, PlanCmd, QuerySub, SearchCmd, SummarizeCmd, TopLevel, WatchCmd};
+use cli::{
+    Command, ConfigInitCmd, ConfigSub, ConfigValidateCmd, EmbedCmd, PlanCmd, QuerySub, SearchCmd,
+    SummarizeCmd, TopLevel, WatchCmd,
+};
 use grakno_core::Store;
 use observability::{record_store_stats, ObservabilityConfig};
 use std::str::FromStr;
@@ -27,6 +31,35 @@ fn main() {
         db = %args.db,
         "Grakno starting"
     );
+
+    // Handle config commands (don't need store)
+    match &args.command {
+        Command::Config(cmd) => {
+            match &cmd.sub {
+                ConfigSub::Init(init) => cmd_config_init(init),
+                ConfigSub::Validate(val) => cmd_config_validate(val),
+            }
+            return;
+        }
+        _ => {}
+    }
+
+    // Load configuration file if present
+    let _config = match config::Config::find() {
+        Ok(Some((cfg, path))) => {
+            tracing::info!(config_path = %path.display(), "loaded configuration");
+            Some(cfg)
+        }
+        Ok(None) => {
+            tracing::debug!("no .grakno.toml found, using defaults");
+            None
+        }
+        Err(e) => {
+            tracing::error!(error = %e, "failed to load configuration");
+            eprintln!("error: failed to load configuration: {e}");
+            std::process::exit(1);
+        }
+    };
 
     let store = open_store(&args.backend, &args.db);
 
@@ -56,6 +89,106 @@ fn main() {
         Command::Search(cmd) => cmd_search(&store, cmd),
         Command::Watch(cmd) => cmd_watch(&store, cmd),
         Command::Plan(cmd) => cmd_plan(&store, cmd),
+        Command::Config(_) => {
+            // Already handled above
+        }
+    }
+}
+
+fn cmd_config_init(cmd: &ConfigInitCmd) {
+    let path = std::path::Path::new(&cmd.path);
+
+    // Check if file already exists
+    if path.exists() && !cmd.force {
+        eprintln!("error: config file already exists at {}", path.display());
+        eprintln!("       use --force to overwrite");
+        std::process::exit(1);
+    }
+
+    // Generate default config with comments
+    let content = config::Config::default_with_comments();
+
+    // Ensure parent directory exists
+    if let Some(parent) = path.parent() {
+        if let Err(e) = std::fs::create_dir_all(parent) {
+            eprintln!("error: failed to create directory: {e}");
+            std::process::exit(1);
+        }
+    }
+
+    // Write config file
+    match std::fs::write(path, content) {
+        Ok(_) => {
+            println!("created configuration file: {}", path.display());
+            println!("\nedit this file to customize grakno settings:");
+            println!("  - index.parallel_workers: number of indexing threads");
+            println!("  - query.default_limit: default result count for queries");
+            println!("  - query.rerank_weights: scoring signal weights");
+            println!("  - llm.default_model: model for summarization");
+        }
+        Err(e) => {
+            eprintln!("error: failed to write config file: {e}");
+            std::process::exit(1);
+        }
+    }
+}
+
+fn cmd_config_validate(cmd: &ConfigValidateCmd) {
+    let config_result = if let Some(ref path_str) = cmd.path {
+        let path = std::path::Path::new(path_str);
+        config::Config::load(path)
+    } else {
+        config::Config::find().map(|opt| opt.map(|(cfg, _)| cfg))
+    };
+
+    match config_result {
+        Ok(Some(config)) => {
+            // Config loaded and validated successfully
+            println!("configuration is valid");
+            println!("\n[index]");
+            println!("  parallel_workers: {}", config.index.parallel_workers);
+            println!(
+                "  exclude_patterns: {} patterns",
+                config.index.exclude_patterns.len()
+            );
+            println!("\n[query]");
+            println!("  default_limit: {}", config.query.default_limit);
+            println!("\n[query.rerank_weights]");
+            println!(
+                "  task_route: {:.2}",
+                config.query.rerank_weights.task_route
+            );
+            println!("  keyword: {:.2}", config.query.rerank_weights.keyword);
+            println!(
+                "  name_match: {:.2}",
+                config.query.rerank_weights.name_match
+            );
+            println!("  vector: {:.2}", config.query.rerank_weights.vector);
+            println!(
+                "  kind_preference: {:.2}",
+                config.query.rerank_weights.kind_preference
+            );
+            println!("  exported: {:.2}", config.query.rerank_weights.exported);
+            println!(
+                "  path_match: {:.2}",
+                config.query.rerank_weights.path_match
+            );
+            println!("\n[llm]");
+            println!("  default_model: {}", config.llm.default_model);
+            println!("  timeout_secs: {}", config.llm.timeout_secs);
+            println!("  retry_attempts: {}", config.llm.retry_attempts);
+            println!("  max_tokens: {}", config.llm.max_tokens);
+            println!("  temperature: {}", config.llm.temperature);
+        }
+        Ok(None) => {
+            eprintln!("error: no configuration file found");
+            eprintln!("\nrun `grakno config init` to create a default configuration");
+            std::process::exit(1);
+        }
+        Err(e) => {
+            eprintln!("error: {e}");
+            std::process::exit(1);
+        }
     }
 }
 

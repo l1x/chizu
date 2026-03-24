@@ -27,7 +27,7 @@ pub struct TopLevel {
     pub command: Command,
 }
 
-#[derive(FromArgs)]
+#[derive(FromArgs, Debug)]
 #[argh(subcommand)]
 pub enum Command {
     Index(IndexCmd),
@@ -38,6 +38,7 @@ pub enum Command {
     Search(SearchCmd),
     Watch(WatchCmd),
     Plan(PlanCmd),
+    Config(ConfigCmd),
 }
 
 /// index a Rust workspace into the graph
@@ -50,14 +51,14 @@ pub struct IndexCmd {
 }
 
 /// query the graph
-#[derive(FromArgs)]
+#[derive(FromArgs, Debug)]
 #[argh(subcommand, name = "query")]
 pub struct QueryCmd {
     #[argh(subcommand)]
     pub sub: QuerySub,
 }
 
-#[derive(FromArgs)]
+#[derive(FromArgs, Debug)]
 #[argh(subcommand)]
 pub enum QuerySub {
     Entity(QueryEntityCmd),
@@ -228,4 +229,41 @@ pub struct WatchCmd {
     /// debounce interval in milliseconds (default: 500)
     #[argh(option, default = "500")]
     pub debounce_ms: u64,
+}
+
+/// configuration management
+#[derive(FromArgs, Debug)]
+#[argh(subcommand, name = "config")]
+pub struct ConfigCmd {
+    #[argh(subcommand)]
+    pub sub: ConfigSub,
+}
+
+#[derive(FromArgs, Debug)]
+#[argh(subcommand)]
+pub enum ConfigSub {
+    Init(ConfigInitCmd),
+    Validate(ConfigValidateCmd),
+}
+
+/// initialize a new .grakno.toml config file
+#[derive(FromArgs, Debug)]
+#[argh(subcommand, name = "init")]
+pub struct ConfigInitCmd {
+    /// path to create config (default: ./.grakno.toml)
+    #[argh(option, default = "String::from(\".grakno.toml\")")]
+    pub path: String,
+
+    /// overwrite existing config file
+    #[argh(switch)]
+    pub force: bool,
+}
+
+/// validate existing .grakno.toml config file
+#[derive(FromArgs, Debug)]
+#[argh(subcommand, name = "validate")]
+pub struct ConfigValidateCmd {
+    /// path to config file (default: search upwards for .grakno.toml)
+    #[argh(option)]
+    pub path: Option<String>,
 }
