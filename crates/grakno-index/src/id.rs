@@ -74,6 +74,16 @@ pub fn content_page_id(site_name: &str, path: &str) -> String {
     format!("content_page::{site_name}::{path}")
 }
 
+/// Generic file entity ID (for non-Cargo projects)
+pub fn file_entity_id(path: &str) -> String {
+    format!("file::{path}")
+}
+
+/// Symbol within a specific file (for non-Cargo projects)
+pub fn symbol_in_file(path: &str, symbol_name: &str) -> String {
+    format!("symbol::{path}::{symbol_name}")
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -1660,6 +1660,371 @@ fn parse_frontmatter_title(content: &str) -> Option<String> {
     None
 }
 
+/// Index a generic project without requiring Cargo.toml or any project structure.
+/// Simply walks the directory, parses supported files, and creates entities/edges.
+#[tracing::instrument(skip(store), fields(path = %path.display()))]
+pub fn index_generic_project(store: &Store, path: &Path) -> Result<IndexStats, IndexError> {
+    tracing::info!("starting generic project indexing");
+    let start = std::time::Instant::now();
+
+    let mut stats = IndexStats::default();
+    let mut indexed_files = HashSet::new();
+
+    // Walk and index all supported files
+    index_generic_walk(
+        store,
+        path,
+        path,
+        &mut stats,
+        &mut indexed_files,
+    )?;
+
+    // Clean up deleted files
+    cleanup_generic_deleted_files(store, &indexed_files, &mut stats)?;
+
+    tracing::info!(
+        duration_ms = start.elapsed().as_millis() as u64,
+        files = stats.files_indexed,
+        symbols = stats.symbols_extracted,
+        edges = stats.edges_created,
+        "generic indexing complete"
+    );
+
+    Ok(stats)
+}
+
+fn index_generic_walk(
+    store: &Store,
+    dir: &Path,
+    project_root: &Path,
+    stats: &mut IndexStats,
+    indexed_files: &mut HashSet<String>,
+) -> Result<(), IndexError> {
+    let mut entries: Vec<_> = std::fs::read_dir(dir)?.filter_map(|e| e.ok()).collect();
+    entries.sort_by_key(|e| e.path());
+
+    for entry in entries {
+        let path = entry.path();
+        let file_name = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
+
+        // Skip hidden dirs and common build/output directories
+        if path.is_dir() {
+            if file_name.starts_with('.') || matches!(file_name, "target" | "node_modules" | "dist" | "build" | "out" | "coverage" | "__pycache__") {
+                continue;
+            }
+            index_generic_walk(store, &path, project_root, stats, indexed_files)?;
+        } else {
+            // Index supported file types directly
+            let rel_path = path.strip_prefix(project_root).unwrap_or(&path);
+            let _rel_path_str = rel_path.display().to_string();
+            
+            // Check file extension for supported languages
+            let ext = path.extension().and_then(|e| e.to_str());
+            match ext {
+                Some("rs") => {
+                    index_generic_source_file(store, &path, project_root, "rust", stats, indexed_files)?;
+                }
+                Some("ts") | Some("tsx") => {
+                    index_generic_source_file(store, &path, project_root, "typescript", stats, indexed_files)?;
+                }
+                Some("astro") => {
+                    index_generic_source_file(store, &path, project_root, "astro", stats, indexed_files)?;
+                }
+                Some("md") => {
+                    index_generic_doc_file(store, &path, project_root, stats, indexed_files)?;
+                }
+                _ => {} // Skip unsupported files
+            }
+        }
+    }
+    Ok(())
+}
+
+fn index_generic_source_file(
+    store: &Store,
+    path: &Path,
+    project_root: &Path,
+    language: &str,
+    stats: &mut IndexStats,
+    indexed_files: &mut HashSet<String>,
+) -> Result<(), IndexError> {
+    let source = std::fs::read_to_string(path)?;
+    let rel_path = path.strip_prefix(project_root).unwrap_or(path);
+    let rel_path_str = rel_path.display().to_string();
+
+    // Track this file
+    indexed_files.insert(rel_path_str.clone());
+
+    // Hash content
+    let hash = format!("blake3:{}", blake3::hash(source.as_bytes()).to_hex());
+
+    // Check if unchanged
+    if let Ok(existing) = store.get_file(&rel_path_str) {
+        if existing.hash == hash {
+            stats.files_skipped += 1;
+            return Ok(());
+        }
+        // File changed - clean up old entities
+        cleanup_generic_file_entities(store, &rel_path_str)?;
+    }
+
+    // Insert/update FileRecord
+    store.insert_file(&FileRecord {
+        path: rel_path_str.clone(),
+        component_id: None,
+        kind: language.to_string(),
+        hash,
+        indexed: true,
+        ignore_reason: None,
+    })?;
+
+    // Create SourceUnit entity
+    let su_id = id::file_entity_id(&rel_path_str);
+    store.insert_entity(&Entity {
+        id: su_id.clone(),
+        kind: EntityKind::SourceUnit,
+        name: path.file_name().and_then(|n| n.to_str()).unwrap_or(&rel_path_str).to_string(),
+        component_id: None,
+        path: Some(rel_path_str.clone()),
+        language: Some(language.to_string()),
+        line_start: None,
+        line_end: None,
+        visibility: None,
+        exported: false,
+    })?;
+    stats.files_indexed += 1;
+
+    // Parse and extract symbols based on language
+    match language {
+        "rust" => {
+            if let Ok(parse_result) = parse_rust_file(&source) {
+                // Create symbol entities and Defines edges
+                for sym in &parse_result.symbols {
+                    let entity_kind = if sym.is_test {
+                        EntityKind::Test
+                    } else if sym.is_bench {
+                        EntityKind::Bench
+                    } else {
+                        EntityKind::Symbol
+                    };
+
+                    let entity_id = id::symbol_in_file(&rel_path_str, &sym.name);
+                    let exported = sym.visibility == "pub";
+
+                    store.insert_entity(&Entity {
+                        id: entity_id.clone(),
+                        kind: entity_kind,
+                        name: sym.name.clone(),
+                        component_id: None,
+                        path: Some(rel_path_str.clone()),
+                        language: Some(language.to_string()),
+                        line_start: Some(sym.line_start as i64),
+                        line_end: Some(sym.line_end as i64),
+                        visibility: Some(sym.visibility.clone()),
+                        exported,
+                    })?;
+
+                    // SourceUnit → Defines → Symbol
+                    store.insert_edge(&Edge {
+                        src_id: su_id.clone(),
+                        rel: EdgeKind::Defines,
+                        dst_id: entity_id.clone(),
+                        provenance_path: Some(rel_path_str.clone()),
+                        provenance_line: Some(sym.line_start as i64),
+                    })?;
+                    stats.edges_created += 1;
+                    stats.symbols_extracted += 1;
+
+                    // Additional edges for tests/benchmarks
+                    if entity_kind == EntityKind::Test {
+                        store.insert_edge(&Edge {
+                            src_id: su_id.clone(),
+                            rel: EdgeKind::TestedBy,
+                            dst_id: entity_id,
+                            provenance_path: Some(rel_path_str.clone()),
+                            provenance_line: Some(sym.line_start as i64),
+                        })?;
+                        stats.edges_created += 1;
+                    }
+                }
+            }
+        }
+        "typescript" => {
+            if let Ok(parse_result) = parse_ts_file(&source) {
+                for sym in &parse_result.symbols {
+                    let entity_id = id::symbol_in_file(&rel_path_str, &sym.name);
+                    store.insert_entity(&Entity {
+                        id: entity_id.clone(),
+                        kind: EntityKind::Symbol,
+                        name: sym.name.clone(),
+                        component_id: None,
+                        path: Some(rel_path_str.clone()),
+                        language: Some(language.to_string()),
+                        line_start: Some(sym.line_start as i64),
+                        line_end: Some(sym.line_end as i64),
+                        visibility: if sym.exported { Some("pub".to_string()) } else { None },
+                        exported: sym.exported,
+                    })?;
+
+                    store.insert_edge(&Edge {
+                        src_id: su_id.clone(),
+                        rel: EdgeKind::Defines,
+                        dst_id: entity_id,
+                        provenance_path: Some(rel_path_str.clone()),
+                        provenance_line: Some(sym.line_start as i64),
+                    })?;
+                    stats.edges_created += 1;
+                    stats.symbols_extracted += 1;
+                }
+            }
+        }
+        "astro" => {
+            if let Ok(_parse_result) = parse_astro_file(&source) {
+                // Create entity for the component itself
+                let comp_name = path.file_stem().and_then(|s| s.to_str()).unwrap_or("component");
+                let entity_id = id::symbol_in_file(&rel_path_str, comp_name);
+                
+                store.insert_entity(&Entity {
+                    id: entity_id.clone(),
+                    kind: EntityKind::Template,
+                    name: comp_name.to_string(),
+                    component_id: None,
+                    path: Some(rel_path_str.clone()),
+                    language: Some("astro".to_string()),
+                    line_start: None,
+                    line_end: None,
+                    visibility: Some("pub".to_string()),
+                    exported: true,
+                })?;
+
+                store.insert_edge(&Edge {
+                    src_id: su_id.clone(),
+                    rel: EdgeKind::Defines,
+                    dst_id: entity_id,
+                    provenance_path: Some(rel_path_str.clone()),
+                    provenance_line: None,
+                })?;
+                stats.edges_created += 1;
+                stats.symbols_extracted += 1;
+            }
+        }
+        _ => {}
+    }
+
+    Ok(())
+}
+
+fn index_generic_doc_file(
+    store: &Store,
+    path: &Path,
+    project_root: &Path,
+    stats: &mut IndexStats,
+    indexed_files: &mut HashSet<String>,
+) -> Result<(), IndexError> {
+    let content = std::fs::read_to_string(path)?;
+    let rel_path = path.strip_prefix(project_root).unwrap_or(path);
+    let rel_path_str = rel_path.display().to_string();
+
+    indexed_files.insert(rel_path_str.clone());
+
+    let hash = format!("blake3:{}", blake3::hash(content.as_bytes()).to_hex());
+
+    if let Ok(existing) = store.get_file(&rel_path_str) {
+        if existing.hash == hash {
+            stats.files_skipped += 1;
+            return Ok(());
+        }
+        cleanup_generic_file_entities(store, &rel_path_str)?;
+    }
+
+    store.insert_file(&FileRecord {
+        path: rel_path_str.clone(),
+        component_id: None,
+        kind: "markdown".to_string(),
+        hash,
+        indexed: true,
+        ignore_reason: None,
+    })?;
+
+    // Create Doc entity
+    let doc_id = id::doc_id("generic", &rel_path_str);
+    let title = parse_frontmatter_title(&content)
+        .or_else(|| path.file_stem().and_then(|s| s.to_str()).map(|s| s.to_string()))
+        .unwrap_or_else(|| "untitled".to_string());
+
+    store.insert_entity(&Entity {
+        id: doc_id.clone(),
+        kind: EntityKind::Doc,
+        name: title,
+        component_id: None,
+        path: Some(rel_path_str.clone()),
+        language: Some("markdown".to_string()),
+        line_start: None,
+        line_end: None,
+        visibility: None,
+        exported: true,
+    })?;
+    stats.docs_indexed += 1;
+
+    // Extract mentions and create edges
+    let mentions = extract_mentions(&content);
+    for mention in mentions {
+        // Try to find a matching symbol in the graph
+        if let Some(symbol_id) = find_symbol_by_name(store, &mention.symbol_name) {
+            store.insert_edge(&Edge {
+                src_id: doc_id.clone(),
+                rel: EdgeKind::Mentions,
+                dst_id: symbol_id,
+                provenance_path: Some(rel_path_str.clone()),
+                provenance_line: Some(mention.line as i64),
+            })?;
+            stats.edges_created += 1;
+        }
+    }
+
+    Ok(())
+}
+
+fn find_symbol_by_name(store: &Store, name: &str) -> Option<String> {
+    // Simple name-based lookup - find any symbol with matching name
+    if let Ok(entities) = store.list_entities() {
+        for entity in entities {
+            if entity.kind == EntityKind::Symbol && entity.name == name {
+                return Some(entity.id);
+            }
+        }
+    }
+    None
+}
+
+fn cleanup_generic_file_entities(store: &Store, rel_path: &str) -> Result<(), IndexError> {
+    // Delete all entities associated with this file path
+    if let Ok(entities) = store.list_entities() {
+        for entity in entities {
+            if entity.path.as_deref() == Some(rel_path) {
+                let _ = store.delete_entity(&entity.id);
+            }
+        }
+    }
+    Ok(())
+}
+
+fn cleanup_generic_deleted_files(
+    store: &Store,
+    indexed_files: &HashSet<String>,
+    stats: &mut IndexStats,
+) -> Result<(), IndexError> {
+    let stored_files = store.list_files(None)?;
+    for file in &stored_files {
+        if !indexed_files.contains(&file.path) {
+            cleanup_generic_file_entities(store, &file.path)?;
+            let _ = store.delete_file(&file.path);
+            stats.files_removed += 1;
+        }
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -48,6 +48,10 @@ pub struct IndexCmd {
     /// path to the workspace root (default: current directory)
     #[argh(positional, default = "String::from(\".\")")]
     pub path: String,
+
+    /// index any directory without requiring Cargo.toml (default: false)
+    #[argh(switch, short = 'g')]
+    pub generic: bool,
 }
 
 /// query the graph
