@@ -106,6 +106,20 @@ fn index_generic_walk(
     let mut entries: Vec<_> = std::fs::read_dir(dir)?.filter_map(|e| e.ok()).collect();
     entries.sort_by_key(|e| e.path());
 
+    // Track if this directory has terraform files for InfraRoot creation
+    let mut has_main_tf = false;
+    
+    for entry in &entries {
+        let path = entry.path();
+        if path.is_file() {
+            let file_name = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
+            if file_name == "main.tf" {
+                has_main_tf = true;
+                break;
+            }
+        }
+    }
+
     for entry in entries {
         let path = entry.path();
         let file_name = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
@@ -136,10 +150,25 @@ fn index_generic_walk(
                 Some("md") => {
                     index_generic_doc_file(store, &path, project_root, stats, indexed_files)?;
                 }
-                _ => {} // Skip unsupported files
+                Some("tf") | Some("hcl") => {
+                    index_terraform_file(store, &path, project_root, stats, indexed_files)?;
+                }
+                _ => {
+                    // Check for Dockerfile patterns
+                    if file_name.contains("Dockerfile") || 
+                       (file_name.starts_with("docker-compose") && (file_name.ends_with(".yml") || file_name.ends_with(".yaml"))) {
+                        index_deployable_file(store, &path, project_root, stats, indexed_files)?;
+                    }
+                }
             }
         }
     }
+    
+    // Create InfraRoot entity if directory has main.tf
+    if has_main_tf {
+        create_infra_root(store, dir, project_root, stats)?;
+    }
+    
     Ok(())
 }
 
@@ -384,6 +413,195 @@ fn index_generic_doc_file(
             stats.edges_created += 1;
         }
     }
+
+    Ok(())
+}
+
+fn index_terraform_file(
+    store: &Store,
+    path: &Path,
+    project_root: &Path,
+    stats: &mut IndexStats,
+    indexed_files: &mut HashSet<String>,
+) -> Result<(), IndexError> {
+    let content = std::fs::read_to_string(path)?;
+    let rel_path = path.strip_prefix(project_root).unwrap_or(path);
+    let rel_path_str = rel_path.display().to_string();
+
+    indexed_files.insert(rel_path_str.clone());
+
+    let hash = format!("blake3:{}", blake3::hash(content.as_bytes()).to_hex());
+
+    if let Ok(existing) = store.get_file(&rel_path_str) {
+        if existing.hash == hash {
+            stats.files_skipped += 1;
+            return Ok(());
+        }
+        cleanup_generic_file_entities(store, &rel_path_str)?;
+    }
+
+    store.insert_file(&FileRecord {
+        path: rel_path_str.clone(),
+        component_id: None,
+        kind: "terraform".to_string(),
+        hash,
+        indexed: true,
+        ignore_reason: None,
+    })?;
+
+    // Create SourceUnit for the terraform file
+    let su_id = id::file_entity_id(&rel_path_str);
+    store.insert_entity(&Entity {
+        id: su_id.clone(),
+        kind: EntityKind::SourceUnit,
+        name: path.file_name().and_then(|n| n.to_str()).unwrap_or(&rel_path_str).to_string(),
+        component_id: None,
+        path: Some(rel_path_str.clone()),
+        language: Some("hcl".to_string()),
+        line_start: None,
+        line_end: None,
+        visibility: None,
+        exported: false,
+    })?;
+    stats.files_indexed += 1;
+
+    // Extract terraform resource names as symbols
+    for line in content.lines() {
+        let trimmed = line.trim();
+        if trimmed.starts_with("resource") {
+            // resource "aws_ecs_service" "api" { ... }
+            if let Some(open) = trimmed.find('"') {
+                if let Some(close) = trimmed[open+1..].find('"') {
+                    let resource_type = &trimmed[open+1..open+1+close];
+                    if let Some(name_open) = trimmed[open+1+close+1..].find('"') {
+                        let name_start = open+1+close+1+name_open+1;
+                        if let Some(name_close) = trimmed[name_start..].find('"') {
+                            let resource_name = &trimmed[name_start..name_start+name_close];
+                            let symbol_id = format!("{su_id}::{resource_type}::{resource_name}");
+                            
+                            store.insert_entity(&Entity {
+                                id: symbol_id.clone(),
+                                kind: EntityKind::Symbol,
+                                name: format!("{resource_type}.{resource_name}"),
+                                component_id: None,
+                                path: Some(rel_path_str.clone()),
+                                language: Some("hcl".to_string()),
+                                line_start: None,
+                                line_end: None,
+                                visibility: Some("pub".to_string()),
+                                exported: true,
+                            })?;
+                            
+                            store.insert_edge(&Edge {
+                                src_id: su_id.clone(),
+                                rel: EdgeKind::Defines,
+                                dst_id: symbol_id,
+                                provenance_path: Some(rel_path_str.clone()),
+                                provenance_line: None,
+                            })?;
+                            stats.edges_created += 1;
+                            stats.symbols_extracted += 1;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    Ok(())
+}
+
+fn index_deployable_file(
+    store: &Store,
+    path: &Path,
+    project_root: &Path,
+    stats: &mut IndexStats,
+    indexed_files: &mut HashSet<String>,
+) -> Result<(), IndexError> {
+    let content = std::fs::read_to_string(path)?;
+    let rel_path = path.strip_prefix(project_root).unwrap_or(path);
+    let rel_path_str = rel_path.display().to_string();
+
+    indexed_files.insert(rel_path_str.clone());
+
+    let hash = format!("blake3:{}", blake3::hash(content.as_bytes()).to_hex());
+
+    if let Ok(existing) = store.get_file(&rel_path_str) {
+        if existing.hash == hash {
+            stats.files_skipped += 1;
+            return Ok(());
+        }
+        cleanup_generic_file_entities(store, &rel_path_str)?;
+    }
+
+    store.insert_file(&FileRecord {
+        path: rel_path_str.clone(),
+        component_id: None,
+        kind: "docker".to_string(),
+        hash,
+        indexed: true,
+        ignore_reason: None,
+    })?;
+
+    // Create Deployable entity
+    let deployable_id = id::deployable_id(&rel_path_str);
+    let name = path.file_name().and_then(|n| n.to_str()).unwrap_or("deployable").to_string();
+    
+    store.insert_entity(&Entity {
+        id: deployable_id.clone(),
+        kind: EntityKind::Deployable,
+        name,
+        component_id: None,
+        path: Some(rel_path_str.clone()),
+        language: Some("dockerfile".to_string()),
+        line_start: None,
+        line_end: None,
+        visibility: Some("pub".to_string()),
+        exported: true,
+    })?;
+    stats.deployables_indexed += 1;
+
+    Ok(())
+}
+
+fn create_infra_root(
+    store: &Store,
+    dir: &Path,
+    project_root: &Path,
+    stats: &mut IndexStats,
+) -> Result<(), IndexError> {
+    let rel_dir = dir.strip_prefix(project_root).unwrap_or(dir);
+    let rel_dir_str = rel_dir.display().to_string();
+    let infra_id = id::infra_root_id(&rel_dir_str);
+    
+    // Check if already exists
+    if store.get_entity(&infra_id).is_ok() {
+        return Ok(());
+    }
+
+    let name = if rel_dir_str.is_empty() {
+        "root".to_string()
+    } else {
+        rel_dir_str.clone()
+    };
+
+    store.insert_entity(&Entity {
+        id: infra_id.clone(),
+        kind: EntityKind::InfraRoot,
+        name,
+        component_id: None,
+        path: Some(rel_dir_str.clone()),
+        language: Some("terraform".to_string()),
+        line_start: None,
+        line_end: None,
+        visibility: Some("pub".to_string()),
+        exported: true,
+    })?;
+    stats.infra_roots_indexed += 1;
+
+    // Note: Deployables are independent entities.
+    // Deploys edges should be created explicitly via configuration or detected
+    // through actual references in terraform code (e.g., image URIs).
 
     Ok(())
 }
