@@ -140,7 +140,7 @@ mod tests {
         let b = make_entity("e::B", "B", EntityKind::Symbol);
         let c = make_entity("e::C", "C", EntityKind::Symbol);
         let d = make_entity("e::D", "D", EntityKind::Test);
-        let e = make_entity("e::E", "E", EntityKind::Deployable);
+        let e = make_entity("e::E", "E", EntityKind::Containerized);
 
         for ent in [&a, &b, &c, &d, &e] {
             store.insert_entity(ent).unwrap();

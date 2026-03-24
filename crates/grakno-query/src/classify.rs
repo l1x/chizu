@@ -97,7 +97,7 @@ impl TaskCategory {
                 EntityKind::Spec,
             ],
             TaskCategory::Deploy => &[
-                EntityKind::Deployable,
+                EntityKind::Containerized,
                 EntityKind::InfraRoot,
                 EntityKind::Task,
                 EntityKind::Command,
@@ -365,7 +365,7 @@ mod tests {
     fn preferred_kinds_deploy_includes_deployable() {
         assert!(TaskCategory::Deploy
             .preferred_kinds()
-            .contains(&EntityKind::Deployable));
+            .contains(&EntityKind::Containerized));
     }
 
     #[test]

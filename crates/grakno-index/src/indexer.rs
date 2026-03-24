@@ -30,7 +30,7 @@ pub struct IndexStats {
     pub agent_configs_indexed: usize,
     pub templates_indexed: usize,
     pub infra_roots_indexed: usize,
-    pub deployables_indexed: usize,
+    pub containerized_indexed: usize,
     pub commands_indexed: usize,
     pub sites_detected: usize,
     pub content_pages_indexed: usize,
@@ -52,7 +52,7 @@ impl fmt::Display for IndexStats {
         writeln!(f, "agent_configs: {}", self.agent_configs_indexed)?;
         writeln!(f, "templates:     {}", self.templates_indexed)?;
         writeln!(f, "infra_roots:   {}", self.infra_roots_indexed)?;
-        writeln!(f, "deployables:   {}", self.deployables_indexed)?;
+        writeln!(f, "containerized: {}", self.containerized_indexed)?;
         writeln!(f, "commands:      {}", self.commands_indexed)?;
         writeln!(f, "sites:         {}", self.sites_detected)?;
         writeln!(f, "content_pages: {}", self.content_pages_indexed)?;
@@ -63,24 +63,38 @@ impl fmt::Display for IndexStats {
 
 
 
+/// Track an image reference found in a terraform file.
+#[derive(Debug, Clone)]
+struct ImageRef {
+    infra_dir: String,
+    image_name: String,
+    line: i64,
+}
+
 /// Index a project by walking the directory and parsing supported files.
 /// No assumptions about project structure - works with any codebase.
 #[tracing::instrument(skip(store), fields(path = %path.display()))]
+
 pub fn index_project(store: &Store, path: &Path) -> Result<IndexStats, IndexError> {
     tracing::info!("starting generic project indexing");
     let start = std::time::Instant::now();
 
     let mut stats = IndexStats::default();
     let mut indexed_files = HashSet::new();
+    let mut image_refs: Vec<ImageRef> = Vec::new();
 
-    // Walk and index all supported files
+    // Walk and index all supported files, collecting image references
     index_generic_walk(
         store,
         path,
         path,
         &mut stats,
         &mut indexed_files,
+        &mut image_refs,
     )?;
+
+    // Create deploys edges from image references
+    create_deploys_edges(store, &image_refs, path, &mut stats)?;
 
     // Clean up deleted files
     cleanup_generic_deleted_files(store, &indexed_files, &mut stats)?;
@@ -102,12 +116,15 @@ fn index_generic_walk(
     project_root: &Path,
     stats: &mut IndexStats,
     indexed_files: &mut HashSet<String>,
+    image_refs: &mut Vec<ImageRef>,
 ) -> Result<(), IndexError> {
     let mut entries: Vec<_> = std::fs::read_dir(dir)?.filter_map(|e| e.ok()).collect();
     entries.sort_by_key(|e| e.path());
 
     // Track if this directory has terraform files for InfraRoot creation
     let mut has_main_tf = false;
+    let dir_rel_path = dir.strip_prefix(project_root).unwrap_or(dir);
+    let dir_rel_str = dir_rel_path.display().to_string();
     
     for entry in &entries {
         let path = entry.path();
@@ -129,7 +146,7 @@ fn index_generic_walk(
             if file_name.starts_with('.') || matches!(file_name, "target" | "node_modules" | "dist" | "build" | "out" | "coverage" | "__pycache__") {
                 continue;
             }
-            index_generic_walk(store, &path, project_root, stats, indexed_files)?;
+            index_generic_walk(store, &path, project_root, stats, indexed_files, image_refs)?;
         } else {
             // Index supported file types directly
             let rel_path = path.strip_prefix(project_root).unwrap_or(&path);
@@ -151,13 +168,13 @@ fn index_generic_walk(
                     index_generic_doc_file(store, &path, project_root, stats, indexed_files)?;
                 }
                 Some("tf") | Some("hcl") => {
-                    index_terraform_file(store, &path, project_root, stats, indexed_files)?;
+                    index_terraform_file(store, &path, project_root, stats, indexed_files, image_refs, &dir_rel_str)?;
                 }
                 _ => {
                     // Check for Dockerfile patterns
                     if file_name.contains("Dockerfile") || 
                        (file_name.starts_with("docker-compose") && (file_name.ends_with(".yml") || file_name.ends_with(".yaml"))) {
-                        index_deployable_file(store, &path, project_root, stats, indexed_files)?;
+                        index_containerized_file(store, &path, project_root, stats, indexed_files)?;
                     }
                 }
             }
@@ -423,6 +440,8 @@ fn index_terraform_file(
     project_root: &Path,
     stats: &mut IndexStats,
     indexed_files: &mut HashSet<String>,
+    image_refs: &mut Vec<ImageRef>,
+    infra_dir: &str,
 ) -> Result<(), IndexError> {
     let content = std::fs::read_to_string(path)?;
     let rel_path = path.strip_prefix(project_root).unwrap_or(path);
@@ -465,9 +484,22 @@ fn index_terraform_file(
     })?;
     stats.files_indexed += 1;
 
-    // Extract terraform resource names as symbols
+    // Extract terraform resource names as symbols and image references
+    let mut line_num = 0;
     for line in content.lines() {
+        line_num += 1;
         let trimmed = line.trim();
+        
+        // Look for image references
+        // Common patterns: image = "...", image_uri = "...", container_image = "..."
+        if let Some(image) = extract_image_from_line(trimmed) {
+            image_refs.push(ImageRef {
+                infra_dir: infra_dir.to_string(),
+                image_name: image,
+                line: line_num,
+            });
+        }
+        
         if trimmed.starts_with("resource") {
             // resource "aws_ecs_service" "api" { ... }
             if let Some(open) = trimmed.find('"') {
@@ -511,7 +543,126 @@ fn index_terraform_file(
     Ok(())
 }
 
-fn index_deployable_file(
+/// Extract image reference from a terraform line.
+/// Looks for patterns like: image = "...", image_uri = "...", container_image = "..."
+fn extract_image_from_line(line: &str) -> Option<String> {
+    // Check if line contains image-related key
+    let image_keys = ["image", "image_uri", "container_image", "docker_image"];
+    let has_image_key = image_keys.iter().any(|k| {
+        line.contains(&format!("{} =", k)) || line.contains(&format!("{}=", k))
+    });
+    
+    if !has_image_key {
+        return None;
+    }
+    
+    // Extract the value after =
+    if let Some(eq_pos) = line.find('=') {
+        let after_eq = &line[eq_pos + 1..].trim();
+        
+        // Try to extract quoted string
+        if let Some(open) = after_eq.find('"') {
+            let after_open = &after_eq[open + 1..];
+            if let Some(close) = after_open.find('"') {
+                let image = &after_open[..close];
+                // Filter out variable references and empty strings
+                if !image.is_empty() && !image.starts_with("$") && !image.starts_with("var.") {
+                    return Some(image.to_string());
+                }
+            }
+        }
+    }
+    
+    None
+}
+
+/// Create Deploys edges from InfraRoot to Containerized based on image references.
+fn create_deploys_edges(
+    store: &Store,
+    image_refs: &[ImageRef],
+    _project_root: &Path,
+    stats: &mut IndexStats,
+) -> Result<(), IndexError> {
+    // Get all containerized entities
+    let containerized: Vec<_> = store.list_entities()?
+        .into_iter()
+        .filter(|e| e.kind == EntityKind::Containerized)
+        .collect();
+    
+    if containerized.is_empty() {
+        return Ok(());
+    }
+    
+    for image_ref in image_refs {
+        let infra_id = id::infra_root_id(&image_ref.infra_dir);
+        
+        // Try to match image reference to a containerized entity
+        // Matching strategy: look for directory name in image path
+        // e.g., image "myapp:latest" matches Dockerfile in "myapp/" directory
+        let image_base = image_ref.image_name
+            .split(':')
+            .next()
+            .unwrap_or(&image_ref.image_name);
+        
+        // Also try matching by last path component
+        let image_name_only = image_base
+            .split('/')
+            .last()
+            .unwrap_or(image_base);
+        
+        for container in &containerized {
+            if let Some(path) = &container.path {
+                // Get the directory containing the Dockerfile
+                let container_dir = std::path::Path::new(path)
+                    .parent()
+                    .and_then(|p| p.file_name())
+                    .and_then(|n| n.to_str())
+                    .unwrap_or("");
+                
+                let container_file = std::path::Path::new(path)
+                    .file_name()
+                    .and_then(|n| n.to_str())
+                    .unwrap_or("");
+                
+                // Match if image name contains the directory name or vice versa
+                let matches = !container_dir.is_empty() && 
+                    (image_base.contains(container_dir) || 
+                     container_dir.contains(image_name_only) ||
+                     image_name_only.contains(container_dir));
+                
+                // Also match docker-compose services
+                let is_compose_match = container_file.starts_with("docker-compose") &&
+                    image_ref.image_name.contains("compose");
+                
+                if matches || is_compose_match {
+                    // Create Deploys edge: InfraRoot -> Containerized
+                    store.insert_edge(&Edge {
+                        src_id: infra_id.clone(),
+                        rel: EdgeKind::Deploys,
+                        dst_id: container.id.clone(),
+                        provenance_path: Some(format!("{}/main.tf", image_ref.infra_dir)),
+                        provenance_line: Some(image_ref.line),
+                    })?;
+                    stats.edges_created += 1;
+                    
+                    tracing::debug!(
+                        infra = %infra_id,
+                        container = %container.id,
+                        image = %image_ref.image_name,
+                        "created deploys edge"
+                    );
+                    
+                    // Only create one edge per image ref
+                    break;
+                }
+            }
+        }
+    }
+    
+    Ok(())
+}
+
+fn index_containerized_file(
     store: &Store,
     path: &Path,
     project_root: &Path,
@@ -543,13 +694,13 @@ fn index_deployable_file(
         ignore_reason: None,
     })?;
 
-    // Create Deployable entity
-    let deployable_id = id::deployable_id(&rel_path_str);
-    let name = path.file_name().and_then(|n| n.to_str()).unwrap_or("deployable").to_string();
+    // Create Containerized entity
+    let containerized_id = id::containerized_id(&rel_path_str);
+    let name = path.file_name().and_then(|n| n.to_str()).unwrap_or("container").to_string();
     
     store.insert_entity(&Entity {
-        id: deployable_id.clone(),
-        kind: EntityKind::Deployable,
+        id: containerized_id.clone(),
+        kind: EntityKind::Containerized,
         name,
         component_id: None,
         path: Some(rel_path_str.clone()),
@@ -559,7 +710,7 @@ fn index_deployable_file(
         visibility: Some("pub".to_string()),
         exported: true,
     })?;
-    stats.deployables_indexed += 1;
+    stats.containerized_indexed += 1;
 
     Ok(())
 }
@@ -599,7 +750,7 @@ fn create_infra_root(
     })?;
     stats.infra_roots_indexed += 1;
 
-    // Note: Deployables are independent entities.
+    // Note: Containerized entities are independent from Infra.
     // Deploys edges should be created explicitly via configuration or detected
     // through actual references in terraform code (e.g., image URIs).
 

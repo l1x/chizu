@@ -58,8 +58,8 @@ pub fn infra_root_id(path: &str) -> String {
     format!("infra_root::{path}")
 }
 
-pub fn deployable_id(path: &str) -> String {
-    format!("deployable::{path}")
+pub fn containerized_id(path: &str) -> String {
+    format!("containerized::{path}")
 }
 
 pub fn command_id(path: &str) -> String {
@@ -135,7 +135,7 @@ mod tests {
             "template::templates/base.html"
         );
         assert_eq!(infra_root_id("infra/prod"), "infra_root::infra/prod");
-        assert_eq!(deployable_id("Dockerfile"), "deployable::Dockerfile");
+        assert_eq!(containerized_id("Dockerfile"), "containerized::Dockerfile");
         assert_eq!(
             command_id("playbooks/deploy.yml"),
             "command::playbooks/deploy.yml"
