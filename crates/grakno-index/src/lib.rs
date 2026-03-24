@@ -9,4 +9,4 @@ pub mod parser_astro;
 pub mod parser_ts;
 
 pub use error::IndexError;
-pub use indexer::{index_generic_project, index_project, IndexStats};
+pub use indexer::{index_project, IndexStats};

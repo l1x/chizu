@@ -41,17 +41,13 @@ pub enum Command {
     Config(ConfigCmd),
 }
 
-/// index a Rust workspace into the graph
+/// index a codebase into the graph
 #[derive(FromArgs, Debug)]
 #[argh(subcommand, name = "index")]
 pub struct IndexCmd {
-    /// path to the workspace root (default: current directory)
+    /// path to the project root (default: current directory)
     #[argh(positional, default = "String::from(\".\")")]
     pub path: String,
-
-    /// index any directory without requiring Cargo.toml (default: false)
-    #[argh(switch, short = 'g')]
-    pub generic: bool,
 }
 
 /// query the graph

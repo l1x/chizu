@@ -68,11 +68,7 @@ fn main() {
     match args.command {
         Command::Index(cmd) => {
             let path = std::path::Path::new(&cmd.path);
-            if cmd.generic {
-                cmd_index_generic(&store, path);
-            } else {
-                cmd_index(&store, path);
-            }
+            cmd_index(&store, path);
         }
         Command::Query(q) => match q.sub {
             QuerySub::Entity(cmd) => cmd_query_entity(&store, &cmd.id),
@@ -269,48 +265,6 @@ fn cmd_index(store: &Store, path: &std::path::Path) {
         Err(e) => {
             let duration = start.elapsed().as_secs_f64();
             tracing::error!(error = %e, duration_seconds = duration, "index failed");
-
-            let m = observability::index_metrics();
-            m.index_duration.observe(duration, &[("result", "error")]);
-
-            eprintln!("error: {e}");
-            std::process::exit(1);
-        }
-    }
-}
-
-#[tracing::instrument(skip(store), fields(path = %path.display()))]
-fn cmd_index_generic(store: &Store, path: &std::path::Path) {
-    tracing::info!("starting generic index operation");
-    let start = std::time::Instant::now();
-
-    match grakno_index::index_generic_project(store, path) {
-        Ok(stats) => {
-            let duration = start.elapsed().as_secs_f64();
-            tracing::info!(
-                duration_seconds = duration,
-                files = stats.files_indexed,
-                symbols = stats.symbols_extracted,
-                edges = stats.edges_created,
-                "generic index completed successfully"
-            );
-
-            let m = observability::index_metrics();
-            m.files_indexed.add(stats.files_indexed as u64, &[("result", "success")]);
-            m.files_skipped.add(stats.files_skipped as u64, &[]);
-            m.symbols_extracted.add(stats.symbols_extracted as u64, &[]);
-            m.edges_created.add(stats.edges_created as u64, &[]);
-            m.index_duration.observe(duration, &[("result", "success")]);
-
-            if let Ok(store_stats) = store.stats() {
-                record_store_stats(&store_stats);
-            }
-
-            println!("indexed successfully:\n{stats}");
-        }
-        Err(e) => {
-            let duration = start.elapsed().as_secs_f64();
-            tracing::error!(error = %e, duration_seconds = duration, "generic index failed");
 
             let m = observability::index_metrics();
             m.index_duration.observe(duration, &[("result", "error")]);
