@@ -10,6 +10,8 @@ use crate::error::IndexError;
 use crate::id;
 use crate::mise::parse_mise_toml;
 use crate::parser::{parse_rust_file, SymbolKind};
+use crate::parser_astro::parse_astro_file;
+use crate::parser_ts::{parse_ts_file, TsSymbolKind};
 
 #[derive(Debug, Clone, Default)]
 pub struct IndexStats {
@@ -509,6 +511,26 @@ fn index_directory(
                 stats,
                 indexed_files,
             )?;
+        } else if path.extension().is_some_and(|e| e == "ts" || e == "tsx") {
+            index_ts_file(
+                store,
+                &path,
+                workspace_root,
+                crate_name,
+                comp_id,
+                stats,
+                indexed_files,
+            )?;
+        } else if path.extension().is_some_and(|e| e == "astro") {
+            index_astro_file(
+                store,
+                &path,
+                workspace_root,
+                crate_name,
+                comp_id,
+                stats,
+                indexed_files,
+            )?;
         }
     }
     Ok(())
@@ -669,6 +691,279 @@ fn index_file(
             provenance_line: Some(use_decl.line as i64),
         })?;
         stats.edges_created += 1;
+    }
+
+    Ok(())
+}
+
+/// Index a TypeScript file.
+fn index_ts_file(
+    store: &Store,
+    path: &Path,
+    workspace_root: &Path,
+    crate_name: &str,
+    comp_id: &str,
+    stats: &mut IndexStats,
+    indexed_files: &mut HashSet<String>,
+) -> Result<(), IndexError> {
+    let source = std::fs::read_to_string(path)?;
+    let rel_path = path.strip_prefix(workspace_root).unwrap_or(path);
+    let rel_path_str = rel_path.display().to_string();
+
+    // Track this file as discovered
+    indexed_files.insert(rel_path_str.clone());
+
+    // Hash content with blake3
+    let hash = format!("blake3:{}", blake3::hash(source.as_bytes()).to_hex());
+
+    // Check if file is unchanged
+    if let Ok(existing) = store.get_file(&rel_path_str) {
+        if existing.hash == hash {
+            stats.files_skipped += 1;
+            return Ok(());
+        }
+        // File changed — clean up old entities before re-indexing
+        let su_id = id::source_unit_id(crate_name, &rel_path_str);
+        cleanup_source_unit(store, comp_id, &su_id, &rel_path_str)?;
+    }
+
+    // Insert FileRecord
+    store.insert_file(&FileRecord {
+        path: rel_path_str.clone(),
+        component_id: Some(comp_id.to_string()),
+        kind: "typescript".to_string(),
+        hash,
+        indexed: true,
+        ignore_reason: None,
+    })?;
+
+    // Insert SourceUnit entity
+    let su_id = id::source_unit_id(crate_name, &rel_path_str);
+    store.insert_entity(&Entity {
+        id: su_id.clone(),
+        kind: EntityKind::SourceUnit,
+        name: rel_path_str.clone(),
+        component_id: Some(comp_id.to_string()),
+        path: Some(rel_path_str.clone()),
+        language: Some("typescript".to_string()),
+        line_start: None,
+        line_end: None,
+        visibility: None,
+        exported: false,
+    })?;
+
+    // Component → Contains → SourceUnit
+    store.insert_edge(&Edge {
+        src_id: comp_id.to_string(),
+        rel: EdgeKind::Contains,
+        dst_id: su_id.clone(),
+        provenance_path: Some(rel_path_str.clone()),
+        provenance_line: None,
+    })?;
+    stats.edges_created += 1;
+    stats.files_indexed += 1;
+
+    // Parse TypeScript file
+    let parse_result = parse_ts_file(&source)?;
+
+    // Create entities for symbols
+    for sym in &parse_result.symbols {
+        let entity_kind = match sym.kind {
+            TsSymbolKind::Class => EntityKind::Symbol,
+            TsSymbolKind::Interface => EntityKind::Symbol,
+            TsSymbolKind::Function => EntityKind::Symbol,
+            TsSymbolKind::TypeAlias => EntityKind::Symbol,
+            TsSymbolKind::Enum => EntityKind::Symbol,
+            _ => EntityKind::Symbol,
+        };
+
+        let entity_id = id::symbol_id(crate_name, &sym.name);
+        store.insert_entity(&Entity {
+            id: entity_id.clone(),
+            kind: entity_kind,
+            name: sym.name.clone(),
+            component_id: Some(comp_id.to_string()),
+            path: Some(rel_path_str.clone()),
+            language: Some("typescript".to_string()),
+            line_start: Some(sym.line_start as i64),
+            line_end: Some(sym.line_end as i64),
+            visibility: if sym.exported {
+                Some("pub".to_string())
+            } else {
+                None
+            },
+            exported: sym.exported,
+        })?;
+
+        // SourceUnit → Defines → Symbol
+        store.insert_edge(&Edge {
+            src_id: su_id.clone(),
+            rel: EdgeKind::Defines,
+            dst_id: entity_id,
+            provenance_path: Some(rel_path_str.clone()),
+            provenance_line: Some(sym.line_start as i64),
+        })?;
+        stats.edges_created += 1;
+        stats.symbols_extracted += 1;
+    }
+
+    // Create edges for imports (best-effort resolution within crate)
+    for imp in &parse_result.imports {
+        // Try to resolve to a symbol in the same crate
+        for sym_name in &imp.symbols {
+            let target_id = id::symbol_id(crate_name, sym_name);
+            // SourceUnit → DependsOn → Symbol (best-effort)
+            store.insert_edge(&Edge {
+                src_id: su_id.clone(),
+                rel: EdgeKind::DependsOn,
+                dst_id: target_id,
+                provenance_path: Some(rel_path_str.clone()),
+                provenance_line: Some(imp.line as i64),
+            })?;
+            stats.edges_created += 1;
+        }
+    }
+
+    Ok(())
+}
+
+/// Index an Astro file.
+fn index_astro_file(
+    store: &Store,
+    path: &Path,
+    workspace_root: &Path,
+    crate_name: &str,
+    comp_id: &str,
+    stats: &mut IndexStats,
+    indexed_files: &mut HashSet<String>,
+) -> Result<(), IndexError> {
+    let source = std::fs::read_to_string(path)?;
+    let rel_path = path.strip_prefix(workspace_root).unwrap_or(path);
+    let rel_path_str = rel_path.display().to_string();
+
+    // Track this file as discovered
+    indexed_files.insert(rel_path_str.clone());
+
+    // Hash content with blake3
+    let hash = format!("blake3:{}", blake3::hash(source.as_bytes()).to_hex());
+
+    // Check if file is unchanged
+    if let Ok(existing) = store.get_file(&rel_path_str) {
+        if existing.hash == hash {
+            stats.files_skipped += 1;
+            return Ok(());
+        }
+        // File changed — clean up old entities before re-indexing
+        let su_id = id::source_unit_id(crate_name, &rel_path_str);
+        cleanup_source_unit(store, comp_id, &su_id, &rel_path_str)?;
+    }
+
+    // Parse Astro file
+    let parse_result = parse_astro_file(&source)?;
+
+    // Determine entity kind based on content
+    let entity_kind = if parse_result.slots.is_empty() && parse_result.frontmatter_props.is_empty()
+    {
+        EntityKind::SourceUnit
+    } else {
+        EntityKind::Template
+    };
+
+    // Insert FileRecord
+    store.insert_file(&FileRecord {
+        path: rel_path_str.clone(),
+        component_id: Some(comp_id.to_string()),
+        kind: "astro".to_string(),
+        hash,
+        indexed: true,
+        ignore_reason: None,
+    })?;
+
+    // Insert entity (Template for components, SourceUnit for plain files)
+    let entity_id = id::source_unit_id(crate_name, &rel_path_str);
+    store.insert_entity(&Entity {
+        id: entity_id.clone(),
+        kind: entity_kind,
+        name: path
+            .file_stem()
+            .and_then(|s| s.to_str())
+            .unwrap_or(&rel_path_str)
+            .to_string(),
+        component_id: Some(comp_id.to_string()),
+        path: Some(rel_path_str.clone()),
+        language: Some("astro".to_string()),
+        line_start: None,
+        line_end: None,
+        visibility: Some("pub".to_string()),
+        exported: true,
+    })?;
+
+    // Component → Contains → Entity
+    store.insert_edge(&Edge {
+        src_id: comp_id.to_string(),
+        rel: EdgeKind::Contains,
+        dst_id: entity_id.clone(),
+        provenance_path: Some(rel_path_str.clone()),
+        provenance_line: None,
+    })?;
+    stats.edges_created += 1;
+    stats.files_indexed += 1;
+
+    // Create ContentPage entity if this is a page (in pages/ directory)
+    if rel_path_str.contains("/pages/") || rel_path_str.contains("\\pages\\") {
+        let page_id = id::content_page_id(crate_name, &rel_path_str);
+        store.insert_entity(&Entity {
+            id: page_id.clone(),
+            kind: EntityKind::ContentPage,
+            name: path
+                .file_stem()
+                .and_then(|s| s.to_str())
+                .unwrap_or("page")
+                .to_string(),
+            component_id: Some(comp_id.to_string()),
+            path: Some(rel_path_str.clone()),
+            language: Some("astro".to_string()),
+            line_start: None,
+            line_end: None,
+            visibility: Some("pub".to_string()),
+            exported: true,
+        })?;
+
+        // Template → Renders → ContentPage (logical relationship)
+        store.insert_edge(&Edge {
+            src_id: entity_id.clone(),
+            rel: EdgeKind::RelatedTo,
+            dst_id: page_id,
+            provenance_path: Some(rel_path_str.clone()),
+            provenance_line: None,
+        })?;
+        stats.edges_created += 1;
+    }
+
+    // Create edges for imports (best-effort resolution)
+    for imp in &parse_result.imports {
+        for sym_name in &imp.symbols {
+            let target_id = id::symbol_id(crate_name, sym_name);
+            store.insert_edge(&Edge {
+                src_id: entity_id.clone(),
+                rel: EdgeKind::DependsOn,
+                dst_id: target_id,
+                provenance_path: Some(rel_path_str.clone()),
+                provenance_line: Some(imp.line as i64),
+            })?;
+            stats.edges_created += 1;
+        }
+        if let Some(ref default) = imp.default_import {
+            let target_id = id::symbol_id(crate_name, default);
+            store.insert_edge(&Edge {
+                src_id: entity_id.clone(),
+                rel: EdgeKind::DependsOn,
+                dst_id: target_id,
+                provenance_path: Some(rel_path_str.clone()),
+                provenance_line: Some(imp.line as i64),
+            })?;
+            stats.edges_created += 1;
+        }
     }
 
     Ok(())
