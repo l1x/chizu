@@ -8,6 +8,7 @@ use grakno_core::Store;
 use crate::discover::discover;
 use crate::error::IndexError;
 use crate::id;
+use crate::markdown::extract_mentions;
 use crate::mise::parse_mise_toml;
 use crate::parser::{parse_rust_file, SymbolKind};
 use crate::parser_astro::parse_astro_file;
@@ -1048,12 +1049,36 @@ fn index_docs(
         store.insert_edge(&Edge {
             src_id: parent_id.to_string(),
             rel: EdgeKind::DocumentedBy,
-            dst_id: doc_entity_id,
-            provenance_path: Some(rel_path_str),
+            dst_id: doc_entity_id.clone(),
+            provenance_path: Some(rel_path_str.clone()),
             provenance_line: None,
         })?;
         stats.edges_created += 1;
         stats.docs_indexed += 1;
+
+        // Extract and emit mentions edges: Doc → Mentions → Symbol
+        let mentions = extract_mentions(&content);
+        for mention in mentions {
+            // Try to resolve symbol in this component (best-effort)
+            if let Some(ref comp_id) = component_id {
+                let symbol_id = format!("symbol::{}::{}", 
+                    comp_id.strip_prefix("component::").unwrap_or(comp_id),
+                    mention.symbol_name
+                );
+                
+                // Check if symbol exists
+                if store.get_entity(&symbol_id).is_ok() {
+                    store.insert_edge(&Edge {
+                        src_id: doc_entity_id.clone(),
+                        rel: EdgeKind::Mentions,
+                        dst_id: symbol_id,
+                        provenance_path: Some(rel_path_str.clone()),
+                        provenance_line: Some(mention.line as i64),
+                    })?;
+                    stats.edges_created += 1;
+                }
+            }
+        }
     }
 
     Ok(indexed_doc_paths)
