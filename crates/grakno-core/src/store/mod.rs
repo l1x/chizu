@@ -169,6 +169,48 @@ impl Store {
         }
     }
 
+    // --- Traversal ---
+
+    /// Walk forward from `start` following edges of kind `rel` up to `max_depth` hops.
+    pub fn walk_forward(
+        &self,
+        start: &str,
+        rel: EdgeKind,
+        max_depth: usize,
+    ) -> Result<Vec<String>> {
+        match self {
+            #[cfg(feature = "sqlite_usearch")]
+            Self::Sqlite(s) => s.walk_forward(start, rel, max_depth),
+            #[cfg(feature = "grafeo")]
+            Self::Grafeo(g) => g.walk_forward(start, rel, max_depth),
+        }
+    }
+
+    /// Walk backward from `start` following edges of kind `rel` up to `max_depth` hops.
+    pub fn walk_backward(
+        &self,
+        start: &str,
+        rel: EdgeKind,
+        max_depth: usize,
+    ) -> Result<Vec<String>> {
+        match self {
+            #[cfg(feature = "sqlite_usearch")]
+            Self::Sqlite(s) => s.walk_backward(start, rel, max_depth),
+            #[cfg(feature = "grafeo")]
+            Self::Grafeo(g) => g.walk_backward(start, rel, max_depth),
+        }
+    }
+
+    /// Find all entities reachable from `start` within `max_depth` hops (any edge kind).
+    pub fn reachable_entities(&self, start: &str, max_depth: usize) -> Result<Vec<String>> {
+        match self {
+            #[cfg(feature = "sqlite_usearch")]
+            Self::Sqlite(s) => s.reachable_entities(start, max_depth),
+            #[cfg(feature = "grafeo")]
+            Self::Grafeo(g) => g.reachable_entities(start, max_depth),
+        }
+    }
+
     // --- Files ---
 
     pub fn insert_file(&self, file: &FileRecord) -> Result<()> {

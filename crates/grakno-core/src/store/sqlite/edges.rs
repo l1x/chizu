@@ -66,6 +66,107 @@ impl SqliteStore {
         Ok(count > 0)
     }
 
+    // --- Traversal ---
+
+    /// Walk forward from `start` following edges of kind `rel` up to `max_depth` hops.
+    /// Returns entity IDs in BFS order (by depth).
+    pub fn walk_forward(
+        &self,
+        start: &str,
+        rel: EdgeKind,
+        max_depth: usize,
+    ) -> Result<Vec<String>> {
+        if max_depth == 0 {
+            return Ok(vec![]);
+        }
+
+        let mut stmt = self.conn.prepare(
+            "WITH RECURSIVE chain(eid, depth) AS (
+                SELECT dst_id, 1 FROM edges WHERE src_id = ?1 AND rel = ?2
+                UNION ALL
+                SELECT e.dst_id, c.depth + 1
+                FROM edges e JOIN chain c ON e.src_id = c.eid
+                WHERE e.rel = ?2 AND c.depth < ?3
+            )
+            SELECT eid FROM chain ORDER BY depth",
+        )?;
+
+        let rows = stmt.query_map(
+            rusqlite::params![start, rel.as_str(), max_depth as i64],
+            |row| row.get::<_, String>(0),
+        )?;
+
+        let mut results = Vec::new();
+        for row in rows {
+            results.push(row?);
+        }
+        Ok(results)
+    }
+
+    /// Walk backward from `start` following edges of kind `rel` up to `max_depth` hops.
+    /// Returns entity IDs in BFS order (by depth).
+    pub fn walk_backward(
+        &self,
+        start: &str,
+        rel: EdgeKind,
+        max_depth: usize,
+    ) -> Result<Vec<String>> {
+        if max_depth == 0 {
+            return Ok(vec![]);
+        }
+
+        let mut stmt = self.conn.prepare(
+            "WITH RECURSIVE chain(eid, depth) AS (
+                SELECT src_id, 1 FROM edges WHERE dst_id = ?1 AND rel = ?2
+                UNION ALL
+                SELECT e.src_id, c.depth + 1
+                FROM edges e JOIN chain c ON e.dst_id = c.eid
+                WHERE e.rel = ?2 AND c.depth < ?3
+            )
+            SELECT eid FROM chain ORDER BY depth",
+        )?;
+
+        let rows = stmt.query_map(
+            rusqlite::params![start, rel.as_str(), max_depth as i64],
+            |row| row.get::<_, String>(0),
+        )?;
+
+        let mut results = Vec::new();
+        for row in rows {
+            results.push(row?);
+        }
+        Ok(results)
+    }
+
+    /// Find all entities reachable from `start` within `max_depth` hops (any edge kind).
+    /// Uses UNION for deduplication and cycle prevention.
+    pub fn reachable_entities(&self, start: &str, max_depth: usize) -> Result<Vec<String>> {
+        if max_depth == 0 {
+            return Ok(vec![]);
+        }
+
+        let mut stmt = self.conn.prepare(
+            "WITH RECURSIVE reachable(eid, depth) AS (
+                SELECT dst_id, 1 FROM edges WHERE src_id = ?1
+                UNION
+                SELECT e.dst_id, r.depth + 1
+                FROM edges e JOIN reachable r ON e.src_id = r.eid
+                WHERE r.depth < ?2
+            )
+            SELECT DISTINCT eid FROM reachable ORDER BY eid",
+        )?;
+
+        let rows = stmt.query_map(rusqlite::params![start, max_depth as i64], |row| {
+            row.get::<_, String>(0)
+        })?;
+
+        let mut results = Vec::new();
+        for row in rows {
+            results.push(row?);
+        }
+        Ok(results)
+    }
+
     fn row_to_edge(row: &rusqlite::Row<'_>) -> rusqlite::Result<Edge> {
         let rel_str: String = row.get(1)?;
         Ok(Edge {
@@ -159,5 +260,118 @@ mod tests {
         let edges = store.edges_from("a").unwrap();
         assert_eq!(edges.len(), 1);
         assert_eq!(edges[0].provenance_line, Some(99));
+    }
+
+    // --- Traversal tests ---
+
+    fn dep_edge(src: &str, dst: &str) -> Edge {
+        Edge {
+            src_id: src.to_string(),
+            rel: EdgeKind::DependsOn,
+            dst_id: dst.to_string(),
+            provenance_path: None,
+            provenance_line: None,
+        }
+    }
+
+    /// Sets up a chain: a -(DependsOn)-> b -(DependsOn)-> c -(DependsOn)-> d
+    fn setup_chain(store: &SqliteStore) {
+        store.insert_edge(&dep_edge("a", "b")).unwrap();
+        store.insert_edge(&dep_edge("b", "c")).unwrap();
+        store.insert_edge(&dep_edge("c", "d")).unwrap();
+    }
+
+    #[test]
+    fn walk_forward_traversal() {
+        let store = SqliteStore::open_in_memory().unwrap();
+        setup_chain(&store);
+
+        let result = store.walk_forward("a", EdgeKind::DependsOn, 10).unwrap();
+        assert_eq!(result, vec!["b", "c", "d"]);
+    }
+
+    #[test]
+    fn walk_forward_max_depth() {
+        let store = SqliteStore::open_in_memory().unwrap();
+        setup_chain(&store);
+
+        let result = store.walk_forward("a", EdgeKind::DependsOn, 2).unwrap();
+        assert_eq!(result, vec!["b", "c"]);
+
+        let result = store.walk_forward("a", EdgeKind::DependsOn, 1).unwrap();
+        assert_eq!(result, vec!["b"]);
+    }
+
+    #[test]
+    fn walk_forward_max_depth_zero() {
+        let store = SqliteStore::open_in_memory().unwrap();
+        setup_chain(&store);
+
+        let result = store.walk_forward("a", EdgeKind::DependsOn, 0).unwrap();
+        assert!(result.is_empty());
+    }
+
+    #[test]
+    fn walk_backward_traversal() {
+        let store = SqliteStore::open_in_memory().unwrap();
+        setup_chain(&store);
+
+        let result = store.walk_backward("d", EdgeKind::DependsOn, 10).unwrap();
+        assert_eq!(result, vec!["c", "b", "a"]);
+    }
+
+    #[test]
+    fn walk_backward_max_depth() {
+        let store = SqliteStore::open_in_memory().unwrap();
+        setup_chain(&store);
+
+        let result = store.walk_backward("d", EdgeKind::DependsOn, 2).unwrap();
+        assert_eq!(result, vec!["c", "b"]);
+    }
+
+    #[test]
+    fn reachable_entities_all_kinds() {
+        let store = SqliteStore::open_in_memory().unwrap();
+        // Chain with mixed edge kinds: a -(DependsOn)-> b -(Contains)-> c -(DependsOn)-> d
+        store.insert_edge(&dep_edge("a", "b")).unwrap();
+        store
+            .insert_edge(&Edge {
+                src_id: "b".to_string(),
+                rel: EdgeKind::Contains,
+                dst_id: "c".to_string(),
+                provenance_path: None,
+                provenance_line: None,
+            })
+            .unwrap();
+        store.insert_edge(&dep_edge("c", "d")).unwrap();
+
+        let result = store.reachable_entities("a", 10).unwrap();
+        assert_eq!(result, vec!["b", "c", "d"]);
+    }
+
+    #[test]
+    fn reachable_entities_dedup_cycles() {
+        let store = SqliteStore::open_in_memory().unwrap();
+        // Create a cycle: a -> b -> c -> a
+        store.insert_edge(&dep_edge("a", "b")).unwrap();
+        store.insert_edge(&dep_edge("b", "c")).unwrap();
+        store.insert_edge(&dep_edge("c", "a")).unwrap();
+
+        // Should not infinite loop and should return unique entities
+        // a is reachable via cycle (c -> a), so it is included
+        let result = store.reachable_entities("a", 10).unwrap();
+        assert_eq!(result.len(), 3); // a, b, c (all reachable in cycle)
+        assert!(result.contains(&"a".to_string()));
+        assert!(result.contains(&"b".to_string()));
+        assert!(result.contains(&"c".to_string()));
+    }
+
+    #[test]
+    fn reachable_entities_max_depth_zero() {
+        let store = SqliteStore::open_in_memory().unwrap();
+        setup_chain(&store);
+
+        let result = store.reachable_entities("a", 0).unwrap();
+        assert!(result.is_empty());
     }
 }

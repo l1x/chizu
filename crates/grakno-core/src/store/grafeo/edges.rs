@@ -160,6 +160,107 @@ impl GrafeoStore {
             .map_err(|e| GraknoError::Other(format!("grafeo: {e}")))?;
         Ok(true)
     }
+
+    // --- Traversal ---
+
+    /// Walk forward from `start` following edges of kind `rel` up to `max_depth` hops.
+    pub fn walk_forward(
+        &self,
+        start: &str,
+        rel: EdgeKind,
+        max_depth: usize,
+    ) -> Result<Vec<String>> {
+        if max_depth == 0 {
+            return Ok(vec![]);
+        }
+
+        let sess = self.session();
+        let edge_type = rel.as_str();
+        let query = format!(
+            "MATCH (a:entity)-[:{edge_type} *1..{max_depth}]->(b:entity) WHERE a.eid = $start RETURN b.eid"
+        );
+
+        let mut params = HashMap::new();
+        params.insert("start".to_string(), Value::from(start));
+
+        let result = sess
+            .execute_with_params(&query, params)
+            .map_err(|e| GraknoError::Other(format!("grafeo: {e}")))?;
+
+        result
+            .rows
+            .iter()
+            .map(|r| {
+                r.first()
+                    .map(val_to_string)
+                    .ok_or_else(|| GraknoError::Other("missing eid".into()))
+            })
+            .collect()
+    }
+
+    /// Walk backward from `start` following edges of kind `rel` up to `max_depth` hops.
+    pub fn walk_backward(
+        &self,
+        start: &str,
+        rel: EdgeKind,
+        max_depth: usize,
+    ) -> Result<Vec<String>> {
+        if max_depth == 0 {
+            return Ok(vec![]);
+        }
+
+        let sess = self.session();
+        let edge_type = rel.as_str();
+        let query = format!(
+            "MATCH (a:entity)<-[:{edge_type} *1..{max_depth}]-(b:entity) WHERE a.eid = $start RETURN b.eid"
+        );
+
+        let mut params = HashMap::new();
+        params.insert("start".to_string(), Value::from(start));
+
+        let result = sess
+            .execute_with_params(&query, params)
+            .map_err(|e| GraknoError::Other(format!("grafeo: {e}")))?;
+
+        result
+            .rows
+            .iter()
+            .map(|r| {
+                r.first()
+                    .map(val_to_string)
+                    .ok_or_else(|| GraknoError::Other("missing eid".into()))
+            })
+            .collect()
+    }
+
+    /// Find all entities reachable from `start` within `max_depth` hops (any edge kind).
+    pub fn reachable_entities(&self, start: &str, max_depth: usize) -> Result<Vec<String>> {
+        if max_depth == 0 {
+            return Ok(vec![]);
+        }
+
+        let sess = self.session();
+        let query = format!(
+            "MATCH (a:entity)-[*1..{max_depth}]->(b:entity) WHERE a.eid = $start RETURN DISTINCT b.eid"
+        );
+
+        let mut params = HashMap::new();
+        params.insert("start".to_string(), Value::from(start));
+
+        let result = sess
+            .execute_with_params(&query, params)
+            .map_err(|e| GraknoError::Other(format!("grafeo: {e}")))?;
+
+        result
+            .rows
+            .iter()
+            .map(|r| {
+                r.first()
+                    .map(val_to_string)
+                    .ok_or_else(|| GraknoError::Other("missing eid".into()))
+            })
+            .collect()
+    }
 }
 
 fn row_to_edge(row: &[Value]) -> Result<Edge> {
@@ -276,5 +377,108 @@ mod tests {
         let edges = store.edges_from("a").unwrap();
         assert_eq!(edges.len(), 1);
         assert_eq!(edges[0].provenance_line, Some(99));
+    }
+
+    // --- Traversal tests ---
+
+    fn dep_edge(src: &str, dst: &str) -> Edge {
+        Edge {
+            src_id: src.to_string(),
+            rel: EdgeKind::DependsOn,
+            dst_id: dst.to_string(),
+            provenance_path: None,
+            provenance_line: None,
+        }
+    }
+
+    /// Sets up a chain: a -(DependsOn)-> b -(DependsOn)-> c -(DependsOn)-> d
+    fn setup_chain(store: &GrafeoStore) {
+        store.insert_edge(&dep_edge("a", "b")).unwrap();
+        store.insert_edge(&dep_edge("b", "c")).unwrap();
+        store.insert_edge(&dep_edge("c", "d")).unwrap();
+    }
+
+    #[test]
+    fn walk_forward_traversal() {
+        let store = setup_store_with_entities();
+        setup_chain(&store);
+
+        let result = store.walk_forward("a", EdgeKind::DependsOn, 10).unwrap();
+        assert!(result.contains(&"b".to_string()));
+        assert!(result.contains(&"c".to_string()));
+        assert!(result.contains(&"d".to_string()));
+    }
+
+    #[test]
+    fn walk_forward_max_depth() {
+        let store = setup_store_with_entities();
+        setup_chain(&store);
+
+        let result = store.walk_forward("a", EdgeKind::DependsOn, 2).unwrap();
+        assert!(result.contains(&"b".to_string()));
+        assert!(result.contains(&"c".to_string()));
+        assert!(!result.contains(&"d".to_string()));
+    }
+
+    #[test]
+    fn walk_forward_max_depth_zero() {
+        let store = setup_store_with_entities();
+        setup_chain(&store);
+
+        let result = store.walk_forward("a", EdgeKind::DependsOn, 0).unwrap();
+        assert!(result.is_empty());
+    }
+
+    #[test]
+    fn walk_backward_traversal() {
+        let store = setup_store_with_entities();
+        setup_chain(&store);
+
+        let result = store.walk_backward("d", EdgeKind::DependsOn, 10).unwrap();
+        assert!(result.contains(&"c".to_string()));
+        assert!(result.contains(&"b".to_string()));
+        assert!(result.contains(&"a".to_string()));
+    }
+
+    #[test]
+    fn walk_backward_max_depth() {
+        let store = setup_store_with_entities();
+        setup_chain(&store);
+
+        let result = store.walk_backward("d", EdgeKind::DependsOn, 2).unwrap();
+        assert!(result.contains(&"c".to_string()));
+        assert!(result.contains(&"b".to_string()));
+        assert!(!result.contains(&"a".to_string()));
+    }
+
+    #[test]
+    fn reachable_entities_all_kinds() {
+        let store = setup_store_with_entities();
+        // Chain with mixed edge kinds: a -(DependsOn)-> b -(Contains)-> c -(DependsOn)-> d
+        store.insert_edge(&dep_edge("a", "b")).unwrap();
+        store
+            .insert_edge(&Edge {
+                src_id: "b".to_string(),
+                rel: EdgeKind::Contains,
+                dst_id: "c".to_string(),
+                provenance_path: None,
+                provenance_line: None,
+            })
+            .unwrap();
+        store.insert_edge(&dep_edge("c", "d")).unwrap();
+
+        let result = store.reachable_entities("a", 10).unwrap();
+        assert!(result.contains(&"b".to_string()));
+        assert!(result.contains(&"c".to_string()));
+        assert!(result.contains(&"d".to_string()));
+    }
+
+    #[test]
+    fn reachable_entities_max_depth_zero() {
+        let store = setup_store_with_entities();
+        setup_chain(&store);
+
+        let result = store.reachable_entities("a", 0).unwrap();
+        assert!(result.is_empty());
     }
 }
