@@ -20,7 +20,7 @@ pub enum ConfigError {
 }
 
 /// Grakno configuration root.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Default, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Config {
     /// Indexing configuration.
@@ -34,16 +34,6 @@ pub struct Config {
     /// LLM/summarization configuration.
     #[serde(default)]
     pub llm: LlmConfig,
-}
-
-impl Default for Config {
-    fn default() -> Self {
-        Self {
-            index: IndexConfig::default(),
-            query: QueryConfig::default(),
-            llm: LlmConfig::default(),
-        }
-    }
 }
 
 impl Config {

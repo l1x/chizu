@@ -33,15 +33,12 @@ fn main() {
     );
 
     // Handle config commands (don't need store)
-    match &args.command {
-        Command::Config(cmd) => {
-            match &cmd.sub {
-                ConfigSub::Init(init) => cmd_config_init(init),
-                ConfigSub::Validate(val) => cmd_config_validate(val),
-            }
-            return;
+    if let Command::Config(cmd) = &args.command {
+        match &cmd.sub {
+            ConfigSub::Init(init) => cmd_config_init(init),
+            ConfigSub::Validate(val) => cmd_config_validate(val),
         }
-        _ => {}
+        return;
     }
 
     // Load configuration file if present
