@@ -11,6 +11,7 @@ mod tests {
     use super::*;
     use model::*;
 
+    #[cfg(feature = "sqlite_usearch")]
     #[test]
     fn graph_round_trip() {
         let store = Store::open_in_memory().unwrap();

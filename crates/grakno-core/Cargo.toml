@@ -4,11 +4,12 @@ version = "0.1.0"
 edition = "2021"
 
 [features]
+default = ["sqlite_usearch"]
+sqlite_usearch = ["dep:rusqlite", "dep:usearch"]
 grafeo = ["dep:grafeo"]
-usearch = ["dep:usearch"]
 
 [dependencies]
-rusqlite = { workspace = true }
+rusqlite = { workspace = true, optional = true }
 thiserror = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
@@ -17,4 +18,10 @@ grafeo = { workspace = true, optional = true }
 usearch = { version = "2", optional = true }
 
 [dev-dependencies]
+criterion = { version = "0.5", features = ["html_reports"] }
 tempfile = "3"
+
+[[bench]]
+name = "backends"
+harness = false
+required-features = ["sqlite_usearch", "grafeo"]

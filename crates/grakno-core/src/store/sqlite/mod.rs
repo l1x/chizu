@@ -5,7 +5,6 @@ pub mod files;
 pub mod stats;
 pub mod summaries;
 pub mod task_routes;
-#[cfg(feature = "usearch")]
 mod usearch;
 
 use rusqlite::Connection;
@@ -15,9 +14,7 @@ use crate::error::Result;
 
 pub struct SqliteStore {
     conn: Connection,
-    #[cfg(feature = "usearch")]
     vector_index: std::cell::RefCell<Option<::usearch::Index>>,
-    #[cfg(feature = "usearch")]
     db_path: Option<String>,
 }
 
@@ -27,9 +24,7 @@ impl SqliteStore {
         schema::init_schema(&conn)?;
         Ok(Self {
             conn,
-            #[cfg(feature = "usearch")]
             vector_index: std::cell::RefCell::new(None),
-            #[cfg(feature = "usearch")]
             db_path: None,
         })
     }
@@ -39,9 +34,7 @@ impl SqliteStore {
         schema::init_schema(&conn)?;
         Ok(Self {
             conn,
-            #[cfg(feature = "usearch")]
             vector_index: std::cell::RefCell::new(None),
-            #[cfg(feature = "usearch")]
             db_path: Some(path.to_string()),
         })
     }

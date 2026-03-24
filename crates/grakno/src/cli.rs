@@ -11,6 +11,18 @@ pub struct TopLevel {
     #[argh(option, default = "String::from(\"sqlite\")")]
     pub backend: String,
 
+    /// log format: pretty or json (default: pretty)
+    #[argh(option, default = "String::from(\"pretty\")")]
+    pub log_format: String,
+
+    /// OTLP endpoint for traces/metrics/logs (optional)
+    #[argh(option)]
+    pub otlp_endpoint: Option<String>,
+
+    /// trace sampling rate 0.0-1.0 (default: 1.0)
+    #[argh(option)]
+    pub sampling_rate: Option<f64>,
+
     #[argh(subcommand)]
     pub command: Command,
 }
@@ -29,7 +41,7 @@ pub enum Command {
 }
 
 /// index a Rust workspace into the graph
-#[derive(FromArgs)]
+#[derive(FromArgs, Debug)]
 #[argh(subcommand, name = "index")]
 pub struct IndexCmd {
     /// path to the workspace root (default: current directory)
@@ -54,7 +66,7 @@ pub enum QuerySub {
 }
 
 /// look up a single entity by id
-#[derive(FromArgs)]
+#[derive(FromArgs, Debug)]
 #[argh(subcommand, name = "entity")]
 pub struct QueryEntityCmd {
     /// the entity id
@@ -63,7 +75,7 @@ pub struct QueryEntityCmd {
 }
 
 /// list entities
-#[derive(FromArgs)]
+#[derive(FromArgs, Debug)]
 #[argh(subcommand, name = "entities")]
 pub struct QueryEntitiesCmd {
     /// filter by component id
@@ -72,7 +84,7 @@ pub struct QueryEntitiesCmd {
 }
 
 /// list task routes
-#[derive(FromArgs)]
+#[derive(FromArgs, Debug)]
 #[argh(subcommand, name = "routes")]
 pub struct QueryRoutesCmd {
     /// routes for a task name
@@ -85,7 +97,7 @@ pub struct QueryRoutesCmd {
 }
 
 /// inspect the graph
-#[derive(FromArgs)]
+#[derive(FromArgs, Debug)]
 #[argh(subcommand, name = "inspect")]
 pub struct InspectCmd {
     /// entity id to inspect in detail
@@ -94,7 +106,7 @@ pub struct InspectCmd {
 }
 
 /// summarize entities using an LLM
-#[derive(FromArgs)]
+#[derive(FromArgs, Debug)]
 #[argh(subcommand, name = "summarize")]
 pub struct SummarizeCmd {
     /// base URL for the OpenAI-compatible API
@@ -127,7 +139,7 @@ pub struct SummarizeCmd {
 }
 
 /// generate embeddings for entity summaries
-#[derive(FromArgs)]
+#[derive(FromArgs, Debug)]
 #[argh(subcommand, name = "embed")]
 pub struct EmbedCmd {
     /// base URL for the OpenAI-compatible API
@@ -152,7 +164,7 @@ pub struct EmbedCmd {
 }
 
 /// semantic search over entity embeddings
-#[derive(FromArgs)]
+#[derive(FromArgs, Debug)]
 #[argh(subcommand, name = "search")]
 pub struct SearchCmd {
     /// base URL for the OpenAI-compatible API
@@ -177,7 +189,7 @@ pub struct SearchCmd {
 }
 
 /// generate a reading plan for a query
-#[derive(FromArgs)]
+#[derive(FromArgs, Debug)]
 #[argh(subcommand, name = "plan")]
 pub struct PlanCmd {
     /// the query to plan for
@@ -206,7 +218,7 @@ pub struct PlanCmd {
 }
 
 /// watch the workspace and re-index on file changes
-#[derive(FromArgs)]
+#[derive(FromArgs, Debug)]
 #[argh(subcommand, name = "watch")]
 pub struct WatchCmd {
     /// path to the workspace root (default: current directory)

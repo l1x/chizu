@@ -60,8 +60,14 @@ impl fmt::Display for IndexStats {
     }
 }
 
+#[tracing::instrument(skip(store), fields(path = %path.display()))]
 pub fn index_project(store: &Store, path: &Path) -> Result<IndexStats, IndexError> {
+    tracing::info!("starting workspace indexing");
+    let start = std::time::Instant::now();
+
     let workspace = discover(path)?;
+    tracing::debug!(workspace_name = %workspace.name, crate_count = workspace.crates.len(), "workspace discovered");
+
     let mut stats = IndexStats::default();
 
     let repo_id = id::repo_id(&workspace.name);
@@ -457,6 +463,14 @@ pub fn index_project(store: &Store, path: &Path) -> Result<IndexStats, IndexErro
 
     // Generate heuristic task routes
     generate_task_routes(store, &mut stats)?;
+
+    tracing::info!(
+        duration_ms = start.elapsed().as_millis() as u64,
+        files = stats.files_indexed,
+        symbols = stats.symbols_extracted,
+        edges = stats.edges_created,
+        "indexing complete"
+    );
 
     Ok(stats)
 }

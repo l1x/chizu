@@ -24,7 +24,6 @@ impl SqliteStore {
             ],
         )?;
 
-        #[cfg(feature = "usearch")]
         if !emb.vector.is_empty() {
             self.usearch_upsert(&emb.entity_id, &emb.vector)?;
         }
@@ -96,7 +95,6 @@ impl SqliteStore {
     }
 
     pub fn delete_embedding(&self, entity_id: &str) -> Result<bool> {
-        #[cfg(feature = "usearch")]
         self.usearch_remove(entity_id)?;
 
         let count = self
@@ -122,20 +120,15 @@ impl SqliteStore {
 
     /// Extract vector from usearch index by key, or return empty vec if unavailable.
     fn vector_for_key(&self, usearch_key: Option<i64>, dimensions: usize) -> Vec<f32> {
-        #[cfg(feature = "usearch")]
-        {
-            if let Some(key) = usearch_key {
-                let idx_ref = self.vector_index.borrow();
-                if let Some(ref index) = *idx_ref {
-                    let mut buf = vec![0.0f32; dimensions];
-                    if index.get(key as u64, &mut buf).is_ok() {
-                        return buf;
-                    }
+        if let Some(key) = usearch_key {
+            let idx_ref = self.vector_index.borrow();
+            if let Some(ref index) = *idx_ref {
+                let mut buf = vec![0.0f32; dimensions];
+                if index.get(key as u64, &mut buf).is_ok() {
+                    return buf;
                 }
             }
         }
-        #[cfg(not(feature = "usearch"))]
-        let _ = (usearch_key, dimensions);
         Vec::new()
     }
 }
@@ -160,16 +153,7 @@ mod tests {
         let e = test_embedding("comp::a");
         store.upsert_embedding(&e).unwrap();
         let got = store.get_embedding("comp::a").unwrap();
-        // Without usearch feature, vector comes back empty
-        #[cfg(feature = "usearch")]
         assert_eq!(e, got);
-        #[cfg(not(feature = "usearch"))]
-        {
-            assert_eq!(got.entity_id, e.entity_id);
-            assert_eq!(got.model, e.model);
-            assert_eq!(got.dimensions, e.dimensions);
-            assert!(got.vector.is_empty());
-        }
     }
 
     #[test]

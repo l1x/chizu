@@ -2,6 +2,7 @@ use thiserror::Error;
 
 #[derive(Debug, Error)]
 pub enum GraknoError {
+    #[cfg(feature = "sqlite_usearch")]
     #[error("sqlite error: {0}")]
     Sqlite(#[from] rusqlite::Error),
 

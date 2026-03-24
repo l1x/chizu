@@ -1,4 +1,5 @@
 use grakno_core::Store;
+use tracing::{debug, info, instrument};
 
 use crate::classify::TaskCategory;
 use crate::expand::expand;
@@ -7,6 +8,7 @@ use crate::rerank::rerank;
 use crate::retrieve::{retrieve, tokenize_query};
 
 /// Configuration for the query pipeline.
+#[derive(Debug)]
 pub struct PipelineConfig {
     /// Maximum results in the reading plan.
     pub limit: usize,
@@ -30,6 +32,8 @@ impl Default for PipelineConfig {
 pub struct QueryPipeline;
 
 impl QueryPipeline {
+    /// Run the query pipeline with tracing spans for each stage.
+    #[instrument(skip(store, query_embedding), fields(query_len = query.len()))]
     pub fn run(
         store: &Store,
         query: &str,
@@ -37,14 +41,16 @@ impl QueryPipeline {
         config: &PipelineConfig,
     ) -> grakno_core::Result<ReadingPlan> {
         // 1. Classify
-        let category = TaskCategory::classify(query);
+        let category = Self::classify(query);
+        debug!(category = %category, "query classified");
 
         // 2. Tokenize
-        let query_tokens = tokenize_query(query);
+        let query_tokens = Self::tokenize(query);
+        debug!(token_count = query_tokens.len(), "query tokenized");
 
         // 3. Retrieve
         let route_names = category.route_names();
-        let candidates = retrieve(
+        let candidates = Self::retrieve(
             store,
             route_names,
             &query_tokens,
@@ -54,14 +60,20 @@ impl QueryPipeline {
 
         let candidates_considered = candidates.len();
         let used_vector_search = query_embedding.is_some();
+        info!(
+            candidates = candidates_considered,
+            used_vector_search, "retrieval complete"
+        );
 
         // 4. Expand
-        let neighbors = expand(store, &candidates, config.max_neighbors_per_seed)?;
+        let neighbors = Self::expand(store, &candidates, config.max_neighbors_per_seed)?;
+        debug!(neighbor_count = neighbors.len(), "expansion complete");
 
         // 5. Rerank
         let seeds: Vec<_> = candidates.into_values().collect();
         let neighbor_list: Vec<_> = neighbors.into_values().collect();
-        let scored = rerank(seeds, neighbor_list, &category, &query_tokens, config.limit);
+        let scored = Self::rerank(seeds, neighbor_list, &category, &query_tokens, config.limit);
+        debug!(result_count = scored.len(), "reranking complete");
 
         // 6. Build reading plan
         let items = scored
@@ -88,6 +100,54 @@ impl QueryPipeline {
             candidates_considered,
             used_vector_search,
         })
+    }
+
+    #[instrument(skip(query), fields(query_len = query.len()))]
+    fn classify(query: &str) -> TaskCategory {
+        TaskCategory::classify(query)
+    }
+
+    #[instrument(skip(query), fields(query_len = query.len()))]
+    fn tokenize(query: &str) -> Vec<String> {
+        tokenize_query(query)
+    }
+
+    #[instrument(
+        skip(store, query_tokens, query_embedding),
+        fields(route_count = route_names.len(), vector_k)
+    )]
+    fn retrieve(
+        store: &Store,
+        route_names: &[&str],
+        query_tokens: &[String],
+        query_embedding: Option<&[f32]>,
+        vector_k: usize,
+    ) -> grakno_core::Result<std::collections::HashMap<String, crate::retrieve::Candidate>> {
+        retrieve(store, route_names, query_tokens, query_embedding, vector_k)
+    }
+
+    #[instrument(skip(store, candidates), fields(candidate_count = candidates.len()))]
+    fn expand(
+        store: &Store,
+        candidates: &std::collections::HashMap<String, crate::retrieve::Candidate>,
+        max_neighbors: usize,
+    ) -> grakno_core::Result<std::collections::HashMap<String, (crate::retrieve::Candidate, String)>>
+    {
+        expand(store, candidates, max_neighbors)
+    }
+
+    #[instrument(
+        skip(seeds, neighbors, category, query_tokens),
+        fields(seed_count = seeds.len(), neighbor_count = neighbors.len(), limit)
+    )]
+    fn rerank(
+        seeds: Vec<crate::retrieve::Candidate>,
+        neighbors: Vec<(crate::retrieve::Candidate, String)>,
+        category: &TaskCategory,
+        query_tokens: &[String],
+        limit: usize,
+    ) -> Vec<crate::rerank::ScoredEntry> {
+        rerank(seeds, neighbors, category, query_tokens, limit)
     }
 }
 

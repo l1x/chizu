@@ -1,25 +1,44 @@
 mod cli;
+mod observability;
 
 use cli::{Command, EmbedCmd, PlanCmd, QuerySub, SearchCmd, SummarizeCmd, TopLevel, WatchCmd};
 use grakno_core::Store;
+use observability::{record_store_stats, ObservabilityConfig};
+use std::str::FromStr;
 
 fn main() {
     let args: TopLevel = argh::from_env();
 
+    // Initialize observability stack
+    let obs_config = ObservabilityConfig {
+        service_name: "grakno".into(),
+        environment: std::env::var("GRAKNO_ENV").unwrap_or_else(|_| "development".into()),
+        otlp_endpoint: args.otlp_endpoint,
+        log_format: observability::LogFormat::from_str(&args.log_format)
+            .unwrap_or(observability::LogFormat::Pretty),
+        sampling_rate: args.sampling_rate,
+    };
+
+    let _telemetry_guard = observability::init_observability(&obs_config);
+
+    tracing::info!(
+        version = env!("CARGO_PKG_VERSION"),
+        backend = %args.backend,
+        db = %args.db,
+        "Grakno starting"
+    );
+
     let store = open_store(&args.backend, &args.db);
+
+    // Record initial store stats
+    if let Ok(stats) = store.stats() {
+        record_store_stats(&stats);
+    }
 
     match args.command {
         Command::Index(cmd) => {
             let path = std::path::Path::new(&cmd.path);
-            match grakno_index::index_project(&store, path) {
-                Ok(stats) => {
-                    println!("indexed successfully:\n{stats}");
-                }
-                Err(e) => {
-                    eprintln!("error: {e}");
-                    std::process::exit(1);
-                }
-            }
+            cmd_index(&store, path);
         }
         Command::Query(q) => match q.sub {
             QuerySub::Entity(cmd) => cmd_query_entity(&store, &cmd.id),
@@ -42,26 +61,85 @@ fn main() {
 
 fn open_store(backend: &str, db: &str) -> Store {
     match backend {
+        #[cfg(feature = "sqlite_usearch")]
         "sqlite" => Store::open(db).unwrap_or_else(|e| {
+            tracing::error!(error = %e, "failed to open sqlite store");
             eprintln!("error: failed to open sqlite store at {db}: {e}");
             std::process::exit(1);
         }),
+        #[cfg(not(feature = "sqlite_usearch"))]
+        "sqlite" => {
+            tracing::error!("sqlite backend not available");
+            eprintln!(
+                "error: sqlite backend not available; rebuild with --features sqlite_usearch"
+            );
+            std::process::exit(1);
+        }
         "grafeo" => {
             #[cfg(feature = "grafeo")]
             {
                 Store::open_grafeo(db).unwrap_or_else(|e| {
+                    tracing::error!(error = %e, "failed to open grafeo store");
                     eprintln!("error: failed to open grafeo store at {db}: {e}");
                     std::process::exit(1);
                 })
             }
             #[cfg(not(feature = "grafeo"))]
             {
+                tracing::error!("grafeo backend not available");
                 eprintln!("error: grafeo backend not available; rebuild with --features grafeo");
                 std::process::exit(1);
             }
         }
         other => {
+            tracing::error!(backend = %other, "unknown backend");
             eprintln!("error: unknown backend '{other}'; expected 'sqlite' or 'grafeo'");
+            std::process::exit(1);
+        }
+    }
+}
+
+#[tracing::instrument(skip(store), fields(path = %path.display()))]
+fn cmd_index(store: &Store, path: &std::path::Path) {
+    tracing::info!("starting index operation");
+    let start = std::time::Instant::now();
+
+    match grakno_index::index_project(store, path) {
+        Ok(stats) => {
+            let duration = start.elapsed().as_secs_f64();
+            tracing::info!(
+                duration_seconds = duration,
+                crates = stats.crates_found,
+                files = stats.files_indexed,
+                symbols = stats.symbols_extracted,
+                edges = stats.edges_created,
+                "index completed successfully"
+            );
+
+            // Record metrics
+            let m = observability::index_metrics();
+            m.files_indexed
+                .add(stats.files_indexed as u64, &[("result", "success")]);
+            m.files_skipped.add(stats.files_skipped as u64, &[]);
+            m.symbols_extracted.add(stats.symbols_extracted as u64, &[]);
+            m.edges_created.add(stats.edges_created as u64, &[]);
+            m.index_duration.observe(duration, &[("result", "success")]);
+
+            // Update store gauges
+            if let Ok(store_stats) = store.stats() {
+                record_store_stats(&store_stats);
+            }
+
+            println!("indexed successfully:\n{stats}");
+        }
+        Err(e) => {
+            let duration = start.elapsed().as_secs_f64();
+            tracing::error!(error = %e, duration_seconds = duration, "index failed");
+
+            let m = observability::index_metrics();
+            m.index_duration.observe(duration, &[("result", "error")]);
+
+            eprintln!("error: {e}");
             std::process::exit(1);
         }
     }
@@ -80,11 +158,23 @@ fn cmd_summarize(store: &Store, cmd: SummarizeCmd) {
         workspace_root: Some(std::env::current_dir().unwrap_or_default()),
     };
 
+    tracing::info!("starting summarization");
+    let start = std::time::Instant::now();
+
     match grakno_summarize::summarize_graph(store, &config, &options) {
         Ok(stats) => {
+            let duration = start.elapsed().as_secs_f64();
+            tracing::info!(
+                duration_seconds = duration,
+                source_units = stats.source_units_summarized,
+                components = stats.components_summarized,
+                errors = stats.errors,
+                "summarization completed"
+            );
             println!("summarization complete:\n{stats}");
         }
         Err(e) => {
+            tracing::error!(error = %e, "summarization failed");
             eprintln!("error: {e}");
             std::process::exit(1);
         }
@@ -94,6 +184,7 @@ fn cmd_summarize(store: &Store, cmd: SummarizeCmd) {
 fn cmd_query_entity(store: &Store, id: &str) {
     match store.get_entity(id) {
         Ok(e) => {
+            tracing::debug!(entity_id = %id, "entity found");
             println!("id:        {}", e.id);
             println!("kind:      {}", e.kind);
             println!("name:      {}", e.name);
@@ -116,6 +207,7 @@ fn cmd_query_entity(store: &Store, id: &str) {
             println!("exported:  {}", e.exported);
         }
         Err(e) => {
+            tracing::warn!(entity_id = %id, error = %e, "entity not found");
             eprintln!("error: {e}");
             std::process::exit(1);
         }
@@ -130,12 +222,14 @@ fn cmd_query_entities(store: &Store, component: Option<&str>) {
     match entities {
         Ok(list) if list.is_empty() => println!("no entities found"),
         Ok(list) => {
+            tracing::debug!(count = list.len(), "listed entities");
             for e in &list {
                 println!("{:<12} {}", e.kind, e.id);
             }
             println!("\n{} entities", list.len());
         }
         Err(e) => {
+            tracing::error!(error = %e, "failed to list entities");
             eprintln!("error: {e}");
             std::process::exit(1);
         }
@@ -154,6 +248,7 @@ fn cmd_query_routes(store: &Store, task: Option<&str>, entity: Option<&str>) {
     match routes {
         Ok(list) if list.is_empty() => println!("no routes found"),
         Ok(list) => {
+            tracing::debug!(count = list.len(), "listed routes");
             for r in &list {
                 println!(
                     "task={:<16} entity={:<32} priority={}",
@@ -162,6 +257,7 @@ fn cmd_query_routes(store: &Store, task: Option<&str>, entity: Option<&str>) {
             }
         }
         Err(e) => {
+            tracing::error!(error = %e, "failed to list routes");
             eprintln!("error: {e}");
             std::process::exit(1);
         }
@@ -188,6 +284,9 @@ fn cmd_inspect_overview(store: &Store) {
     println!("  summaries:   {}", stats.summaries);
     println!("  task_routes: {}", stats.task_routes);
     println!("  embeddings:  {}", stats.embeddings);
+
+    // Record latest stats
+    record_store_stats(&stats);
 }
 
 fn cmd_inspect_entity(store: &Store, id: &str) {
@@ -244,11 +343,15 @@ fn cmd_embed(store: &Store, cmd: EmbedCmd) {
         force: cmd.force,
     };
 
+    tracing::info!("starting embedding generation");
+
     match grakno_summarize::embedding::embed_graph(store, &client, &options) {
         Ok(stats) => {
+            tracing::info!("embedding completed");
             println!("embedding complete:\n{stats}");
         }
         Err(e) => {
+            tracing::error!(error = %e, "embedding failed");
             eprintln!("error: {e}");
             std::process::exit(1);
         }
@@ -267,10 +370,22 @@ fn cmd_watch(store: &Store, cmd: WatchCmd) {
     });
 
     // Initial index
+    tracing::info!(path = %root.display(), "running initial index");
     println!("running initial index of {}…", root.display());
+
+    let start = std::time::Instant::now();
     match grakno_index::index_project(store, &root) {
-        Ok(stats) => println!("initial index complete:\n{stats}"),
+        Ok(stats) => {
+            let duration = start.elapsed().as_secs_f64();
+            tracing::info!(
+                duration_seconds = duration,
+                files = stats.files_indexed,
+                "initial index complete"
+            );
+            println!("initial index complete:\n{stats}");
+        }
         Err(e) => {
+            tracing::error!(error = %e, "initial index failed");
             eprintln!("error during initial index: {e}");
             std::process::exit(1);
         }
@@ -296,6 +411,11 @@ fn cmd_watch(store: &Store, cmd: WatchCmd) {
             std::process::exit(1);
         });
 
+    tracing::info!(
+        path = %root.display(),
+        debounce_ms = cmd.debounce_ms,
+        "watch mode started"
+    );
     println!(
         "watching {} (debounce {}ms, Ctrl+C to stop)",
         root.display(),
@@ -327,6 +447,7 @@ fn cmd_watch(store: &Store, cmd: WatchCmd) {
         loop {
             match rx.recv() {
                 Ok(event) => {
+                    tracing::trace!(?event, "file system event");
                     if event.paths.iter().any(|p| !ignored(p) && relevant_ext(p)) {
                         break;
                     }
@@ -352,19 +473,38 @@ fn cmd_watch(store: &Store, cmd: WatchCmd) {
             }
         }
 
+        tracing::info!("change detected, re-indexing");
         println!("\nchange detected, re-indexing…");
+
+        let start = std::time::Instant::now();
         match grakno_index::index_project(store, &root) {
-            Ok(stats) => println!("re-index complete:\n{stats}"),
-            Err(e) => eprintln!("re-index error: {e}"),
+            Ok(stats) => {
+                let duration = start.elapsed().as_secs_f64();
+                tracing::info!(
+                    duration_seconds = duration,
+                    files = stats.files_indexed,
+                    skipped = stats.files_skipped,
+                    "re-index complete"
+                );
+                println!("re-index complete:\n{stats}");
+            }
+            Err(e) => {
+                tracing::error!(error = %e, "re-index failed");
+                eprintln!("re-index error: {e}");
+            }
         }
     }
 }
 
+#[tracing::instrument(skip(store), fields(query = %cmd.query))]
 fn cmd_plan(store: &Store, cmd: PlanCmd) {
     let config = grakno_query::PipelineConfig {
         limit: cmd.limit,
         ..Default::default()
     };
+
+    tracing::info!("starting query plan");
+    let start = std::time::Instant::now();
 
     // Optionally embed the query if all three embedding options are provided
     let query_embedding = match (&cmd.base_url, &cmd.api_key, &cmd.model) {
@@ -376,20 +516,21 @@ fn cmd_plan(store: &Store, cmd: PlanCmd) {
             );
             match grakno_summarize::EmbeddingClient::new(&embed_config) {
                 Ok(client) => match client.embed(&[&cmd.query]) {
-                    Ok(mut vecs) if !vecs.is_empty() => Some(vecs.remove(0)),
+                    Ok(mut vecs) if !vecs.is_empty() => {
+                        tracing::debug!("query embedding successful");
+                        Some(vecs.remove(0))
+                    }
                     Ok(_) => {
-                        eprintln!(
-                            "warning: embedding returned no vectors, falling back to keyword-only"
-                        );
+                        tracing::warn!("embedding returned no vectors");
                         None
                     }
                     Err(e) => {
-                        eprintln!("warning: embedding failed ({e}), falling back to keyword-only");
+                        tracing::warn!(error = %e, "embedding failed");
                         None
                     }
                 },
                 Err(e) => {
-                    eprintln!("warning: failed to create embedding client ({e}), falling back to keyword-only");
+                    tracing::warn!(error = %e, "failed to create embedding client");
                     None
                 }
             }
@@ -397,22 +538,62 @@ fn cmd_plan(store: &Store, cmd: PlanCmd) {
         _ => None,
     };
 
+    let used_vector_search = query_embedding.is_some();
     let embedding_ref = query_embedding.as_deref();
 
     match grakno_query::QueryPipeline::run(store, &cmd.query, embedding_ref, &config) {
-        Ok(plan) => match cmd.format.as_str() {
-            "json" => {
-                let json = serde_json::to_string_pretty(&plan).unwrap_or_else(|e| {
-                    eprintln!("error serializing plan: {e}");
-                    std::process::exit(1);
-                });
-                println!("{json}");
+        Ok(plan) => {
+            let duration = start.elapsed().as_secs_f64();
+
+            // Record metrics
+            let m = observability::query_metrics();
+            m.queries_total.add(
+                1,
+                &[
+                    ("category", plan.category.as_str()),
+                    (
+                        "used_vector",
+                        if used_vector_search { "true" } else { "false" },
+                    ),
+                ],
+            );
+            m.query_duration
+                .observe(duration, &[("category", plan.category.as_str())]);
+            m.candidates_considered
+                .observe(plan.candidates_considered as f64, &[]);
+            if used_vector_search {
+                m.vector_searches.add(1, &[]);
             }
-            _ => {
-                print!("{}", plan.display());
+
+            tracing::info!(
+                duration_seconds = duration,
+                category = %plan.category,
+                candidates = plan.candidates_considered,
+                results = plan.items.len(),
+                used_vector_search,
+                "query completed"
+            );
+
+            match cmd.format.as_str() {
+                "json" => {
+                    let json = serde_json::to_string_pretty(&plan).unwrap_or_else(|e| {
+                        eprintln!("error serializing plan: {e}");
+                        std::process::exit(1);
+                    });
+                    println!("{json}");
+                }
+                _ => {
+                    print!("{}", plan.display());
+                }
             }
-        },
+        }
         Err(e) => {
+            let duration = start.elapsed().as_secs_f64();
+            tracing::error!(error = %e, duration_seconds = duration, "query failed");
+
+            let m = observability::query_metrics();
+            m.query_duration.observe(duration, &[("result", "error")]);
+
             eprintln!("error: {e}");
             std::process::exit(1);
         }
@@ -429,11 +610,22 @@ fn cmd_search(store: &Store, cmd: SearchCmd) {
         }
     };
 
+    tracing::info!(query = %cmd.query, k = cmd.k, "starting semantic search");
+    let start = std::time::Instant::now();
+
     match grakno_summarize::embedding::search(store, &client, &cmd.query, cmd.k) {
         Ok(results) if results.is_empty() => {
+            tracing::info!("search returned no results");
             println!("no results found");
         }
         Ok(results) => {
+            let duration = start.elapsed().as_secs_f64();
+            tracing::info!(
+                duration_seconds = duration,
+                count = results.len(),
+                "search completed"
+            );
+
             for (i, r) in results.iter().enumerate() {
                 println!("{}. {}  (distance: {:.3})", i + 1, r.entity_id, r.distance);
                 let location = match (&r.path, r.line_start) {
@@ -453,6 +645,7 @@ fn cmd_search(store: &Store, cmd: SearchCmd) {
             }
         }
         Err(e) => {
+            tracing::error!(error = %e, "search failed");
             eprintln!("error: {e}");
             std::process::exit(1);
         }

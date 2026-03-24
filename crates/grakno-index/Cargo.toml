@@ -20,3 +20,4 @@ tree-sitter-c-sharp = "0"
 tree-sitter-sequel = "0"
 cargo_metadata = "0"
 toml = "1"
+tracing = { workspace = true }
