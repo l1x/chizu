@@ -455,4 +455,31 @@ impl MyStruct {
         assert_eq!(symbols[0].name, "impl MyStruct");
         assert_eq!(symbols[0].trait_name, None);
     }
+
+    #[test]
+    fn all_grammars_load() {
+        let grammars: Vec<(&str, tree_sitter::Language)> = vec![
+            ("rust", tree_sitter_rust::LANGUAGE.into()),
+            (
+                "typescript",
+                tree_sitter_typescript::LANGUAGE_TYPESCRIPT.into(),
+            ),
+            ("tsx", tree_sitter_typescript::LANGUAGE_TSX.into()),
+            ("hcl", tree_sitter_hcl::LANGUAGE.into()),
+            ("toml", tree_sitter_toml_ng::LANGUAGE.into()),
+            ("yaml", tree_sitter_yaml::LANGUAGE.into()),
+            ("html", tree_sitter_html::LANGUAGE.into()),
+            ("markdown", tree_sitter_md::LANGUAGE.into()),
+            ("markdown_inline", tree_sitter_md::INLINE_LANGUAGE.into()),
+            ("tlaplus", tree_sitter_tlaplus::LANGUAGE.into()),
+            ("c_sharp", tree_sitter_c_sharp::LANGUAGE.into()),
+            ("sql", tree_sitter_sequel::LANGUAGE.into()),
+        ];
+        for (name, language) in &grammars {
+            let mut parser = Parser::new();
+            parser
+                .set_language(language)
+                .unwrap_or_else(|e| panic!("failed to load {name} grammar: {e}"));
+        }
+    }
 }
