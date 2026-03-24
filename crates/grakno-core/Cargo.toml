@@ -15,3 +15,6 @@ serde_json = { workspace = true }
 blake3 = { workspace = true }
 grafeo = { workspace = true, optional = true }
 usearch = { version = "2", optional = true }
+
+[dev-dependencies]
+tempfile = "3"
