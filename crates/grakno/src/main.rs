@@ -109,7 +109,8 @@ fn main() {
     match args.command {
         Command::Index(cmd) => {
             let path = std::path::Path::new(&cmd.path);
-            cmd_index(&store, path);
+            let should_embed = cmd.embed || _config.as_ref().map(|c| c.embedding.enabled).unwrap_or(false);
+            cmd_index(&store, path, should_embed, _config.as_ref());
         }
         Command::Query(q) => match q.sub {
             QuerySub::Entity(cmd) => cmd_query_entity(&store, &cmd.id),
@@ -271,7 +272,7 @@ fn open_store(backend: &str, db: &str) -> Store {
 }
 
 #[tracing::instrument(skip(store), fields(path = %path.display()))]
-fn cmd_index(store: &Store, path: &std::path::Path) {
+fn cmd_index(store: &Store, path: &std::path::Path, should_embed: bool, config: Option<&config::Config>) {
     tracing::info!("starting index operation");
     let start = std::time::Instant::now();
 
@@ -302,6 +303,43 @@ fn cmd_index(store: &Store, path: &std::path::Path) {
             }
 
             println!("indexed successfully:\n{stats}");
+
+            // Generate embeddings if requested
+            if should_embed {
+                if let Some(cfg) = config {
+                    if cfg.embedding.enabled || should_embed {
+                        println!("\ngenerating embeddings...");
+                        let embed_start = std::time::Instant::now();
+                        
+                        let embed_config = grakno_summarize::SummarizeConfig::new(
+                            cfg.embedding.base_url.clone(),
+                            cfg.embedding.api_key.clone(),
+                            cfg.embedding.model.clone(),
+                        );
+                        
+                        match grakno_summarize::EmbeddingClient::new(&embed_config) {
+                            Ok(client) => {
+                                let embed_options = grakno_summarize::SimpleEmbedOptions { force: false };
+                                match grakno_summarize::embed_entities_simple(store, &client, &embed_options) {
+                                    Ok(embed_stats) => {
+                                        let embed_duration = embed_start.elapsed().as_secs_f64();
+                                        println!("embeddings: {embed_stats} (took {:.2}s)", embed_duration);
+                                    }
+                                    Err(e) => {
+                                        eprintln!("warning: embedding generation failed: {e}");
+                                    }
+                                }
+                            }
+                            Err(e) => {
+                                eprintln!("warning: failed to create embedding client: {e}");
+                            }
+                        }
+                    }
+                } else {
+                    eprintln!("warning: embeddings requested but no config found");
+                    eprintln!("         create .grakno.toml with [embedding] section or use --embed with config");
+                }
+            }
         }
         Err(e) => {
             let duration = start.elapsed().as_secs_f64();

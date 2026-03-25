@@ -279,6 +279,95 @@ pub fn search(
 }
 
 // ---------------------------------------------------------------------------
+// Simple entity embedding (no summaries required)
+// ---------------------------------------------------------------------------
+
+pub struct SimpleEmbedOptions {
+    pub force: bool,
+}
+
+/// Embed entities using their metadata (name, kind, path) instead of summaries.
+/// This is useful for initial indexing when summaries haven't been generated yet.
+pub fn embed_entities_simple(
+    store: &Store,
+    client: &EmbeddingClient,
+    options: &SimpleEmbedOptions,
+) -> Result<EmbedStats> {
+    use grakno_core::model::Entity;
+    
+    let mut stats = EmbedStats {
+        entities_processed: 0,
+        entities_skipped: 0,
+        entities_embedded: 0,
+        errors: 0,
+    };
+
+    // Get all entities
+    let entities: Vec<Entity> = store.list_entities()?;
+
+    // Build (entity_id, text_to_embed) pairs
+    let mut to_embed: Vec<(String, String)> = Vec::new();
+
+    for entity in &entities {
+        stats.entities_processed += 1;
+
+        if !options.force {
+            if store.get_embedding(&entity.id).is_ok() {
+                stats.entities_skipped += 1;
+                continue;
+            }
+        }
+
+        // Create a simple text representation of the entity
+        let text = format!(
+            "{} {} {}",
+            entity.kind,
+            entity.name,
+            entity.path.as_deref().unwrap_or("")
+        );
+
+        to_embed.push((entity.id.clone(), text));
+    }
+
+    // Process in batches
+    for batch in to_embed.chunks(BATCH_SIZE) {
+        let texts: Vec<&str> = batch.iter().map(|(_, text)| text.as_str()).collect();
+
+        eprint!("embedding {} entities... ", batch.len());
+
+        match client.embed(&texts) {
+            Ok(vectors) => {
+                for (i, vec) in vectors.into_iter().enumerate() {
+                    let (entity_id, _) = &batch[i];
+                    let dimensions = vec.len() as i64;
+                    let record = EmbeddingRecord {
+                        entity_id: entity_id.clone(),
+                        model: client.model().to_string(),
+                        dimensions,
+                        vector: vec,
+                        updated_at: now_iso8601(),
+                    };
+                    match store.upsert_embedding(&record) {
+                        Ok(()) => stats.entities_embedded += 1,
+                        Err(e) => {
+                            eprintln!("store error for {entity_id}: {e}");
+                            stats.errors += 1;
+                        }
+                    }
+                }
+                eprintln!("done");
+            }
+            Err(e) => {
+                eprintln!("error: {e}");
+                stats.errors += batch.len();
+            }
+        }
+    }
+
+    Ok(stats)
+}
+
+// ---------------------------------------------------------------------------
 // helpers
 // ---------------------------------------------------------------------------
 

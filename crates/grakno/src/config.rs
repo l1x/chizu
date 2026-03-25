@@ -34,6 +34,10 @@ pub struct Config {
     /// LLM/summarization configuration.
     #[serde(default)]
     pub llm: LlmConfig,
+
+    /// Embedding configuration for vector search.
+    #[serde(default)]
+    pub embedding: EmbeddingConfig,
 }
 
 impl Config {
@@ -195,6 +199,35 @@ max_tokens = 512
 
 # Sampling temperature (0.0-2.0, lower = more deterministic)
 temperature = 0.2
+
+[embedding]
+# Enable automatic embedding generation during indexing
+enabled = false
+
+# Provider: "ollama" or "openai"
+provider = "ollama"
+
+# Base URL for the embedding API
+# For Ollama: http://localhost:11434/v1
+# For OpenAI: https://api.openai.com/v1
+base_url = "http://localhost:11434/v1"
+
+# API key (not needed for Ollama, required for OpenAI)
+api_key = ""
+
+# Model to use for embeddings
+# Ollama examples: "nomic-embed-text", "mxbai-embed-large"
+# OpenAI examples: "text-embedding-3-small", "text-embedding-3-large"
+model = "nomic-embed-text"
+
+# Embedding dimensions (must match the model)
+dimensions = 768
+
+# Batch size for embedding requests
+batch_size = 32
+
+# Timeout in seconds
+timeout_secs = 120
 "#
         .to_string()
     }
@@ -369,6 +402,90 @@ impl Default for LlmConfig {
             temperature: default_temperature(),
         }
     }
+}
+
+/// Embedding configuration for vector search.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct EmbeddingConfig {
+    /// Whether to automatically generate embeddings during indexing.
+    #[serde(default = "default_embedding_enabled")]
+    pub enabled: bool,
+
+    /// Provider type: "ollama" or "openai".
+    #[serde(default = "default_embedding_provider")]
+    pub provider: String,
+
+    /// Base URL for the embedding API.
+    #[serde(default = "default_embedding_base_url")]
+    pub base_url: String,
+
+    /// API key (required for OpenAI, not for Ollama).
+    #[serde(default)]
+    pub api_key: String,
+
+    /// Model to use for embeddings.
+    #[serde(default = "default_embedding_model")]
+    pub model: String,
+
+    /// Embedding dimensions (must match model).
+    #[serde(default = "default_embedding_dimensions")]
+    pub dimensions: usize,
+
+    /// Batch size for embedding requests.
+    #[serde(default = "default_embedding_batch_size")]
+    pub batch_size: usize,
+
+    /// Timeout in seconds.
+    #[serde(default = "default_embedding_timeout")]
+    pub timeout_secs: u64,
+}
+
+fn default_embedding_enabled() -> bool {
+    false
+}
+
+fn default_embedding_provider() -> String {
+    "ollama".to_string()
+}
+
+fn default_embedding_base_url() -> String {
+    "http://localhost:11434/v1".to_string()
+}
+
+fn default_embedding_model() -> String {
+    "nomic-embed-text".to_string()
+}
+
+fn default_embedding_dimensions() -> usize {
+    768
+}
+
+fn default_embedding_batch_size() -> usize {
+    32
+}
+
+fn default_embedding_timeout() -> u64 {
+    120
+}
+
+impl Default for EmbeddingConfig {
+    fn default() -> Self {
+        Self {
+            enabled: default_embedding_enabled(),
+            provider: default_embedding_provider(),
+            base_url: default_embedding_base_url(),
+            api_key: default_embedding_api_key(),
+            model: default_embedding_model(),
+            dimensions: default_embedding_dimensions(),
+            batch_size: default_embedding_batch_size(),
+            timeout_secs: default_embedding_timeout(),
+        }
+    }
+}
+
+fn default_embedding_api_key() -> String {
+    String::new()
 }
 
 #[cfg(test)]

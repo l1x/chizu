@@ -48,6 +48,10 @@ pub struct IndexCmd {
     /// path to the project root (default: current directory)
     #[argh(positional, default = "String::from(\".\")")]
     pub path: String,
+
+    /// generate embeddings for vector search (requires embedding config)
+    #[argh(switch, short = 'e')]
+    pub embed: bool,
 }
 
 /// query the graph
