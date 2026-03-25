@@ -21,4 +21,4 @@ tree-sitter-sequel = "0"
 cargo_metadata = "0"
 toml = "1"
 tracing = { workspace = true }
-regex = "1"
+pulldown-cmark = "0.12"
