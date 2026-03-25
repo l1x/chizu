@@ -206,15 +206,23 @@ fn is_likely_symbol(name: &str) -> bool {
 }
 
 /// Extract context around a position in a line.
+/// Handles unicode correctly by using char indices.
 fn extract_context(line: &str, pos: usize) -> String {
-    let start = pos.saturating_sub(30);
-    let end = (pos + 40).min(line.len());
-    let context = &line[start..end];
+    // Convert byte position to char position
+    let char_pos = line[..pos.min(line.len())].chars().count();
     
-    if start > 0 {
+    let start_char = char_pos.saturating_sub(30);
+    let end_char = (char_pos + 40).min(line.chars().count());
+    
+    let context: String = line.chars()
+        .skip(start_char)
+        .take(end_char - start_char)
+        .collect();
+    
+    if start_char > 0 {
         format!("...{}", context)
     } else {
-        context.to_string()
+        context
     }
 }
 
