@@ -3,7 +3,7 @@
 //! Uses pulldown-cmark for proper Markdown parsing.
 
 use pulldown_cmark::{Event, Parser, Tag, TagEnd};
-use std::collections::HashSet;
+
 
 /// A detected mention of a symbol in documentation.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -49,18 +49,18 @@ pub fn extract_mentions(content: &str) -> Vec<Mention> {
     
     // Track code block ranges
     let mut code_block_ranges: Vec<std::ops::Range<usize>> = Vec::new();
-    let mut in_code_block = false;
+    let mut _in_code_block = false;
     let mut code_block_start = 0;
     
     // First pass: collect code block ranges
     for (event, range) in Parser::new(content).into_offset_iter() {
         match event {
             Event::Start(Tag::CodeBlock(_)) => {
-                in_code_block = true;
+                _in_code_block = true;
                 code_block_start = range.start;
             }
             Event::End(TagEnd::CodeBlock) => {
-                in_code_block = false;
+                _in_code_block = false;
                 code_block_ranges.push(code_block_start..range.end);
             }
             _ => {}
