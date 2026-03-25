@@ -176,15 +176,24 @@ impl std::str::FromStr for LogFormat {
     }
 }
 
-/// Initialize the observability stack with rolly.
+/// Initialize the observability stack.
 ///
-/// Returns a guard that flushes pending telemetry on drop.
-pub fn init_observability(config: &ObservabilityConfig) -> rolly::TelemetryGuard {
+/// In pretty mode without OTLP, uses simple human-readable logging.
+/// In JSON mode or with OTLP endpoint, uses rolly for structured telemetry.
+pub fn init_observability(config: &ObservabilityConfig) -> Option<rolly::TelemetryGuard> {
     init_metrics();
 
     let endpoint = config.otlp_endpoint.clone();
 
-    rolly::init(rolly::TelemetryConfig {
+    // In pretty mode without OTLP, use simple stderr logging (no JSON)
+    if config.log_format == LogFormat::Pretty && endpoint.is_none() {
+        // Initialize simple pretty logging
+        tracing_subscriber::fmt::init();
+        return None;
+    }
+
+    // Use rolly for JSON output or when OTLP is configured
+    Some(rolly::init(rolly::TelemetryConfig {
         service_name: config.service_name.clone(),
         service_version: env!("CARGO_PKG_VERSION").into(),
         environment: config.environment.clone(),
@@ -192,12 +201,12 @@ pub fn init_observability(config: &ObservabilityConfig) -> rolly::TelemetryGuard
         otlp_traces_endpoint: endpoint.clone(),
         otlp_logs_endpoint: endpoint.clone(),
         otlp_metrics_endpoint: endpoint,
-        log_to_stderr: config.log_format == LogFormat::Pretty,
+        log_to_stderr: true,
         use_metrics_interval: None,
         metrics_flush_interval: Some(Duration::from_secs(10)),
         sampling_rate: config.sampling_rate,
         backpressure_strategy: rolly::BackpressureStrategy::Drop,
-    })
+    }))
 }
 
 /// Update store gauges from current stats.

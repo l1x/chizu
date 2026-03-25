@@ -1,0 +1,56 @@
+# Grakno configuration file
+# This enables automatic embedding generation during indexing
+
+[index]
+exclude_patterns = [
+    "**/target/**",
+    "**/.git/**",
+    "**/node_modules/**",
+    "**/*.db",
+    "**/*.db.usearch",
+]
+parallel_workers = 4
+
+[query]
+default_limit = 15
+
+[query.rerank_weights]
+task_route = 0.30
+keyword = 0.20
+name_match = 0.15
+vector = 0.20
+kind_preference = 0.05
+exported = 0.05
+path_match = 0.05
+
+[llm]
+default_model = "gpt-4o-mini"
+timeout_secs = 60
+retry_attempts = 3
+max_tokens = 512
+temperature = 0.2
+
+[embedding]
+# Enable automatic embedding generation during indexing
+enabled = true
+
+# Provider: "ollama" or "openai"
+provider = "ollama"
+
+# Base URL for the embedding API
+base_url = "http://localhost:11434/v1"
+
+# API key (not needed for Ollama)
+api_key = ""
+
+# Model for embeddings
+model = "nomic-embed-text-v2-moe:latest"
+
+# Embedding dimensions
+dimensions = 768
+
+# Batch size
+batch_size = 32
+
+# Timeout
+timeout_secs = 120
