@@ -58,7 +58,48 @@ fn main() {
         }
     };
 
-    let store = open_store(&args.backend, &args.db);
+    // Determine database path
+    // For index command: use .grakno/graph.db in the repo unless --db is explicitly set
+    // For other commands: find .grakno/graph.db in CWD or use --db
+    let db_path = match &args.command {
+        Command::Index(cmd) => {
+            if args.db == "grakno.db" {
+                // Default: use .grakno/graph.db in the repo
+                let repo_path = std::path::Path::new(&cmd.path);
+                let canonical = repo_path.canonicalize().unwrap_or_else(|_| repo_path.to_path_buf());
+                canonical.join(".grakno").join("graph.db")
+            } else {
+                std::path::PathBuf::from(&args.db)
+            }
+        }
+        _ => {
+            if args.db == "grakno.db" {
+                // Try to find .grakno/graph.db in CWD
+                let cwd = std::env::current_dir().unwrap_or_default();
+                let grakno_db = cwd.join(".grakno").join("graph.db");
+                if grakno_db.exists() {
+                    grakno_db
+                } else {
+                    cwd.join("grakno.db")
+                }
+            } else {
+                std::path::PathBuf::from(&args.db)
+            }
+        }
+    };
+
+    // Ensure .grakno directory exists for index command
+    if matches!(args.command, Command::Index(_)) {
+        if let Some(parent) = db_path.parent() {
+            if let Err(e) = std::fs::create_dir_all(parent) {
+                tracing::error!(error = %e, "failed to create .grakno directory");
+                eprintln!("error: failed to create .grakno directory: {e}");
+                std::process::exit(1);
+            }
+        }
+    }
+
+    let store = open_store(&args.backend, &db_path.to_string_lossy());
 
     // Record initial store stats
     if let Ok(stats) = store.stats() {

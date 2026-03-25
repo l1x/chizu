@@ -1,3 +1,6 @@
 /target
 /.agent
 /.DS_Store
+/.grakno
+*.db
+*.db.usearch
