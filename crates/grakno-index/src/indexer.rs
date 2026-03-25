@@ -61,8 +61,6 @@ impl fmt::Display for IndexStats {
     }
 }
 
-
-
 /// Track an image reference found in a terraform file.
 #[derive(Debug, Clone)]
 struct ImageRef {
@@ -125,7 +123,7 @@ fn index_generic_walk(
     let mut has_main_tf = false;
     let dir_rel_path = dir.strip_prefix(project_root).unwrap_or(dir);
     let dir_rel_str = dir_rel_path.display().to_string();
-    
+
     for entry in &entries {
         let path = entry.path();
         if path.is_file() {
@@ -143,7 +141,18 @@ fn index_generic_walk(
 
         // Skip hidden dirs and common build/output directories
         if path.is_dir() {
-            if file_name.starts_with('.') || matches!(file_name, "target" | "node_modules" | "dist" | "build" | "out" | "coverage" | "__pycache__") {
+            if file_name.starts_with('.')
+                || matches!(
+                    file_name,
+                    "target"
+                        | "node_modules"
+                        | "dist"
+                        | "build"
+                        | "out"
+                        | "coverage"
+                        | "__pycache__"
+                )
+            {
                 continue;
             }
             index_generic_walk(store, &path, project_root, stats, indexed_files, image_refs)?;
@@ -151,41 +160,72 @@ fn index_generic_walk(
             // Index supported file types directly
             let rel_path = path.strip_prefix(project_root).unwrap_or(&path);
             let _rel_path_str = rel_path.display().to_string();
-            
+
             // Check file extension for supported languages
             let ext = path.extension().and_then(|e| e.to_str());
             match ext {
                 Some("rs") => {
-                    index_generic_source_file(store, &path, project_root, "rust", stats, indexed_files)?;
+                    index_generic_source_file(
+                        store,
+                        &path,
+                        project_root,
+                        "rust",
+                        stats,
+                        indexed_files,
+                    )?;
                 }
                 Some("ts") | Some("tsx") => {
-                    index_generic_source_file(store, &path, project_root, "typescript", stats, indexed_files)?;
+                    index_generic_source_file(
+                        store,
+                        &path,
+                        project_root,
+                        "typescript",
+                        stats,
+                        indexed_files,
+                    )?;
                 }
                 Some("astro") => {
-                    index_generic_source_file(store, &path, project_root, "astro", stats, indexed_files)?;
+                    index_generic_source_file(
+                        store,
+                        &path,
+                        project_root,
+                        "astro",
+                        stats,
+                        indexed_files,
+                    )?;
                 }
                 Some("md") => {
                     index_generic_doc_file(store, &path, project_root, stats, indexed_files)?;
                 }
                 Some("tf") | Some("hcl") => {
-                    index_terraform_file(store, &path, project_root, stats, indexed_files, image_refs, &dir_rel_str)?;
+                    index_terraform_file(
+                        store,
+                        &path,
+                        project_root,
+                        stats,
+                        indexed_files,
+                        image_refs,
+                        &dir_rel_str,
+                    )?;
                 }
                 _ => {
                     // Check for Dockerfile patterns
-                    if file_name.contains("Dockerfile") || 
-                       (file_name.starts_with("docker-compose") && (file_name.ends_with(".yml") || file_name.ends_with(".yaml"))) {
+                    if file_name.contains("Dockerfile")
+                        || (file_name.starts_with("docker-compose")
+                            && (file_name.ends_with(".yml") || file_name.ends_with(".yaml")))
+                    {
                         index_containerized_file(store, &path, project_root, stats, indexed_files)?;
                     }
                 }
             }
         }
     }
-    
+
     // Create InfraRoot entity if directory has main.tf
     if has_main_tf {
         create_infra_root(store, dir, project_root, stats)?;
     }
-    
+
     Ok(())
 }
 
@@ -232,7 +272,11 @@ fn index_generic_source_file(
     store.insert_entity(&Entity {
         id: su_id.clone(),
         kind: EntityKind::SourceUnit,
-        name: path.file_name().and_then(|n| n.to_str()).unwrap_or(&rel_path_str).to_string(),
+        name: path
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or(&rel_path_str)
+            .to_string(),
         component_id: None,
         path: Some(rel_path_str.clone()),
         language: Some(language.to_string()),
@@ -311,7 +355,11 @@ fn index_generic_source_file(
                         language: Some(language.to_string()),
                         line_start: Some(sym.line_start as i64),
                         line_end: Some(sym.line_end as i64),
-                        visibility: if sym.exported { Some("pub".to_string()) } else { None },
+                        visibility: if sym.exported {
+                            Some("pub".to_string())
+                        } else {
+                            None
+                        },
                         exported: sym.exported,
                     })?;
 
@@ -330,9 +378,12 @@ fn index_generic_source_file(
         "astro" => {
             if let Ok(_parse_result) = parse_astro_file(&source) {
                 // Create entity for the component itself
-                let comp_name = path.file_stem().and_then(|s| s.to_str()).unwrap_or("component");
+                let comp_name = path
+                    .file_stem()
+                    .and_then(|s| s.to_str())
+                    .unwrap_or("component");
                 let entity_id = id::symbol_in_file(&rel_path_str, comp_name);
-                
+
                 store.insert_entity(&Entity {
                     id: entity_id.clone(),
                     kind: EntityKind::Template,
@@ -398,7 +449,11 @@ fn index_generic_doc_file(
     // Create Doc entity
     let doc_id = id::doc_id("generic", &rel_path_str);
     let title = parse_frontmatter_title(&content)
-        .or_else(|| path.file_stem().and_then(|s| s.to_str()).map(|s| s.to_string()))
+        .or_else(|| {
+            path.file_stem()
+                .and_then(|s| s.to_str())
+                .map(|s| s.to_string())
+        })
         .unwrap_or_else(|| "untitled".to_string());
 
     store.insert_entity(&Entity {
@@ -473,7 +528,11 @@ fn index_terraform_file(
     store.insert_entity(&Entity {
         id: su_id.clone(),
         kind: EntityKind::SourceUnit,
-        name: path.file_name().and_then(|n| n.to_str()).unwrap_or(&rel_path_str).to_string(),
+        name: path
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or(&rel_path_str)
+            .to_string(),
         component_id: None,
         path: Some(rel_path_str.clone()),
         language: Some("hcl".to_string()),
@@ -489,7 +548,7 @@ fn index_terraform_file(
     for line in content.lines() {
         line_num += 1;
         let trimmed = line.trim();
-        
+
         // Look for image references
         // Common patterns: image = "...", image_uri = "...", container_image = "..."
         if let Some(image) = extract_image_from_line(trimmed) {
@@ -499,18 +558,18 @@ fn index_terraform_file(
                 line: line_num,
             });
         }
-        
+
         if trimmed.starts_with("resource") {
             // resource "aws_ecs_service" "api" { ... }
             if let Some(open) = trimmed.find('"') {
-                if let Some(close) = trimmed[open+1..].find('"') {
-                    let resource_type = &trimmed[open+1..open+1+close];
-                    if let Some(name_open) = trimmed[open+1+close+1..].find('"') {
-                        let name_start = open+1+close+1+name_open+1;
+                if let Some(close) = trimmed[open + 1..].find('"') {
+                    let resource_type = &trimmed[open + 1..open + 1 + close];
+                    if let Some(name_open) = trimmed[open + 1 + close + 1..].find('"') {
+                        let name_start = open + 1 + close + 1 + name_open + 1;
                         if let Some(name_close) = trimmed[name_start..].find('"') {
-                            let resource_name = &trimmed[name_start..name_start+name_close];
+                            let resource_name = &trimmed[name_start..name_start + name_close];
                             let symbol_id = format!("{su_id}::{resource_type}::{resource_name}");
-                            
+
                             store.insert_entity(&Entity {
                                 id: symbol_id.clone(),
                                 kind: EntityKind::Symbol,
@@ -523,7 +582,7 @@ fn index_terraform_file(
                                 visibility: Some("pub".to_string()),
                                 exported: true,
                             })?;
-                            
+
                             store.insert_edge(&Edge {
                                 src_id: su_id.clone(),
                                 rel: EdgeKind::Defines,
@@ -548,18 +607,18 @@ fn index_terraform_file(
 fn extract_image_from_line(line: &str) -> Option<String> {
     // Check if line contains image-related key
     let image_keys = ["image", "image_uri", "container_image", "docker_image"];
-    let has_image_key = image_keys.iter().any(|k| {
-        line.contains(&format!("{} =", k)) || line.contains(&format!("{}=", k))
-    });
-    
+    let has_image_key = image_keys
+        .iter()
+        .any(|k| line.contains(&format!("{} =", k)) || line.contains(&format!("{}=", k)));
+
     if !has_image_key {
         return None;
     }
-    
+
     // Extract the value after =
     if let Some(eq_pos) = line.find('=') {
         let after_eq = &line[eq_pos + 1..].trim();
-        
+
         // Try to extract quoted string
         if let Some(open) = after_eq.find('"') {
             let after_open = &after_eq[open + 1..];
@@ -572,7 +631,7 @@ fn extract_image_from_line(line: &str) -> Option<String> {
             }
         }
     }
-    
+
     None
 }
 
@@ -584,32 +643,31 @@ fn create_deploys_edges(
     stats: &mut IndexStats,
 ) -> Result<(), IndexError> {
     // Get all containerized entities
-    let containerized: Vec<_> = store.list_entities()?
+    let containerized: Vec<_> = store
+        .list_entities()?
         .into_iter()
         .filter(|e| e.kind == EntityKind::Containerized)
         .collect();
-    
+
     if containerized.is_empty() {
         return Ok(());
     }
-    
+
     for image_ref in image_refs {
         let infra_id = id::infra_root_id(&image_ref.infra_dir);
-        
+
         // Try to match image reference to a containerized entity
         // Matching strategy: look for directory name in image path
         // e.g., image "myapp:latest" matches Dockerfile in "myapp/" directory
-        let image_base = image_ref.image_name
+        let image_base = image_ref
+            .image_name
             .split(':')
             .next()
             .unwrap_or(&image_ref.image_name);
-        
+
         // Also try matching by last path component
-        let image_name_only = image_base
-            .split('/')
-            .last()
-            .unwrap_or(image_base);
-        
+        let image_name_only = image_base.split('/').last().unwrap_or(image_base);
+
         for container in &containerized {
             if let Some(path) = &container.path {
                 // Get the directory containing the Dockerfile
@@ -618,22 +676,22 @@ fn create_deploys_edges(
                     .and_then(|p| p.file_name())
                     .and_then(|n| n.to_str())
                     .unwrap_or("");
-                
+
                 let container_file = std::path::Path::new(path)
                     .file_name()
                     .and_then(|n| n.to_str())
                     .unwrap_or("");
-                
+
                 // Match if image name contains the directory name or vice versa
-                let matches = !container_dir.is_empty() && 
-                    (image_base.contains(container_dir) || 
-                     container_dir.contains(image_name_only) ||
-                     image_name_only.contains(container_dir));
-                
+                let matches = !container_dir.is_empty()
+                    && (image_base.contains(container_dir)
+                        || container_dir.contains(image_name_only)
+                        || image_name_only.contains(container_dir));
+
                 // Also match docker-compose services
-                let is_compose_match = container_file.starts_with("docker-compose") &&
-                    image_ref.image_name.contains("compose");
-                
+                let is_compose_match = container_file.starts_with("docker-compose")
+                    && image_ref.image_name.contains("compose");
+
                 if matches || is_compose_match {
                     // Create Deploys edge: InfraRoot -> Containerized
                     store.insert_edge(&Edge {
@@ -644,21 +702,21 @@ fn create_deploys_edges(
                         provenance_line: Some(image_ref.line),
                     })?;
                     stats.edges_created += 1;
-                    
+
                     tracing::debug!(
                         infra = %infra_id,
                         container = %container.id,
                         image = %image_ref.image_name,
                         "created deploys edge"
                     );
-                    
+
                     // Only create one edge per image ref
                     break;
                 }
             }
         }
     }
-    
+
     Ok(())
 }
 
@@ -696,8 +754,12 @@ fn index_containerized_file(
 
     // Create Containerized entity
     let containerized_id = id::containerized_id(&rel_path_str);
-    let name = path.file_name().and_then(|n| n.to_str()).unwrap_or("container").to_string();
-    
+    let name = path
+        .file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or("container")
+        .to_string();
+
     store.insert_entity(&Entity {
         id: containerized_id.clone(),
         kind: EntityKind::Containerized,
@@ -724,7 +786,7 @@ fn create_infra_root(
     let rel_dir = dir.strip_prefix(project_root).unwrap_or(dir);
     let rel_dir_str = rel_dir.display().to_string();
     let infra_id = id::infra_root_id(&rel_dir_str);
-    
+
     // Check if already exists
     if store.get_entity(&infra_id).is_ok() {
         return Ok(());

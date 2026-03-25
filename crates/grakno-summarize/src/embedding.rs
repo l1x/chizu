@@ -294,7 +294,7 @@ pub fn embed_entities_simple(
     options: &SimpleEmbedOptions,
 ) -> Result<EmbedStats> {
     use grakno_core::model::Entity;
-    
+
     let mut stats = EmbedStats {
         entities_processed: 0,
         entities_skipped: 0,
