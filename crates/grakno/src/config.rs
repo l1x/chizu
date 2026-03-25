@@ -67,14 +67,6 @@ impl Config {
         Ok(None)
     }
 
-    /// Save configuration to a file.
-    pub fn save(&self, path: &Path) -> Result<(), ConfigError> {
-        let content = toml::to_string_pretty(self)
-            .map_err(|e| ConfigError::Validation(format!("failed to serialize config: {e}")))?;
-        std::fs::write(path, content)?;
-        Ok(())
-    }
-
     /// Validate configuration values.
     fn validate(&self) -> Result<(), ConfigError> {
         let mut errors = Vec::new();
