@@ -4,7 +4,7 @@ mod observability;
 
 use cli::{
     Command, ConfigInitCmd, ConfigSub, ConfigValidateCmd, EmbedCmd, PlanCmd, QuerySub, SearchCmd,
-    SummarizeCmd, TopLevel, WatchCmd,
+    SummarizeCmd, TopLevel,
 };
 use grakno_core::Store;
 use observability::{record_store_stats, ObservabilityConfig};
@@ -25,24 +25,44 @@ fn main() {
 
     let _telemetry_guard = observability::init_observability(&obs_config);
 
+    // Guide doesn't need --repo; handle it before repo resolution
+    if matches!(args.command, Command::Guide(_)) {
+        cmd_guide();
+        return;
+    }
+
+    // Require --repo for all commands except guide
+    let repo_str = args.repo.as_deref().unwrap_or_else(|| {
+        eprintln!("error: --repo is required for this command");
+        std::process::exit(1);
+    });
+
+    // Canonicalize repo path
+    let repo_path = std::path::Path::new(repo_str)
+        .canonicalize()
+        .unwrap_or_else(|e| {
+            eprintln!("error: invalid --repo path '{repo_str}': {e}");
+            std::process::exit(1);
+        });
+
     tracing::info!(
         version = env!("CARGO_PKG_VERSION"),
         backend = %args.backend,
-        db = %args.db,
+        repo = %repo_path.display(),
         "Grakno starting"
     );
 
-    // Handle config commands (don't need store)
-    if let Command::Config(cmd) = &args.command {
+    // Handle commands that don't need store
+    if let Command::Config(ref cmd) = args.command {
         match &cmd.sub {
-            ConfigSub::Init(init) => cmd_config_init(init),
-            ConfigSub::Validate(val) => cmd_config_validate(val),
+            ConfigSub::Init(init) => cmd_config_init(init, &repo_path),
+            ConfigSub::Validate(val) => cmd_config_validate(val, &repo_path),
         }
         return;
     }
 
     // Load configuration file if present
-    let _config = match config::Config::find() {
+    let _config = match config::Config::find_from(&repo_path) {
         Ok(Some((cfg, path))) => {
             tracing::info!(config_path = %path.display(), "loaded configuration");
             Some(cfg)
@@ -58,40 +78,11 @@ fn main() {
         }
     };
 
-    // Determine database path
-    // For index command: use .grakno/graph.db in the repo unless --db is explicitly set
-    // For other commands: find .grakno/graph.db in CWD or use --db
-    let db_path = match &args.command {
-        Command::Index(cmd) => {
-            if args.db == "grakno.db" {
-                // Default: use .grakno/graph.db in the repo
-                let repo_path = std::path::Path::new(&cmd.path);
-                let canonical = repo_path
-                    .canonicalize()
-                    .unwrap_or_else(|_| repo_path.to_path_buf());
-                canonical.join(".grakno").join("graph.db")
-            } else {
-                std::path::PathBuf::from(&args.db)
-            }
-        }
-        _ => {
-            if args.db == "grakno.db" {
-                // Try to find .grakno/graph.db in CWD
-                let cwd = std::env::current_dir().unwrap_or_default();
-                let grakno_db = cwd.join(".grakno").join("graph.db");
-                if grakno_db.exists() {
-                    grakno_db
-                } else {
-                    cwd.join("grakno.db")
-                }
-            } else {
-                std::path::PathBuf::from(&args.db)
-            }
-        }
-    };
+    // Database always lives at <repo>/.grakno/graph.db
+    let db_path = repo_path.join(".grakno").join("graph.db");
 
-    // Ensure .grakno directory exists for index command
-    if matches!(args.command, Command::Index(_)) {
+    // Ensure .grakno directory exists for write commands
+    if matches!(args.command, Command::Index(_) | Command::Watch(_)) {
         if let Some(parent) = db_path.parent() {
             if let Err(e) = std::fs::create_dir_all(parent) {
                 tracing::error!(error = %e, "failed to create .grakno directory");
@@ -110,13 +101,12 @@ fn main() {
 
     match args.command {
         Command::Index(cmd) => {
-            let path = std::path::Path::new(&cmd.path);
             let should_embed = cmd.embed
                 || _config
                     .as_ref()
                     .map(|c| c.embedding.enabled)
                     .unwrap_or(false);
-            cmd_index(&store, path, should_embed, _config.as_ref());
+            cmd_index(&store, &repo_path, should_embed, _config.as_ref());
         }
         Command::Query(q) => match q.sub {
             QuerySub::Entity(cmd) => cmd_query_entity(&store, &cmd.id),
@@ -129,19 +119,34 @@ fn main() {
             Some(ref id) => cmd_inspect_entity(&store, id),
             None => cmd_inspect_overview(&store),
         },
-        Command::Summarize(cmd) => cmd_summarize(&store, cmd),
+        Command::Summarize(cmd) => cmd_summarize(&store, cmd, &repo_path),
         Command::Embed(cmd) => cmd_embed(&store, cmd),
         Command::Search(cmd) => cmd_search(&store, cmd),
-        Command::Watch(cmd) => cmd_watch(&store, cmd),
+        Command::Watch(cmd) => cmd_watch(&store, &repo_path, cmd.debounce_ms),
         Command::Plan(cmd) => cmd_plan(&store, cmd),
         Command::Config(_) => {
             // Already handled above
         }
+        Command::Guide(_) => {
+            // Already handled above
+            unreachable!()
+        }
     }
 }
 
-fn cmd_config_init(cmd: &ConfigInitCmd) {
-    let path = std::path::Path::new(&cmd.path);
+fn cmd_config_init(cmd: &ConfigInitCmd, repo_path: &std::path::Path) {
+    let path = match cmd.path {
+        Some(ref explicit) => {
+            let p = std::path::PathBuf::from(explicit);
+            if p.is_absolute() {
+                p
+            } else {
+                repo_path.join(p)
+            }
+        }
+        None => repo_path.join(".grakno.toml"),
+    };
+    let path = path.as_path();
 
     // Check if file already exists
     if path.exists() && !cmd.force {
@@ -178,12 +183,13 @@ fn cmd_config_init(cmd: &ConfigInitCmd) {
     }
 }
 
-fn cmd_config_validate(cmd: &ConfigValidateCmd) {
+fn cmd_config_validate(cmd: &ConfigValidateCmd, repo_path: &std::path::Path) {
     let config_result = if let Some(ref path_str) = cmd.path {
-        let path = std::path::Path::new(path_str);
-        config::Config::load(path)
+        let p = std::path::PathBuf::from(path_str);
+        let resolved = if p.is_absolute() { p } else { repo_path.join(p) };
+        config::Config::load(&resolved)
     } else {
-        config::Config::find().map(|opt| opt.map(|(cfg, _)| cfg))
+        config::Config::find_from(repo_path).map(|opt| opt.map(|(cfg, _)| cfg))
     };
 
     match config_result {
@@ -373,7 +379,7 @@ fn cmd_index(
     }
 }
 
-fn cmd_summarize(store: &Store, cmd: SummarizeCmd) {
+fn cmd_summarize(store: &Store, cmd: SummarizeCmd, repo_path: &std::path::Path) {
     let config = grakno_summarize::SummarizeConfig::new(cmd.base_url, cmd.api_key, cmd.model);
     let config = grakno_summarize::SummarizeConfig {
         max_tokens: cmd.max_tokens,
@@ -383,7 +389,7 @@ fn cmd_summarize(store: &Store, cmd: SummarizeCmd) {
     let options = grakno_summarize::summarizer::SummarizeOptions {
         component: cmd.component,
         force: cmd.force,
-        workspace_root: Some(std::env::current_dir().unwrap_or_default()),
+        workspace_root: Some(repo_path.to_path_buf()),
     };
 
     tracing::info!("starting summarization");
@@ -586,23 +592,20 @@ fn cmd_embed(store: &Store, cmd: EmbedCmd) {
     }
 }
 
-fn cmd_watch(store: &Store, cmd: WatchCmd) {
+fn cmd_watch(store: &Store, repo_path: &std::path::Path, debounce_ms: u64) {
     use notify::{Event, RecursiveMode, Watcher};
     use std::path::Path;
     use std::sync::mpsc;
     use std::time::{Duration, Instant};
 
-    let root = Path::new(&cmd.path).canonicalize().unwrap_or_else(|e| {
-        eprintln!("error: invalid path '{}': {e}", cmd.path);
-        std::process::exit(1);
-    });
+    let root = repo_path;
 
     // Initial index
     tracing::info!(path = %root.display(), "running initial index");
     println!("running initial index of {}…", root.display());
 
     let start = std::time::Instant::now();
-    match grakno_index::index_project(store, &root) {
+    match grakno_index::index_project(store, root) {
         Ok(stats) => {
             let duration = start.elapsed().as_secs_f64();
             tracing::info!(
@@ -619,7 +622,7 @@ fn cmd_watch(store: &Store, cmd: WatchCmd) {
         }
     }
 
-    let debounce = Duration::from_millis(cmd.debounce_ms);
+    let debounce = Duration::from_millis(debounce_ms);
     let (tx, rx) = mpsc::channel::<Event>();
 
     let mut watcher = notify::recommended_watcher(move |res: Result<Event, notify::Error>| {
@@ -633,7 +636,7 @@ fn cmd_watch(store: &Store, cmd: WatchCmd) {
     });
 
     watcher
-        .watch(&root, RecursiveMode::Recursive)
+        .watch(root, RecursiveMode::Recursive)
         .unwrap_or_else(|e| {
             eprintln!("error: failed to watch '{}': {e}", root.display());
             std::process::exit(1);
@@ -641,13 +644,13 @@ fn cmd_watch(store: &Store, cmd: WatchCmd) {
 
     tracing::info!(
         path = %root.display(),
-        debounce_ms = cmd.debounce_ms,
+        debounce_ms = debounce_ms,
         "watch mode started"
     );
     println!(
         "watching {} (debounce {}ms, Ctrl+C to stop)",
         root.display(),
-        cmd.debounce_ms
+        debounce_ms
     );
 
     let relevant_ext = |p: &Path| -> bool {
@@ -705,7 +708,7 @@ fn cmd_watch(store: &Store, cmd: WatchCmd) {
         println!("\nchange detected, re-indexing…");
 
         let start = std::time::Instant::now();
-        match grakno_index::index_project(store, &root) {
+        match grakno_index::index_project(store, root) {
             Ok(stats) => {
                 let duration = start.elapsed().as_secs_f64();
                 tracing::info!(
@@ -726,8 +729,16 @@ fn cmd_watch(store: &Store, cmd: WatchCmd) {
 
 #[tracing::instrument(skip(store), fields(query = %cmd.query))]
 fn cmd_plan(store: &Store, cmd: PlanCmd) {
+    let category_override = cmd.category.as_ref().map(|c| {
+        c.parse::<grakno_query::TaskCategory>().unwrap_or_else(|e| {
+            eprintln!("error: {e}");
+            std::process::exit(1);
+        })
+    });
+
     let config = grakno_query::PipelineConfig {
         limit: cmd.limit,
+        category_override,
         ..Default::default()
     };
 
@@ -878,4 +889,241 @@ fn cmd_search(store: &Store, cmd: SearchCmd) {
             std::process::exit(1);
         }
     }
+}
+
+
+fn cmd_guide() {
+    println!(r#"
+╔══════════════════════════════════════════════════════════════════════════════╗
+║                         GRAKNO AGENT GUIDE                                   ║
+║             How to use grakno effectively in your workflow                   ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+
+WHAT IS GRAKNO?
+═══════════════
+Grakno builds a knowledge graph from your codebase: symbols, docs, infra configs,
+and their relationships. It helps you navigate large codebases by understanding
+structure, not just text.
+
+NOTE: Most commands require --repo <path> to specify the repository root.
+
+┌──────────────────────────────────────────────────────────────────────────────┐
+│  QUICK START (5 minutes)                                                     │
+└──────────────────────────────────────────────────────────────────────────────┘
+
+  1. INDEX your codebase (one-time setup):
+
+     $ grakno --repo . index --embed
+
+     This creates .grakno/graph.db with entities and relationships.
+     The --embed flag generates vectors for semantic search.
+
+  2. QUERY to understand:
+
+     $ grakno --repo . plan "how does auth work"
+     $ grakno --repo . search "error handling patterns"
+
+  3. INSPECT to drill down:
+
+     $ grakno --repo . inspect <entity-id>
+
+  4. WATCH to stay updated (optional):
+
+     $ grakno --repo . watch     # Auto-reindex on file changes
+
+┌──────────────────────────────────────────────────────────────────────────────┐
+│  PLAN vs SEARCH: When to use which                                           │
+└──────────────────────────────────────────────────────────────────────────────┘
+
+  ┌─────────────┬─────────────────────────────────────────────────────────────┐
+  │ PLAN        │ SEARCH                                                      │
+  ├─────────────┼─────────────────────────────────────────────────────────────┤
+  │ Use for:    │ Use for:                                                    │
+  │ • Finding   │ • Finding by meaning                                        │
+  │   relevant  │ • "Similar to X"                                            │
+  │   files for │ • Exploring patterns                                        │
+  │   a task    │ • Requires embeddings                                       │
+  ├─────────────┼─────────────────────────────────────────────────────────────┤
+  │ grakno      │ grakno --repo . search "how errors propagate"               │
+  │  --repo .   │                                                             │
+  │  plan       │                                                             │
+  │  "refactor  │                                                             │
+  │   the API"  │                                                             │
+  ├─────────────┼─────────────────────────────────────────────────────────────┤
+  │ Returns:    │ Returns:                                                    │
+  │ Structured  │ Ranked list by semantic                                     │
+  │ reading list│ similarity                                                  │
+  │ with scores │                                                             │
+  │ & reasons   │                                                             │
+  └─────────────┴─────────────────────────────────────────────────────────────┘
+
+  KEY INSIGHT:
+  • PLAN combines multiple signals: keywords, names, task routes, and vectors
+  • SEARCH is pure semantic similarity over embeddings
+  • PLAN is better for task-oriented exploration
+  • SEARCH is better for "find similar things"
+
+┌──────────────────────────────────────────────────────────────────────────────┐
+│  TASK ROUTES: How plan knows what to look for                                │
+└──────────────────────────────────────────────────────────────────────────────┘
+
+  Task routes are heuristic mappings from intent keywords to entity types.
+  They help PLAN prioritize the right kinds of entities.
+
+  Intent keyword    →  Prioritized entity types
+  ─────────────────────────────────────────────────
+  understand, learn → Symbol, Doc, SourceUnit
+  deploy, release   → InfraRoot, Containerized, Task
+  test, verify      → Test, SourceUnit
+  fix, debug        → Symbol, SourceUnit, Doc
+  refactor          → Symbol, SourceUnit
+  optimize          → Symbol, SourceUnit
+
+  VIEW ROUTES:
+    $ grakno --repo . query routes               # All task routes
+    $ grakno --repo . query routes --task deploy  # Routes for "deploy" intent
+
+┌──────────────────────────────────────────────────────────────────────────────┐
+│  EFFECTIVE QUERY PATTERNS                                                    │
+└──────────────────────────────────────────────────────────────────────────────┘
+
+  PLAN QUERIES (task-oriented):
+  ─────────────────────────────
+  "how does the auth system work"
+  "where is the database connection pool configured"
+  "find all API endpoints related to users"
+  "what needs to change to add rate limiting"
+  "how do I deploy this service"
+
+  SEARCH QUERIES (semantic):
+  ───────────────────────────
+  "error handling patterns"
+  "database connection retry logic"
+  "configuration validation"
+  "async task queue implementation"
+
+  INSPECT QUERIES (deep dive):
+  ─────────────────────────────
+  $ grakno --repo . inspect symbol:my_function    # Function details
+  $ grakno --repo . inspect doc:README            # Document content
+  $ grakno --repo . inspect                       # Graph overview
+
+┌──────────────────────────────────────────────────────────────────────────────┐
+│  DAILY DEVELOPMENT WORKFLOW                                                  │
+└──────────────────────────────────────────────────────────────────────────────┘
+
+  NEW TASK:
+  ─────────
+  1. Start with PLAN to get oriented:
+     $ grakno --repo . plan "implement feature X"
+
+  2. INSPECT the most relevant entities:
+     $ grakno --repo . inspect <entity-id>
+
+  3. Make changes, then verify with SEARCH:
+     $ grakno --repo . search "similar implementations"
+
+  4. Run tests to validate
+
+  ONGOING WORK:
+  ─────────────
+  • Keep grakno watch running in a terminal:
+    $ grakno --repo . watch
+
+  • Before major changes, use PLAN to identify impact:
+    $ grakno --repo . plan "refactor the database layer"
+
+  • Use SUMMARIZE for high-level overviews:
+    $ grakno --repo . summarize --component api
+
+┌──────────────────────────────────────────────────────────────────────────────┐
+│  WATCH MODE: Automatic updates                                               │
+└──────────────────────────────────────────────────────────────────────────────┘
+
+  Watch mode monitors your filesystem and re-indexes changed files:
+
+    $ grakno --repo . watch                  # Start watching
+    $ grakno --repo . watch --debounce 1000  # 1 second debounce
+
+  Best practices:
+  • Run in a dedicated terminal/tab
+  • Uses 500ms debounce by default (configurable)
+  • Only re-indexes changed files, not full rebuild
+  • Press Ctrl+C to stop
+
+┌──────────────────────────────────────────────────────────────────────────────┐
+│  CONFIGURATION                                                               │
+└──────────────────────────────────────────────────────────────────────────────┘
+
+  Create a config file:
+
+    $ grakno --repo . config init
+
+  Key settings in .grakno.toml:
+  ─────────────────────────────
+  [embedding]
+  provider = "ollama"           # or "openai"
+  model = "nomic-embed-text-v2-moe"
+
+  [query]
+  default_limit = 20            # Default result count
+
+  [llm]
+  provider = "ollama"           # For summarize command
+  model = "llama3.2"
+
+┌──────────────────────────────────────────────────────────────────────────────┐
+│  EMBEDDINGS: When you need them                                              │
+└──────────────────────────────────────────────────────────────────────────────┘
+
+  • SEARCH requires embeddings (index with --embed)
+  • PLAN uses embeddings if available, works without them
+  • Embeddings enable semantic similarity matching
+  • Without embeddings, PLAN relies on text/structure signals
+
+  To add embeddings to existing index:
+    $ grakno --repo . embed
+
+┌──────────────────────────────────────────────────────────────────────────────┐
+│  TROUBLESHOOTING                                                             │
+└──────────────────────────────────────────────────────────────────────────────┘
+
+  "No results found"
+  → Check if you've indexed: grakno --repo . index --embed
+  → Try broader search terms
+
+  "No embeddings found"
+  → Index with --embed flag
+  → Or run: grakno --repo . embed
+
+  "Database not found"
+  → Run grakno --repo . index first
+  → Check that --repo points to the correct directory
+
+  Results not relevant
+  → Try PLAN instead of SEARCH for task-oriented queries
+  → Check task routes: grakno --repo . query routes
+
+┌──────────────────────────────────────────────────────────────────────────────┐
+│  COMMAND REFERENCE                                                           │
+└──────────────────────────────────────────────────────────────────────────────┘
+
+  grakno --repo <path> index [--embed]      Index codebase, optionally with embeddings
+  grakno --repo <path> plan "query"         Get structured reading plan
+  grakno --repo <path> search "query"       Semantic search (needs embeddings)
+  grakno --repo <path> inspect [entity-id]  Inspect entity or show overview
+  grakno --repo <path> query entities       List all entities
+  grakno --repo <path> query routes         Show task routes
+  grakno --repo <path> summarize            Generate summary
+  grakno --repo <path> embed                Generate embeddings for existing index
+  grakno --repo <path> watch                Auto-reindex on changes
+  grakno --repo <path> config init          Create config file
+
+══════════════════════════════════════════════════════════════════════════════
+
+Remember: grakno.plan is for task-oriented discovery, grakno.search is for
+semantic similarity. Start with plan, drill down with inspect.
+
+For more details: grakno --help
+"#);
 }

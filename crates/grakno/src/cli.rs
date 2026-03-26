@@ -3,9 +3,9 @@ use argh::FromArgs;
 /// Grakno — a code knowledge graph
 #[derive(FromArgs)]
 pub struct TopLevel {
-    /// path to the database (default: grakno.db)
-    #[argh(option, default = "String::from(\"grakno.db\")")]
-    pub db: String,
+    /// path to the repository root (required for all commands except guide)
+    #[argh(option)]
+    pub repo: Option<String>,
 
     /// storage backend: sqlite or grafeo (default: sqlite)
     #[argh(option, default = "String::from(\"sqlite\")")]
@@ -38,6 +38,7 @@ pub enum Command {
     Search(SearchCmd),
     Watch(WatchCmd),
     Plan(PlanCmd),
+    Guide(GuideCmd),
     Config(ConfigCmd),
 }
 
@@ -45,10 +46,6 @@ pub enum Command {
 #[derive(FromArgs, Debug)]
 #[argh(subcommand, name = "index")]
 pub struct IndexCmd {
-    /// path to the project root (default: current directory)
-    #[argh(positional, default = "String::from(\".\")")]
-    pub path: String,
-
     /// generate embeddings for vector search (requires embedding config)
     #[argh(switch, short = 'e')]
     pub embed: bool,
@@ -205,6 +202,10 @@ pub struct PlanCmd {
     #[argh(option, default = "15")]
     pub limit: usize,
 
+    /// override task category: understand, debug, build, test, deploy, configure, general
+    #[argh(option)]
+    pub category: Option<String>,
+
     /// output format: text or json (default: text)
     #[argh(option, default = "String::from(\"text\")")]
     pub format: String,
@@ -226,14 +227,15 @@ pub struct PlanCmd {
 #[derive(FromArgs, Debug)]
 #[argh(subcommand, name = "watch")]
 pub struct WatchCmd {
-    /// path to the workspace root (default: current directory)
-    #[argh(positional, default = "String::from(\".\")")]
-    pub path: String,
-
     /// debounce interval in milliseconds (default: 500)
     #[argh(option, default = "500")]
     pub debounce_ms: u64,
 }
+
+/// interactive guide for using grakno
+#[derive(FromArgs, Debug)]
+#[argh(subcommand, name = "guide")]
+pub struct GuideCmd {}
 
 /// configuration management
 #[derive(FromArgs, Debug)]
@@ -254,9 +256,9 @@ pub enum ConfigSub {
 #[derive(FromArgs, Debug)]
 #[argh(subcommand, name = "init")]
 pub struct ConfigInitCmd {
-    /// path to create config (default: ./.grakno.toml)
-    #[argh(option, default = "String::from(\".grakno.toml\")")]
-    pub path: String,
+    /// path to create config (default: <repo>/.grakno.toml)
+    #[argh(option)]
+    pub path: Option<String>,
 
     /// overwrite existing config file
     #[argh(switch)]

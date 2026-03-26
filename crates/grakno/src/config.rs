@@ -56,9 +56,9 @@ impl Config {
         Ok(Some(config))
     }
 
-    /// Find and load configuration by walking up from current directory.
-    pub fn find() -> Result<Option<(Self, std::path::PathBuf)>, ConfigError> {
-        let mut current = std::env::current_dir().ok();
+    /// Find and load configuration by walking up from the given directory.
+    pub fn find_from(start: &Path) -> Result<Option<(Self, std::path::PathBuf)>, ConfigError> {
+        let mut current: Option<std::path::PathBuf> = Some(start.to_path_buf());
 
         while let Some(dir) = current {
             let config_path = dir.join(".grakno.toml");
