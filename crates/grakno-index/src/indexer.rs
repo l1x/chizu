@@ -77,11 +77,41 @@ pub fn index_project(store: &Store, path: &Path) -> Result<IndexStats, IndexErro
     tracing::info!("starting generic project indexing");
     let start = std::time::Instant::now();
 
+    store
+        .begin_transaction()
+        .map_err(|e| IndexError::Io(std::io::Error::new(std::io::ErrorKind::Other, e.to_string())))?;
+
+    let result = index_project_inner(store, path);
+
+    match &result {
+        Ok(_) => {
+            store.commit_transaction().map_err(|e| {
+                IndexError::Io(std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))
+            })?;
+        }
+        Err(_) => {
+            let _ = store.rollback_transaction();
+        }
+    }
+
+    let stats = result?;
+
+    tracing::info!(
+        duration_ms = start.elapsed().as_millis() as u64,
+        files = stats.files_indexed,
+        symbols = stats.symbols_extracted,
+        edges = stats.edges_created,
+        "generic indexing complete"
+    );
+
+    Ok(stats)
+}
+
+fn index_project_inner(store: &Store, path: &Path) -> Result<IndexStats, IndexError> {
     let mut stats = IndexStats::default();
     let mut indexed_files = HashSet::new();
     let mut image_refs: Vec<ImageRef> = Vec::new();
 
-    // Walk and index all supported files, collecting image references
     index_generic_walk(
         store,
         path,
@@ -91,19 +121,8 @@ pub fn index_project(store: &Store, path: &Path) -> Result<IndexStats, IndexErro
         &mut image_refs,
     )?;
 
-    // Create deploys edges from image references
     create_deploys_edges(store, &image_refs, path, &mut stats)?;
-
-    // Clean up deleted files
     cleanup_generic_deleted_files(store, &indexed_files, &mut stats)?;
-
-    tracing::info!(
-        duration_ms = start.elapsed().as_millis() as u64,
-        files = stats.files_indexed,
-        symbols = stats.symbols_extracted,
-        edges = stats.edges_created,
-        "generic indexing complete"
-    );
 
     Ok(stats)
 }

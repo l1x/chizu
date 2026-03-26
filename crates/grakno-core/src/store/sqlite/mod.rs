@@ -46,4 +46,19 @@ impl SqliteStore {
     pub fn schema_version(&self) -> Result<i64> {
         schema::schema_version(&self.conn)
     }
+
+    pub fn begin_transaction(&self) -> Result<()> {
+        self.conn.execute_batch("BEGIN IMMEDIATE")?;
+        Ok(())
+    }
+
+    pub fn commit_transaction(&self) -> Result<()> {
+        self.conn.execute_batch("COMMIT")?;
+        Ok(())
+    }
+
+    pub fn rollback_transaction(&self) -> Result<()> {
+        self.conn.execute_batch("ROLLBACK")?;
+        Ok(())
+    }
 }

@@ -57,6 +57,35 @@ impl Store {
         }
     }
 
+    // --- Transactions ---
+
+    pub fn begin_transaction(&self) -> Result<()> {
+        match self {
+            #[cfg(feature = "sqlite_usearch")]
+            Self::Sqlite(s) => s.begin_transaction(),
+            #[cfg(feature = "grafeo")]
+            Self::Grafeo(g) => g.begin_transaction(),
+        }
+    }
+
+    pub fn commit_transaction(&self) -> Result<()> {
+        match self {
+            #[cfg(feature = "sqlite_usearch")]
+            Self::Sqlite(s) => s.commit_transaction(),
+            #[cfg(feature = "grafeo")]
+            Self::Grafeo(g) => g.commit_transaction(),
+        }
+    }
+
+    pub fn rollback_transaction(&self) -> Result<()> {
+        match self {
+            #[cfg(feature = "sqlite_usearch")]
+            Self::Sqlite(s) => s.rollback_transaction(),
+            #[cfg(feature = "grafeo")]
+            Self::Grafeo(g) => g.rollback_transaction(),
+        }
+    }
+
     // --- Entities ---
 
     pub fn insert_entity(&self, entity: &Entity) -> Result<()> {

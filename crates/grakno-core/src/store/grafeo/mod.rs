@@ -55,4 +55,16 @@ impl GrafeoStore {
         );
         Ok(())
     }
+
+    pub fn begin_transaction(&self) -> Result<()> {
+        Ok(())
+    }
+
+    pub fn commit_transaction(&self) -> Result<()> {
+        Ok(())
+    }
+
+    pub fn rollback_transaction(&self) -> Result<()> {
+        Ok(())
+    }
 }
