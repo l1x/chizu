@@ -242,6 +242,86 @@ dependencies = [
 ]
 
 [[package]]
+name = "chizu"
+version = "0.1.0"
+dependencies = [
+ "argh",
+ "chizu-core",
+ "chizu-index",
+ "chizu-query",
+ "chizu-summarize",
+ "notify",
+ "rolly",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "thiserror",
+ "toml 0.8.23",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
+name = "chizu-core"
+version = "0.1.0"
+dependencies = [
+ "blake3",
+ "criterion",
+ "grafeo",
+ "rusqlite",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "thiserror",
+ "usearch",
+]
+
+[[package]]
+name = "chizu-index"
+version = "0.1.0"
+dependencies = [
+ "blake3",
+ "cargo_metadata",
+ "chizu-core",
+ "glob",
+ "pulldown-cmark",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "thiserror",
+ "toml 1.1.0+spec-1.1.0",
+ "tracing",
+ "tree-sitter",
+ "tree-sitter-hcl",
+ "tree-sitter-md",
+ "tree-sitter-rust",
+ "tree-sitter-typescript",
+]
+
+[[package]]
+name = "chizu-query"
+version = "0.1.0"
+dependencies = [
+ "chizu-core",
+ "serde",
+ "serde_json",
+ "thiserror",
+ "tracing",
+]
+
+[[package]]
+name = "chizu-summarize"
+version = "0.1.0"
+dependencies = [
+ "blake3",
+ "chizu-core",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "thiserror",
+]
+
+[[package]]
 name = "ciborium"
 version = "0.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -807,86 +887,6 @@ dependencies = [
  "smallvec",
  "thiserror",
  "tracing",
-]
-
-[[package]]
-name = "grakno"
-version = "0.1.0"
-dependencies = [
- "argh",
- "grakno-core",
- "grakno-index",
- "grakno-query",
- "grakno-summarize",
- "notify",
- "rolly",
- "serde",
- "serde_json",
- "tempfile",
- "thiserror",
- "toml 0.8.23",
- "tracing",
- "tracing-subscriber",
-]
-
-[[package]]
-name = "grakno-core"
-version = "0.1.0"
-dependencies = [
- "blake3",
- "criterion",
- "grafeo",
- "rusqlite",
- "serde",
- "serde_json",
- "tempfile",
- "thiserror",
- "usearch",
-]
-
-[[package]]
-name = "grakno-index"
-version = "0.1.0"
-dependencies = [
- "blake3",
- "cargo_metadata",
- "glob",
- "grakno-core",
- "pulldown-cmark",
- "serde",
- "serde_json",
- "tempfile",
- "thiserror",
- "toml 1.1.0+spec-1.1.0",
- "tracing",
- "tree-sitter",
- "tree-sitter-hcl",
- "tree-sitter-md",
- "tree-sitter-rust",
- "tree-sitter-typescript",
-]
-
-[[package]]
-name = "grakno-query"
-version = "0.1.0"
-dependencies = [
- "grakno-core",
- "serde",
- "serde_json",
- "thiserror",
- "tracing",
-]
-
-[[package]]
-name = "grakno-summarize"
-version = "0.1.0"
-dependencies = [
- "blake3",
- "grakno-core",
- "reqwest",
- "serde",
- "serde_json",
- "thiserror",
 ]
 
 [[package]]

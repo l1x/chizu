@@ -1,28 +1,34 @@
-# Grakno
+# Chizu (地図)
 
-Graph Repository Knowledge Navigator.
+**Your code's mental map.**
 
-Grakno is a local-first component graph and navigation index for code
-repositories. It builds a structured repo model in SQLite, attaches short
-summaries to graph nodes, and can optionally use local vector search over those
-summaries for fuzzy entry.
+Chizu is a local-first code knowledge graph for software repositories. It builds a
+structured model of your codebase, extracts symbols and relationships, and
+enables fast semantic search over your code.
 
 The goal is simple: help agents and developers answer "what should I read
 first?" before they start opening files blindly.
 
-## Initial Design Targets
+## Architecture
 
-- Harrow: multi-crate Rust workspace with strong feature wiring
-- Panzerotti: heterogeneous component monorepo with infra, docs, and mixed
-  source systems
+Chizu uses a **dual-backend storage system**:
 
-## Early Shape
+### SQLite + usearch (default)
+- **SQLite**: Stores entities, edges, files, summaries, and task routes
+- **usearch**: HNSW vector index for fast similarity search over embeddings
+- Local, fast, no external dependencies
 
-- SQLite as the structured source of truth
-- component graph core
-- language and source adapters
-- generated summaries for speed
-- optional vector search over summaries
+### Grafeo (alternative)
+- Unified graph database backend
+- Handles both structured data and vector search in one system
+
+## Features
+
+- **Multi-language parsing**: Rust, TypeScript, Astro, Terraform, Markdown
+- **Graph traversal**: Navigate relationships (defines, uses, implements, etc.)
+- **Semantic search**: Vector similarity over LLM-generated summaries
+- **Task routing**: Prioritized entity lists for common tasks (debug, build, deploy)
+- **Local-first**: All data stays on your machine
 
 ## Docs
 

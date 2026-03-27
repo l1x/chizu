@@ -27,7 +27,7 @@
   <!-- TITLE                                                            -->
   <!-- ================================================================ -->
   <text x="600" y="38" text-anchor="middle" font-family="monospace" font-size="20" font-weight="bold" fill="#1e293b">Code Knowledge Graph</text>
-  <text x="600" y="58" text-anchor="middle" font-size="12" fill="#94a3b8">How grakno maps a codebase into a navigable graph for AI agents</text>
+  <text x="600" y="58" text-anchor="middle" font-size="12" fill="#94a3b8">How chizu maps a codebase into a navigable graph for AI agents</text>
 
   <!-- ================================================================ -->
   <!-- SECTION 1: THE GRAPH                                             -->
@@ -410,7 +410,7 @@
       <g transform="translate(20, 118)">
         <rect width="490" height="50" fill="#ffffff" stroke="#ea580c" stroke-width="0.5" rx="3"/>
         <text x="10" y="16" font-size="9" font-weight="bold" fill="#ea580c">RE-INDEX</text>
-        <text x="10" y="32" font-size="9" fill="#1e293b">grakno index . → graph updated with new RateLimiter symbol</text>
+        <text x="10" y="32" font-size="9" fill="#1e293b">chizu index . → graph updated with new RateLimiter symbol</text>
         <text x="10" y="44" font-size="9" fill="#94a3b8">sha256 detects changed files, only re-parses what changed</text>
       </g>
     </g>
@@ -486,5 +486,5 @@
   <!-- ================================================================ -->
   <!-- FOOTER                                                           -->
   <!-- ================================================================ -->
-  <text x="600" y="1700" text-anchor="middle" font-size="10" fill="#94a3b8">grakno  ·  Rust workspace → knowledge graph → agent-navigable codebase map</text>
+  <text x="600" y="1700" text-anchor="middle" font-size="10" fill="#94a3b8">chizu  ·  Rust workspace → knowledge graph → agent-navigable codebase map</text>
 </svg>

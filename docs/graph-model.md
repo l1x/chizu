@@ -5,7 +5,7 @@
 
 ## Purpose
 
-This document describes the initial graph model for Grakno.
+This document describes the initial graph model for Chizu.
 
 The model is designed to be:
 
@@ -17,7 +17,7 @@ The model is designed to be:
 
 ## Three Layers
 
-Grakno separates three concerns:
+Chizu separates three concerns:
 
 - graph = structure
 - summaries = fast descriptions of nodes

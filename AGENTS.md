@@ -1,14 +1,14 @@
-# Grakno Guide for Agents
+# Chizu Guide for Agents
 
-## What is Grakno?
+## What is Chizu?
 
-Grakno is a **local code knowledge graph** that indexes your codebase into a queryable graph database. It helps agents and developers understand code relationships without opening files blindly.
+Chizu is a **local code knowledge graph** that indexes your codebase into a queryable graph database. It helps agents and developers understand code relationships without opening files blindly.
 
 ### Core Purpose
 
 ```
 Traditional workflow: grep → open file → read → understand → repeat
-Grakno workflow:    ask question → get relevant entities → understand context
+Chizu workflow:    ask question → get relevant entities → understand context
 ```
 
 ## Architecture
@@ -75,33 +75,33 @@ Grakno workflow:    ask question → get relevant entities → understand contex
 
 ```bash
 # Basic indexing
-grakno index /path/to/repo
+chizu index /path/to/repo
 
 # With embeddings (requires Ollama)
-grakno index --embed /path/to/repo
+chizu index --embed /path/to/repo
 
 # Check results
-grakno inspect
+chizu inspect
 ```
 
 ### 2. Query the Graph
 
 ```bash
 # Natural language query
-grakno plan "how does routing work"
+chizu plan "how does routing work"
 
 # List all entities
-grakno query entities
+chizu query entities
 
 # Inspect specific entity
-grakno inspect "symbol::src/main.rs::main"
+chizu inspect "symbol::src/main.rs::main"
 ```
 
 ### 3. Direct SQL Access
 
 ```bash
 # Query the SQLite database directly
-cd /path/to/repo/.grakno
+cd /path/to/repo/.chizu
 
 # List all symbols
 sqlite3 graph.db "SELECT name FROM entities WHERE kind='symbol' LIMIT 10;"
@@ -115,7 +115,7 @@ sqlite3 graph.db "SELECT * FROM entities WHERE name LIKE '%handler%';"
 
 ## Configuration
 
-Create `.grakno.toml` in your repo:
+Create `.chizu.toml` in your repo:
 
 ```toml
 [index]
@@ -154,12 +154,12 @@ timeout_secs = 120
 
 ### Adding a New Language Parser
 
-1. Add tree-sitter dependency in `crates/grakno-index/Cargo.toml`:
+1. Add tree-sitter dependency in `crates/chizu-index/Cargo.toml`:
 ```toml
 tree-sitter-python = "0"
 ```
 
-2. Create parser in `crates/grakno-index/src/parser_python.rs`:
+2. Create parser in `crates/chizu-index/src/parser_python.rs`:
 ```rust
 use tree_sitter::Parser;
 
@@ -180,7 +180,7 @@ Some("py") => index_python_file(store, &path, project_root, stats, indexed_files
 
 ### Adding a New Entity Type
 
-1. Add to `crates/grakno-core/src/model/entity.rs`:
+1. Add to `crates/chizu-core/src/model/entity.rs`:
 ```rust
 pub enum EntityKind {
     // ... existing kinds
@@ -202,7 +202,7 @@ store.insert_entity(&Entity {
 
 ### Adding a New Edge Type
 
-1. Add to `crates/grakno-core/src/model/edge.rs`:
+1. Add to `crates/chizu-core/src/model/edge.rs`:
 ```rust
 pub enum EdgeKind {
     // ... existing kinds
@@ -225,13 +225,13 @@ store.insert_edge(&Edge {
 
 | File | Purpose |
 |------|---------|
-| `crates/grakno-index/src/indexer.rs` | Main indexing pipeline |
-| `crates/grakno-index/src/parser*.rs` | Language-specific parsers |
-| `crates/grakno-index/src/markdown.rs` | Markdown mention extraction |
-| `crates/grakno-core/src/model/*.rs` | Entity/edge/summary models |
-| `crates/grakno-core/src/store/*.rs` | SQLite + usearch backends |
-| `crates/grakno-query/src/*.rs` | Query pipeline & ranking |
-| `crates/grakno/src/main.rs` | CLI & command dispatch |
+| `crates/chizu-index/src/indexer.rs` | Main indexing pipeline |
+| `crates/chizu-index/src/parser*.rs` | Language-specific parsers |
+| `crates/chizu-index/src/markdown.rs` | Markdown mention extraction |
+| `crates/chizu-core/src/model/*.rs` | Entity/edge/summary models |
+| `crates/chizu-core/src/store/*.rs` | SQLite + usearch backends |
+| `crates/chizu-query/src/*.rs` | Query pipeline & ranking |
+| `crates/chizu/src/main.rs` | CLI & command dispatch |
 
 ## Common Tasks
 
@@ -239,13 +239,13 @@ store.insert_edge(&Edge {
 
 ```bash
 # Run with debug logging
-RUST_LOG=debug grakno index /path/to/repo 2>&1 | head -50
+RUST_LOG=debug chizu index /path/to/repo 2>&1 | head -50
 
 # Check specific file
-sqlite3 .grakno/graph.db "SELECT * FROM files WHERE path LIKE '%problematic%';"
+sqlite3 .chizu/graph.db "SELECT * FROM files WHERE path LIKE '%problematic%';"
 
 # Verify entities
-sqlite3 .grakno/graph.db "SELECT COUNT(*) FROM entities WHERE kind='symbol';"
+sqlite3 .chizu/graph.db "SELECT COUNT(*) FROM entities WHERE kind='symbol';"
 ```
 
 ### Test Changes
@@ -255,10 +255,10 @@ sqlite3 .grakno/graph.db "SELECT COUNT(*) FROM entities WHERE kind='symbol';"
 cargo test
 
 # Test specific crate
-cargo test -p grakno-index
+cargo test -p chizu-index
 
 # Test on sample repo
-rm -rf /tmp/test_repo/.grakno
+rm -rf /tmp/test_repo/.chizu
 cargo run -- index /tmp/test_repo
 ```
 
@@ -266,13 +266,13 @@ cargo run -- index /tmp/test_repo
 
 ```bash
 # Time indexing
-time grakno index /large/repo
+time chizu index /large/repo
 
 # Check DB size
-ls -lh .grakno/
+ls -lh .chizu/
 
 # Query performance
-time grakno plan "complex query"
+time chizu plan "complex query"
 ```
 
 ## Design Principles
@@ -289,9 +289,9 @@ time grakno plan "complex query"
 |-------|----------|
 | Unicode panic | Already fixed (pulldown-cmark) |
 | Embeddings fail | Check Ollama running + model pulled |
-| No results | Check `.grakno/graph.db` exists |
+| No results | Check `.chizu/graph.db` exists |
 | Slow queries | Enable embeddings for vector search |
-| Wrong entity IDs | Use `grakno query entities` to find correct format |
+| Wrong entity IDs | Use `chizu query entities` to find correct format |
 
 ## Future Extensions
 

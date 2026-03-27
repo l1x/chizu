@@ -1,4 +1,4 @@
-# Grakno PRD
+# Chizu PRD
 
 **Status:** v1 complete
 **Date:** 2026-03-23
@@ -23,7 +23,7 @@ explicit, queryable structural model of the repository.
 
 ## Thesis
 
-Grakno should be a local component graph indexer for repositories.
+Chizu should be a local component graph indexer for repositories.
 
 It should combine:
 
@@ -214,7 +214,7 @@ setup(60).
 
 ## Watch Mode
 
-Grakno supports incremental re-indexing and filesystem watching to keep the
+Chizu supports incremental re-indexing and filesystem watching to keep the
 graph up to date as the codebase evolves.
 
 ### Incremental Re-indexing
@@ -229,7 +229,7 @@ The `watch` command monitors the workspace and automatically re-indexes when
 files change:
 
 ```
-grakno watch [path] [--debounce-ms 500]
+chizu watch [path] [--debounce-ms 500]
 ```
 
 Behavior:
@@ -252,7 +252,7 @@ The `plan` command implements a multi-stage query pipeline that produces a
 ranked reading plan telling an agent which files and entities to read first.
 
 ```
-grakno plan "how does the store work" [--limit 15] [--format text|json]
+chizu plan "how does the store work" [--limit 15] [--format text|json]
     [--base-url URL --api-key KEY --model MODEL]
 ```
 
