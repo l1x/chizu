@@ -5,6 +5,7 @@ use std::fmt;
 #[serde(rename_all = "snake_case")]
 pub enum EntityKind {
     Repo,
+    Directory,
     Component,
     SourceUnit,
     Symbol,
@@ -29,6 +30,7 @@ impl EntityKind {
     pub fn as_str(&self) -> &'static str {
         match self {
             Self::Repo => "repo",
+            Self::Directory => "directory",
             Self::Component => "component",
             Self::SourceUnit => "source_unit",
             Self::Symbol => "symbol",
@@ -53,6 +55,7 @@ impl EntityKind {
     pub fn parse(s: &str) -> Option<Self> {
         match s {
             "repo" => Some(Self::Repo),
+            "directory" => Some(Self::Directory),
             "component" => Some(Self::Component),
             "source_unit" => Some(Self::SourceUnit),
             "symbol" => Some(Self::Symbol),
@@ -104,6 +107,7 @@ mod tests {
     fn entity_kind_round_trip() {
         let kinds = [
             EntityKind::Repo,
+            EntityKind::Directory,
             EntityKind::Component,
             EntityKind::SourceUnit,
             EntityKind::Symbol,

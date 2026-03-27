@@ -11,6 +11,7 @@ use crate::markdown::extract_mentions;
 use crate::mise::parse_mise_toml;
 use crate::parser::parse_rust_file;
 use crate::parser_astro::parse_astro_file;
+use crate::parser_package_json::{parse_package_json, resolve_workspaces};
 use crate::parser_ts::parse_ts_file;
 
 #[derive(Debug, Clone, Default)]
@@ -35,6 +36,7 @@ pub struct IndexStats {
     pub commands_indexed: usize,
     pub sites_detected: usize,
     pub content_pages_indexed: usize,
+    pub packages_indexed: usize,
 }
 
 impl fmt::Display for IndexStats {
@@ -57,6 +59,7 @@ impl fmt::Display for IndexStats {
         writeln!(f, "commands:      {}", self.commands_indexed)?;
         writeln!(f, "sites:         {}", self.sites_detected)?;
         writeln!(f, "content_pages: {}", self.content_pages_indexed)?;
+        writeln!(f, "packages:      {}", self.packages_indexed)?;
         writeln!(f, "routes:        {}", self.task_routes_generated)?;
         write!(f, "edges:         {}", self.edges_created)
     }
@@ -119,16 +122,7 @@ fn index_project_inner(store: &Store, path: &Path) -> Result<IndexStats, IndexEr
     let mut indexed_files = HashSet::new();
     let mut image_refs: Vec<ImageRef> = Vec::new();
 
-    index_generic_walk(
-        store,
-        path,
-        path,
-        &mut stats,
-        &mut indexed_files,
-        &mut image_refs,
-    )?;
-
-    // Create Repo entity unconditionally
+    // Create the Repo entity (serves as the root of the containment hierarchy)
     let project_name = path
         .file_name()
         .and_then(|n| n.to_str())
@@ -146,6 +140,16 @@ fn index_project_inner(store: &Store, path: &Path) -> Result<IndexStats, IndexEr
         visibility: None,
         exported: true,
     })?;
+
+    index_generic_walk(
+        store,
+        path,
+        path,
+        &repo_entity_id,
+        &mut stats,
+        &mut indexed_files,
+        &mut image_refs,
+    )?;
 
     // Parse mise.toml and emit Task entities + OwnsTask edges
     if let Some(config) = parse_mise_toml(path)? {
@@ -187,6 +191,7 @@ fn index_generic_walk(
     store: &Store,
     dir: &Path,
     project_root: &Path,
+    parent_entity_id: &str,
     stats: &mut IndexStats,
     indexed_files: &mut HashSet<String>,
     image_refs: &mut Vec<ImageRef>,
@@ -198,6 +203,44 @@ fn index_generic_walk(
     let mut has_main_tf = false;
     let dir_rel_path = dir.strip_prefix(project_root).unwrap_or(dir);
     let dir_rel_str = dir_rel_path.display().to_string();
+
+    // Determine the current directory's entity ID.
+    // For the project root, the Repo entity serves as the container (no Directory entity).
+    // For subdirectories, create a Directory entity and a Contains edge from parent.
+    let current_entity_id = if dir != project_root {
+        let dir_id = id::dir_entity_id(&dir_rel_str);
+        let dir_name = dir
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or(&dir_rel_str)
+            .to_string();
+        store.insert_entity(&Entity {
+            id: dir_id.clone(),
+            kind: EntityKind::Directory,
+            name: dir_name,
+            component_id: None,
+            path: Some(dir_rel_str.clone()),
+            language: None,
+            line_start: None,
+            line_end: None,
+            visibility: None,
+            exported: false,
+        })?;
+
+        // Parent → Contains → Directory
+        store.insert_edge(&Edge {
+            src_id: parent_entity_id.to_string(),
+            rel: EdgeKind::Contains,
+            dst_id: dir_id.clone(),
+            provenance_path: Some(dir_rel_str.clone()),
+            provenance_line: None,
+        })?;
+        stats.edges_created += 1;
+
+        dir_id
+    } else {
+        parent_entity_id.to_string()
+    };
 
     for entry in &entries {
         let path = entry.path();
@@ -230,11 +273,29 @@ fn index_generic_walk(
             {
                 continue;
             }
-            index_generic_walk(store, &path, project_root, stats, indexed_files, image_refs)?;
+            index_generic_walk(
+                store,
+                &path,
+                project_root,
+                &current_entity_id,
+                stats,
+                indexed_files,
+                image_refs,
+            )?;
         } else {
             // Index supported file types directly
             let rel_path = path.strip_prefix(project_root).unwrap_or(&path);
-            let _rel_path_str = rel_path.display().to_string();
+            let rel_path_str = rel_path.display().to_string();
+
+            // Detect package.json by filename before extension matching
+            if file_name == "package.json" {
+                index_package_json_file(store, &path, project_root, stats, indexed_files)?;
+                continue;
+            }
+
+            // Determine the file entity ID for Contains edges.
+            // Each indexing function creates an entity with a deterministic ID.
+            let file_entity_id: Option<String>;
 
             // Check file extension for supported languages
             let ext = path.extension().and_then(|e| e.to_str());
@@ -248,6 +309,7 @@ fn index_generic_walk(
                         stats,
                         indexed_files,
                     )?;
+                    file_entity_id = Some(id::file_entity_id(&rel_path_str));
                 }
                 Some("ts") | Some("tsx") => {
                     index_generic_source_file(
@@ -258,6 +320,7 @@ fn index_generic_walk(
                         stats,
                         indexed_files,
                     )?;
+                    file_entity_id = Some(id::file_entity_id(&rel_path_str));
                 }
                 Some("astro") => {
                     index_generic_source_file(
@@ -268,9 +331,11 @@ fn index_generic_walk(
                         stats,
                         indexed_files,
                     )?;
+                    file_entity_id = Some(id::file_entity_id(&rel_path_str));
                 }
                 Some("md") => {
                     index_generic_doc_file(store, &path, project_root, stats, indexed_files)?;
+                    file_entity_id = Some(id::doc_id("generic", &rel_path_str));
                 }
                 Some("tf") | Some("hcl") => {
                     index_terraform_file(
@@ -282,6 +347,7 @@ fn index_generic_walk(
                         image_refs,
                         &dir_rel_str,
                     )?;
+                    file_entity_id = Some(id::file_entity_id(&rel_path_str));
                 }
                 _ => {
                     // Check for Dockerfile patterns
@@ -290,8 +356,23 @@ fn index_generic_walk(
                             && (file_name.ends_with(".yml") || file_name.ends_with(".yaml")))
                     {
                         index_containerized_file(store, &path, project_root, stats, indexed_files)?;
+                        file_entity_id = Some(id::containerized_id(&rel_path_str));
+                    } else {
+                        file_entity_id = None;
                     }
                 }
+            }
+
+            // Emit Contains edge: current directory (or repo) → file entity
+            if let Some(ref child_id) = file_entity_id {
+                store.insert_edge(&Edge {
+                    src_id: current_entity_id.clone(),
+                    rel: EdgeKind::Contains,
+                    dst_id: child_id.clone(),
+                    provenance_path: Some(rel_path_str),
+                    provenance_line: None,
+                })?;
+                stats.edges_created += 1;
             }
         }
     }
@@ -1039,6 +1120,130 @@ fn create_infra_root(
     Ok(())
 }
 
+fn index_package_json_file(
+    store: &Store,
+    path: &Path,
+    project_root: &Path,
+    stats: &mut IndexStats,
+    indexed_files: &mut HashSet<String>,
+) -> Result<(), IndexError> {
+    let content = std::fs::read_to_string(path)?;
+    let rel_path = path.strip_prefix(project_root).unwrap_or(path);
+    let rel_path_str = rel_path.display().to_string();
+
+    indexed_files.insert(rel_path_str.clone());
+
+    let hash = format!("blake3:{}", blake3::hash(content.as_bytes()).to_hex());
+
+    if let Ok(existing) = store.get_file(&rel_path_str) {
+        if existing.hash == hash {
+            stats.files_skipped += 1;
+            return Ok(());
+        }
+        cleanup_generic_file_entities(store, &rel_path_str)?;
+    }
+
+    store.insert_file(&FileRecord {
+        path: rel_path_str.clone(),
+        component_id: None,
+        kind: "package_json".to_string(),
+        hash,
+        indexed: true,
+        ignore_reason: None,
+    })?;
+    stats.files_indexed += 1;
+
+    let pkg = match parse_package_json(&content) {
+        Ok(pkg) => pkg,
+        Err(e) => {
+            tracing::warn!(path = %rel_path_str, error = %e, "failed to parse package.json");
+            return Ok(());
+        }
+    };
+
+    // Determine component name: use `name` field, or fall back to directory name
+    let component_name = pkg
+        .name
+        .clone()
+        .or_else(|| {
+            path.parent()
+                .and_then(|p| p.file_name())
+                .and_then(|n| n.to_str())
+                .map(|s| s.to_string())
+        })
+        .unwrap_or_else(|| "unknown-package".to_string());
+
+    let comp_id = id::component_id(&component_name);
+
+    store.insert_entity(&Entity {
+        id: comp_id.clone(),
+        kind: EntityKind::Component,
+        name: component_name,
+        component_id: None,
+        path: Some(rel_path_str.clone()),
+        language: Some("javascript".to_string()),
+        line_start: None,
+        line_end: None,
+        visibility: Some("pub".to_string()),
+        exported: true,
+    })?;
+    stats.packages_indexed += 1;
+
+    // Emit DependsOn edges for all dependency types
+    let all_deps = pkg
+        .dependencies
+        .keys()
+        .chain(pkg.dev_dependencies.keys())
+        .chain(pkg.peer_dependencies.keys());
+
+    for dep_name in all_deps {
+        let dep_comp_id = id::component_id(dep_name);
+        store.insert_edge(&Edge {
+            src_id: comp_id.clone(),
+            rel: EdgeKind::DependsOn,
+            dst_id: dep_comp_id,
+            provenance_path: Some(rel_path_str.clone()),
+            provenance_line: None,
+        })?;
+        stats.edges_created += 1;
+    }
+
+    // Handle workspaces: resolve globs and emit Contains edges
+    if let Some(ref ws_config) = pkg.workspaces {
+        let parent_dir = path.parent().unwrap_or(project_root);
+        let workspace_dirs = resolve_workspaces(parent_dir, ws_config);
+
+        for ws_dir in &workspace_dirs {
+            let ws_pkg_path = ws_dir.join("package.json");
+            if let Ok(ws_content) = std::fs::read_to_string(&ws_pkg_path) {
+                if let Ok(ws_pkg) = parse_package_json(&ws_content) {
+                    let ws_name = ws_pkg
+                        .name
+                        .or_else(|| {
+                            ws_dir
+                                .file_name()
+                                .and_then(|n| n.to_str())
+                                .map(|s| s.to_string())
+                        })
+                        .unwrap_or_else(|| "unknown-workspace".to_string());
+                    let ws_comp_id = id::component_id(&ws_name);
+
+                    store.insert_edge(&Edge {
+                        src_id: comp_id.clone(),
+                        rel: EdgeKind::Contains,
+                        dst_id: ws_comp_id,
+                        provenance_path: Some(rel_path_str.clone()),
+                        provenance_line: None,
+                    })?;
+                    stats.edges_created += 1;
+                }
+            }
+        }
+    }
+
+    Ok(())
+}
+
 fn find_symbol_by_name(store: &Store, name: &str) -> Option<String> {
     // Simple name-based lookup - find any symbol with matching name
     if let Ok(entities) = store.list_entities() {
@@ -1214,6 +1419,76 @@ mod tests {
         // The workspace root should have at least a README.md
         if root.join("README.md").exists() {
             assert!(stats.docs_indexed > 0, "should index at least README.md");
+        }
+    }
+
+    #[test]
+    fn index_project_creates_containment_hierarchy() {
+        let store = Store::open_in_memory().unwrap();
+        let root = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .parent()
+            .unwrap()
+            .parent()
+            .unwrap();
+
+        index_project(&store, root).unwrap();
+
+        let all_entities = store.list_entities().unwrap();
+
+        // 1. Repo entity should exist
+        let repos: Vec<_> = all_entities
+            .iter()
+            .filter(|e| e.kind == EntityKind::Repo)
+            .collect();
+        assert_eq!(repos.len(), 1, "should have exactly one Repo entity");
+        let repo = repos[0];
+
+        // 2. Repo should have Contains edges to top-level items
+        let repo_edges = store.edges_from(&repo.id).unwrap();
+        let repo_contains: Vec<_> = repo_edges
+            .iter()
+            .filter(|e| e.rel == EdgeKind::Contains)
+            .collect();
+        assert!(
+            !repo_contains.is_empty(),
+            "Repo should contain top-level items"
+        );
+
+        // 3. Directory entities should exist
+        let directories: Vec<_> = all_entities
+            .iter()
+            .filter(|e| e.kind == EntityKind::Directory)
+            .collect();
+        assert!(
+            !directories.is_empty(),
+            "should have Directory entities for subdirectories"
+        );
+
+        // 4. At least one directory should contain children
+        let mut found_dir_with_children = false;
+        for dir in &directories {
+            let dir_edges = store.edges_from(&dir.id).unwrap();
+            let contains_edges: Vec<_> = dir_edges
+                .iter()
+                .filter(|e| e.rel == EdgeKind::Contains)
+                .collect();
+            if !contains_edges.is_empty() {
+                found_dir_with_children = true;
+                break;
+            }
+        }
+        assert!(
+            found_dir_with_children,
+            "at least one directory should contain children"
+        );
+
+        // 5. Directory entity IDs should use the "dir::" prefix
+        for dir in &directories {
+            assert!(
+                dir.id.starts_with("dir::"),
+                "directory entity ID should start with 'dir::', got: {}",
+                dir.id
+            );
         }
     }
 
@@ -1677,5 +1952,77 @@ mod tests {
     fn normalize_path_handles_current_dir() {
         let p = Path::new("src/./utils.ts");
         assert_eq!(normalize_path(p), PathBuf::from("src/utils.ts"));
+    }
+
+    #[test]
+    fn index_package_json_creates_component_and_deps() {
+        let tmp = std::env::temp_dir().join("grakno_test_pkg_json");
+        let _ = std::fs::remove_dir_all(&tmp);
+        std::fs::create_dir_all(&tmp).unwrap();
+
+        let pkg_content = r#"{
+            "name": "my-web-app",
+            "version": "2.0.0",
+            "dependencies": {
+                "express": "^4.18.0",
+                "lodash": "^4.17.21"
+            },
+            "devDependencies": {
+                "typescript": "^5.0.0"
+            }
+        }"#;
+        std::fs::write(tmp.join("package.json"), pkg_content).unwrap();
+
+        let store = Store::open_in_memory().unwrap();
+        let stats = index_project(&store, &tmp).unwrap();
+
+        assert_eq!(stats.packages_indexed, 1, "should index one package");
+
+        let comp = store.get_entity("component::my-web-app");
+        assert!(comp.is_ok(), "component entity should exist");
+        let comp = comp.unwrap();
+        assert_eq!(comp.kind, EntityKind::Component);
+        assert_eq!(comp.language.as_deref(), Some("javascript"));
+
+        let edges = store.edges_from("component::my-web-app").unwrap();
+        let depends_on: Vec<_> = edges
+            .iter()
+            .filter(|e| e.rel == EdgeKind::DependsOn)
+            .collect();
+        assert_eq!(depends_on.len(), 3, "should have 3 DependsOn edges");
+
+        let dep_targets: HashSet<_> = depends_on.iter().map(|e| e.dst_id.as_str()).collect();
+        assert!(dep_targets.contains("component::express"));
+        assert!(dep_targets.contains("component::lodash"));
+        assert!(dep_targets.contains("component::typescript"));
+
+        let _ = std::fs::remove_dir_all(&tmp);
+    }
+
+    #[test]
+    fn index_package_json_falls_back_to_dir_name() {
+        let tmp = std::env::temp_dir().join("grakno_test_pkg_noname");
+        let _ = std::fs::remove_dir_all(&tmp);
+        std::fs::create_dir_all(&tmp).unwrap();
+
+        std::fs::write(
+            tmp.join("package.json"),
+            r#"{ "dependencies": { "foo": "1.0" } }"#,
+        )
+        .unwrap();
+
+        let store = Store::open_in_memory().unwrap();
+        let stats = index_project(&store, &tmp).unwrap();
+
+        assert_eq!(stats.packages_indexed, 1);
+
+        let dir_name = tmp.file_name().unwrap().to_str().unwrap();
+        let comp = store.get_entity(&format!("component::{dir_name}"));
+        assert!(
+            comp.is_ok(),
+            "component should use directory name as fallback"
+        );
+
+        let _ = std::fs::remove_dir_all(&tmp);
     }
 }

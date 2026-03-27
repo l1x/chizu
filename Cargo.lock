@@ -701,6 +701,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "glob"
+version = "0.3.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0cc23270f6e1808e30a928bdc84dea0b9b4136a8bc82338574f23baf47bbd280"
+
+[[package]]
 name = "grafeo"
 version = "0.5.23"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -844,8 +850,11 @@ version = "0.1.0"
 dependencies = [
  "blake3",
  "cargo_metadata",
+ "glob",
  "grakno-core",
  "pulldown-cmark",
+ "serde",
+ "serde_json",
  "tempfile",
  "thiserror",
  "toml 1.1.0+spec-1.1.0",

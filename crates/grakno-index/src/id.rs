@@ -74,6 +74,11 @@ pub fn content_page_id(site_name: &str, path: &str) -> String {
     format!("content_page::{site_name}::{path}")
 }
 
+/// Directory entity ID (containment hierarchy)
+pub fn dir_entity_id(path: &str) -> String {
+    format!("dir::{path}")
+}
+
 /// Generic file entity ID (for non-Cargo projects)
 pub fn file_entity_id(path: &str) -> String {
     format!("file::{path}")
@@ -135,6 +140,7 @@ mod tests {
             "template::templates/base.html"
         );
         assert_eq!(infra_root_id("infra/prod"), "infra_root::infra/prod");
+        assert_eq!(dir_entity_id("src/utils"), "dir::src/utils");
         assert_eq!(containerized_id("Dockerfile"), "containerized::Dockerfile");
         assert_eq!(
             command_id("playbooks/deploy.yml"),
