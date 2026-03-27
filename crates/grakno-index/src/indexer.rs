@@ -1,6 +1,6 @@
 use std::collections::HashSet;
 use std::fmt;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use grakno_core::model::{Edge, EdgeKind, Entity, EntityKind, FileRecord};
 use grakno_core::Store;
@@ -8,6 +8,7 @@ use grakno_core::Store;
 use crate::error::IndexError;
 use crate::id;
 use crate::markdown::extract_mentions;
+use crate::mise::parse_mise_toml;
 use crate::parser::parse_rust_file;
 use crate::parser_astro::parse_astro_file;
 use crate::parser_ts::parse_ts_file;
@@ -77,16 +78,22 @@ pub fn index_project(store: &Store, path: &Path) -> Result<IndexStats, IndexErro
     tracing::info!("starting generic project indexing");
     let start = std::time::Instant::now();
 
-    store
-        .begin_transaction()
-        .map_err(|e| IndexError::Io(std::io::Error::new(std::io::ErrorKind::Other, e.to_string())))?;
+    store.begin_transaction().map_err(|e| {
+        IndexError::Io(std::io::Error::new(
+            std::io::ErrorKind::Other,
+            e.to_string(),
+        ))
+    })?;
 
     let result = index_project_inner(store, path);
 
     match &result {
         Ok(_) => {
             store.commit_transaction().map_err(|e| {
-                IndexError::Io(std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))
+                IndexError::Io(std::io::Error::new(
+                    std::io::ErrorKind::Other,
+                    e.to_string(),
+                ))
             })?;
         }
         Err(_) => {
@@ -120,6 +127,55 @@ fn index_project_inner(store: &Store, path: &Path) -> Result<IndexStats, IndexEr
         &mut indexed_files,
         &mut image_refs,
     )?;
+
+    // Create Repo entity unconditionally
+    let project_name = path
+        .file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or("unknown");
+    let repo_entity_id = id::repo_id(project_name);
+    store.insert_entity(&Entity {
+        id: repo_entity_id.clone(),
+        kind: EntityKind::Repo,
+        name: project_name.to_string(),
+        component_id: None,
+        path: None,
+        language: None,
+        line_start: None,
+        line_end: None,
+        visibility: None,
+        exported: true,
+    })?;
+
+    // Parse mise.toml and emit Task entities + OwnsTask edges
+    if let Some(config) = parse_mise_toml(path)? {
+        for task in &config.tasks {
+            let task_entity_id = id::task_id(&task.name);
+            store.insert_entity(&Entity {
+                id: task_entity_id.clone(),
+                kind: EntityKind::Task,
+                name: task.name.clone(),
+                component_id: None,
+                path: Some("mise.toml".to_string()),
+                language: None,
+                line_start: None,
+                line_end: None,
+                visibility: None,
+                exported: true,
+            })?;
+
+            store.insert_edge(&Edge {
+                src_id: repo_entity_id.clone(),
+                rel: EdgeKind::OwnsTask,
+                dst_id: task_entity_id,
+                provenance_path: Some("mise.toml".to_string()),
+                provenance_line: None,
+            })?;
+
+            stats.tasks_extracted += 1;
+            stats.edges_created += 1;
+        }
+    }
 
     create_deploys_edges(store, &image_refs, path, &mut stats)?;
     cleanup_generic_deleted_files(store, &indexed_files, &mut stats)?;
@@ -248,6 +304,66 @@ fn index_generic_walk(
     Ok(())
 }
 
+/// Resolve a TypeScript relative import path to a project-relative file path.
+///
+/// Returns `None` for bare/package imports (those not starting with `./` or `../`).
+/// Tries the following extensions in order: "", ".ts", ".tsx", ".js", ".jsx",
+/// "/index.ts", "/index.tsx".
+fn resolve_ts_import(
+    import_path: &str,
+    importing_file_rel: &str,
+    project_root: &Path,
+) -> Option<String> {
+    // Skip bare/package imports
+    if !import_path.starts_with("./") && !import_path.starts_with("../") {
+        return None;
+    }
+
+    // Get the directory of the importing file (project-relative)
+    let importing_dir = Path::new(importing_file_rel)
+        .parent()
+        .unwrap_or(Path::new(""));
+
+    // Resolve the relative import path against the importing file's directory
+    let resolved = importing_dir.join(import_path);
+
+    // Normalize the path (collapse .. and .)
+    let normalized = normalize_path(&resolved);
+
+    // Extensions to probe
+    let probes: &[&str] = &["", ".ts", ".tsx", ".js", ".jsx", "/index.ts", "/index.tsx"];
+
+    let normalized_str = normalized.display().to_string();
+
+    for ext in probes {
+        let candidate = format!("{normalized_str}{ext}");
+        let abs_candidate = project_root.join(&candidate);
+        if abs_candidate.is_file() {
+            return Some(candidate);
+        }
+    }
+
+    None
+}
+
+/// Normalize a path by collapsing `.` and `..` components without touching the filesystem.
+fn normalize_path(path: &Path) -> PathBuf {
+    let mut components = Vec::new();
+    for component in path.components() {
+        match component {
+            std::path::Component::CurDir => {} // skip "."
+            std::path::Component::ParentDir => {
+                // Pop last component unless we're at root
+                if !components.is_empty() {
+                    components.pop();
+                }
+            }
+            other => components.push(other),
+        }
+    }
+    components.iter().collect()
+}
+
 fn index_generic_source_file(
     store: &Store,
     path: &Path,
@@ -352,12 +468,63 @@ fn index_generic_source_file(
                         store.insert_edge(&Edge {
                             src_id: su_id.clone(),
                             rel: EdgeKind::TestedBy,
-                            dst_id: entity_id,
+                            dst_id: entity_id.clone(),
                             provenance_path: Some(rel_path_str.clone()),
                             provenance_line: Some(sym.line_start as i64),
                         })?;
                         stats.edges_created += 1;
                     }
+
+                    // BenchmarkedBy: SourceUnit → BenchmarkedBy → Bench entity
+                    if entity_kind == EntityKind::Bench {
+                        store.insert_edge(&Edge {
+                            src_id: su_id.clone(),
+                            rel: EdgeKind::BenchmarkedBy,
+                            dst_id: entity_id.clone(),
+                            provenance_path: Some(rel_path_str.clone()),
+                            provenance_line: Some(sym.line_start as i64),
+                        })?;
+                        stats.edges_created += 1;
+                    }
+
+                    // Implements: impl entity → Implements → trait entity
+                    if let Some(ref trait_name) = sym.trait_name {
+                        let trait_entity_id = id::symbol_in_file(&rel_path_str, trait_name);
+                        store.insert_edge(&Edge {
+                            src_id: entity_id,
+                            rel: EdgeKind::Implements,
+                            dst_id: trait_entity_id,
+                            provenance_path: Some(rel_path_str.clone()),
+                            provenance_line: Some(sym.line_start as i64),
+                        })?;
+                        stats.edges_created += 1;
+                    }
+                }
+
+                // Reexports: SourceUnit → Reexports → reexported symbol entity
+                for reexport in &parse_result.uses {
+                    let reexport_entity_id = id::symbol_in_file(&rel_path_str, &reexport.path);
+                    store.insert_entity(&Entity {
+                        id: reexport_entity_id.clone(),
+                        kind: EntityKind::Symbol,
+                        name: reexport.path.clone(),
+                        component_id: None,
+                        path: Some(rel_path_str.clone()),
+                        language: Some(language.to_string()),
+                        line_start: Some(reexport.line as i64),
+                        line_end: Some(reexport.line as i64),
+                        visibility: Some(reexport.visibility.clone()),
+                        exported: reexport.visibility == "pub",
+                    })?;
+                    store.insert_edge(&Edge {
+                        src_id: su_id.clone(),
+                        rel: EdgeKind::Reexports,
+                        dst_id: reexport_entity_id,
+                        provenance_path: Some(rel_path_str.clone()),
+                        provenance_line: Some(reexport.line as i64),
+                    })?;
+                    stats.edges_created += 1;
+                    stats.symbols_extracted += 1;
                 }
             }
         }
@@ -391,6 +558,40 @@ fn index_generic_source_file(
                     })?;
                     stats.edges_created += 1;
                     stats.symbols_extracted += 1;
+                }
+
+                // Emit DependsOn edges from imports
+                for imp in &parse_result.imports {
+                    if let Some(target_rel) =
+                        resolve_ts_import(&imp.path, &rel_path_str, project_root)
+                    {
+                        let target_id = id::file_entity_id(&target_rel);
+                        store.insert_edge(&Edge {
+                            src_id: su_id.clone(),
+                            rel: EdgeKind::DependsOn,
+                            dst_id: target_id,
+                            provenance_path: Some(rel_path_str.clone()),
+                            provenance_line: Some(imp.line as i64),
+                        })?;
+                        stats.edges_created += 1;
+                    }
+                }
+
+                // Emit Reexports edges from re-export paths
+                for reexport_path in &parse_result.exports {
+                    if let Some(target_rel) =
+                        resolve_ts_import(reexport_path, &rel_path_str, project_root)
+                    {
+                        let target_id = id::file_entity_id(&target_rel);
+                        store.insert_edge(&Edge {
+                            src_id: su_id.clone(),
+                            rel: EdgeKind::Reexports,
+                            dst_id: target_id,
+                            provenance_path: Some(rel_path_str.clone()),
+                            provenance_line: None,
+                        })?;
+                        stats.edges_created += 1;
+                    }
                 }
             }
         }
@@ -1052,5 +1253,429 @@ mod tests {
     fn parse_frontmatter_no_title() {
         let content = "+++\ndate = 2024-01-01\n+++\n\nBody.";
         assert_eq!(parse_frontmatter_title(content), None);
+    }
+
+    #[test]
+    fn index_project_emits_repo_and_mise_tasks() {
+        use std::fs;
+
+        // Create a temp directory with a unique name
+        let dir = std::env::temp_dir().join("grakno_test_mise_indexer");
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+
+        // Write a mise.toml with two tasks
+        fs::write(
+            dir.join("mise.toml"),
+            "[tasks]\nbuild = \"cargo build\"\ntest = \"cargo test\"\n",
+        )
+        .unwrap();
+
+        // Write a dummy .rs file so the indexer has something to walk
+        fs::write(dir.join("dummy.rs"), "fn main() {}\n").unwrap();
+
+        let store = Store::open_in_memory().unwrap();
+        let stats = index_project(&store, &dir).unwrap();
+
+        // Verify task stats
+        assert_eq!(stats.tasks_extracted, 2, "should extract 2 tasks");
+
+        let all_entities = store.list_entities().unwrap();
+
+        // Verify Repo entity exists
+        let repos: Vec<_> = all_entities
+            .iter()
+            .filter(|e| e.kind == EntityKind::Repo)
+            .collect();
+        assert_eq!(repos.len(), 1, "should have exactly one Repo entity");
+
+        // Verify Task entities exist
+        let tasks: Vec<_> = all_entities
+            .iter()
+            .filter(|e| e.kind == EntityKind::Task)
+            .collect();
+        assert_eq!(tasks.len(), 2, "should have 2 Task entities");
+        let task_names: Vec<&str> = tasks.iter().map(|t| t.name.as_str()).collect();
+        assert!(task_names.contains(&"build"), "should have build task");
+        assert!(task_names.contains(&"test"), "should have test task");
+
+        // Verify OwnsTask edges exist (query from the repo entity)
+        let repo_edges = store.edges_from(&repos[0].id).unwrap();
+        let owns_task_edges: Vec<_> = repo_edges
+            .iter()
+            .filter(|e| e.rel == EdgeKind::OwnsTask)
+            .collect();
+        assert_eq!(owns_task_edges.len(), 2, "should have 2 OwnsTask edges");
+        for edge in &owns_task_edges {
+            assert_eq!(edge.src_id, repos[0].id, "OwnsTask src should be the Repo");
+            assert_eq!(
+                edge.provenance_path.as_deref(),
+                Some("mise.toml"),
+                "provenance_path should be mise.toml"
+            );
+        }
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn index_project_creates_repo_without_mise_toml() {
+        use std::fs;
+
+        let dir = std::env::temp_dir().join("grakno_test_no_mise_indexer");
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+
+        // Write only a dummy .rs file, no mise.toml
+        fs::write(dir.join("dummy.rs"), "fn main() {}\n").unwrap();
+
+        let store = Store::open_in_memory().unwrap();
+        let stats = index_project(&store, &dir).unwrap();
+
+        // Should still create a Repo entity
+        let all_entities = store.list_entities().unwrap();
+        let repos: Vec<_> = all_entities
+            .iter()
+            .filter(|e| e.kind == EntityKind::Repo)
+            .collect();
+        assert_eq!(repos.len(), 1, "should have Repo even without mise.toml");
+
+        // But no tasks
+        assert_eq!(stats.tasks_extracted, 0, "no tasks without mise.toml");
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn index_creates_benchmarked_by_edges() {
+        let store = Store::open_in_memory().unwrap();
+        let tmp = tempfile::tempdir().unwrap();
+        let rs_path = tmp.path().join("bench_example.rs");
+        std::fs::write(&rs_path, "#[bench]\nfn bench_foo() {}\n").unwrap();
+
+        let mut stats = IndexStats::default();
+        let mut indexed = HashSet::new();
+        index_generic_source_file(
+            &store,
+            &rs_path,
+            tmp.path(),
+            "rust",
+            &mut stats,
+            &mut indexed,
+        )
+        .unwrap();
+
+        let su_id = id::file_entity_id("bench_example.rs");
+        let edges: Vec<_> = store
+            .edges_from(&su_id)
+            .unwrap()
+            .into_iter()
+            .filter(|e| e.rel == EdgeKind::BenchmarkedBy)
+            .collect();
+        assert_eq!(edges.len(), 1, "expected one BenchmarkedBy edge");
+        assert!(
+            edges[0].dst_id.contains("bench_foo"),
+            "dst should reference bench_foo"
+        );
+    }
+
+    #[test]
+    fn index_creates_implements_edges() {
+        let store = Store::open_in_memory().unwrap();
+        let tmp = tempfile::tempdir().unwrap();
+        let rs_path = tmp.path().join("impl_example.rs");
+        std::fs::write(
+            &rs_path,
+            "pub trait Greet {\n    fn greet(&self);\n}\n\nimpl Greet for MyStruct {\n    fn greet(&self) {}\n}\n",
+        )
+        .unwrap();
+
+        let mut stats = IndexStats::default();
+        let mut indexed = HashSet::new();
+        index_generic_source_file(
+            &store,
+            &rs_path,
+            tmp.path(),
+            "rust",
+            &mut stats,
+            &mut indexed,
+        )
+        .unwrap();
+
+        // The impl entity ID is based on its display name "impl Greet for MyStruct"
+        let impl_entity_id = id::symbol_in_file("impl_example.rs", "impl Greet for MyStruct");
+        let edges: Vec<_> = store
+            .edges_from(&impl_entity_id)
+            .unwrap()
+            .into_iter()
+            .filter(|e| e.rel == EdgeKind::Implements)
+            .collect();
+        assert_eq!(edges.len(), 1, "expected one Implements edge");
+        // src is the impl entity, dst is the trait entity
+        assert!(
+            edges[0].src_id.contains("impl Greet for MyStruct"),
+            "src should be the impl entity"
+        );
+        assert!(
+            edges[0].dst_id.contains("Greet"),
+            "dst should reference the trait"
+        );
+    }
+
+    #[test]
+    fn index_creates_reexports_edges() {
+        let store = Store::open_in_memory().unwrap();
+        let tmp = tempfile::tempdir().unwrap();
+        let rs_path = tmp.path().join("reexport_example.rs");
+        std::fs::write(&rs_path, "pub use crate::foo::Bar;\n").unwrap();
+
+        let mut stats = IndexStats::default();
+        let mut indexed = HashSet::new();
+        index_generic_source_file(
+            &store,
+            &rs_path,
+            tmp.path(),
+            "rust",
+            &mut stats,
+            &mut indexed,
+        )
+        .unwrap();
+
+        let su_id = id::file_entity_id("reexport_example.rs");
+        let edges: Vec<_> = store
+            .edges_from(&su_id)
+            .unwrap()
+            .into_iter()
+            .filter(|e| e.rel == EdgeKind::Reexports)
+            .collect();
+        assert_eq!(edges.len(), 1, "expected one Reexports edge");
+        assert!(
+            edges[0].dst_id.contains("crate::foo::Bar"),
+            "dst should reference the reexported path"
+        );
+
+        // Verify the reexport symbol entity was created
+        let entities: Vec<_> = store
+            .list_entities()
+            .unwrap()
+            .into_iter()
+            .filter(|e| e.name == "crate::foo::Bar")
+            .collect();
+        assert_eq!(entities.len(), 1, "expected reexport symbol entity");
+    }
+
+    #[test]
+    fn resolve_ts_import_skips_bare_imports() {
+        let tmp = tempfile::tempdir().unwrap();
+        assert_eq!(resolve_ts_import("react", "src/app.ts", tmp.path()), None);
+        assert_eq!(
+            resolve_ts_import("@scope/pkg", "src/app.ts", tmp.path()),
+            None
+        );
+    }
+
+    #[test]
+    fn resolve_ts_import_finds_relative_ts() {
+        let tmp = tempfile::tempdir().unwrap();
+        let src_dir = tmp.path().join("src");
+        std::fs::create_dir_all(&src_dir).unwrap();
+        std::fs::write(src_dir.join("utils.ts"), "export const x = 1;").unwrap();
+
+        let result = resolve_ts_import("./utils", "src/app.ts", tmp.path());
+        assert_eq!(result, Some("src/utils.ts".to_string()));
+    }
+
+    #[test]
+    fn resolve_ts_import_finds_exact_extension() {
+        let tmp = tempfile::tempdir().unwrap();
+        let src_dir = tmp.path().join("src");
+        std::fs::create_dir_all(&src_dir).unwrap();
+        std::fs::write(src_dir.join("helper.tsx"), "export const x = 1;").unwrap();
+
+        let result = resolve_ts_import("./helper", "src/app.ts", tmp.path());
+        assert_eq!(result, Some("src/helper.tsx".to_string()));
+    }
+
+    #[test]
+    fn resolve_ts_import_finds_index_ts() {
+        let tmp = tempfile::tempdir().unwrap();
+        let sub = tmp.path().join("src").join("components");
+        std::fs::create_dir_all(&sub).unwrap();
+        std::fs::write(sub.join("index.ts"), "export {};").unwrap();
+
+        let result = resolve_ts_import("./components", "src/app.ts", tmp.path());
+        assert_eq!(result, Some("src/components/index.ts".to_string()));
+    }
+
+    #[test]
+    fn resolve_ts_import_parent_dir() {
+        let tmp = tempfile::tempdir().unwrap();
+        let src_dir = tmp.path().join("src");
+        let lib_dir = tmp.path().join("lib");
+        std::fs::create_dir_all(&src_dir).unwrap();
+        std::fs::create_dir_all(&lib_dir).unwrap();
+        std::fs::write(lib_dir.join("shared.ts"), "export {};").unwrap();
+
+        let result = resolve_ts_import("../lib/shared", "src/app.ts", tmp.path());
+        assert_eq!(result, Some("lib/shared.ts".to_string()));
+    }
+
+    #[test]
+    fn resolve_ts_import_returns_none_for_missing() {
+        let tmp = tempfile::tempdir().unwrap();
+        let src_dir = tmp.path().join("src");
+        std::fs::create_dir_all(&src_dir).unwrap();
+
+        let result = resolve_ts_import("./nonexistent", "src/app.ts", tmp.path());
+        assert_eq!(result, None);
+    }
+
+    #[test]
+    fn resolve_ts_import_with_explicit_extension() {
+        let tmp = tempfile::tempdir().unwrap();
+        let src_dir = tmp.path().join("src");
+        std::fs::create_dir_all(&src_dir).unwrap();
+        std::fs::write(src_dir.join("data.js"), "export {};").unwrap();
+
+        // When the import already has an extension, the "" probe matches
+        let result = resolve_ts_import("./data.js", "src/app.ts", tmp.path());
+        assert_eq!(result, Some("src/data.js".to_string()));
+    }
+
+    #[test]
+    fn ts_import_emits_depends_on_edges() {
+        let tmp = tempfile::tempdir().unwrap();
+        let src_dir = tmp.path().join("src");
+        std::fs::create_dir_all(&src_dir).unwrap();
+
+        // Create two TS files: app.ts imports utils.ts
+        std::fs::write(
+            src_dir.join("utils.ts"),
+            "export function helper() { return 42; }\n",
+        )
+        .unwrap();
+        std::fs::write(
+            src_dir.join("app.ts"),
+            "import { helper } from './utils';\nconsole.log(helper());\n",
+        )
+        .unwrap();
+
+        let store = Store::open_in_memory().unwrap();
+        let stats = index_project(&store, tmp.path()).unwrap();
+
+        // Both files should be indexed
+        assert_eq!(stats.files_indexed, 2);
+
+        // Should have a DependsOn edge from app.ts -> utils.ts
+        let app_su_id = id::file_entity_id("src/app.ts");
+        let edges = store.edges_from(&app_su_id).unwrap();
+        let depends_on: Vec<_> = edges
+            .iter()
+            .filter(|e| e.rel == EdgeKind::DependsOn)
+            .collect();
+
+        assert_eq!(
+            depends_on.len(),
+            1,
+            "expected exactly one DependsOn edge, got: {:?}",
+            depends_on
+        );
+        assert_eq!(depends_on[0].src_id, app_su_id);
+        assert_eq!(depends_on[0].dst_id, id::file_entity_id("src/utils.ts"));
+    }
+
+    #[test]
+    fn ts_reexport_emits_reexports_edge() {
+        let tmp = tempfile::tempdir().unwrap();
+        let src_dir = tmp.path().join("src");
+        std::fs::create_dir_all(&src_dir).unwrap();
+
+        // Create a module and an index that re-exports it
+        std::fs::write(
+            src_dir.join("types.ts"),
+            "export interface User { name: string; }\n",
+        )
+        .unwrap();
+        std::fs::write(
+            src_dir.join("index.ts"),
+            "export { User } from './types';\n",
+        )
+        .unwrap();
+
+        let store = Store::open_in_memory().unwrap();
+        let stats = index_project(&store, tmp.path()).unwrap();
+
+        assert_eq!(stats.files_indexed, 2);
+
+        // index.ts should have a Reexports edge to types.ts
+        let index_su_id = id::file_entity_id("src/index.ts");
+        let edges = store.edges_from(&index_su_id).unwrap();
+
+        let reexports: Vec<_> = edges
+            .iter()
+            .filter(|e| e.rel == EdgeKind::Reexports)
+            .collect();
+
+        assert_eq!(
+            reexports.len(),
+            1,
+            "expected exactly one Reexports edge, got: {:?}",
+            reexports
+        );
+        assert_eq!(reexports[0].src_id, index_su_id);
+        assert_eq!(reexports[0].dst_id, id::file_entity_id("src/types.ts"));
+
+        // index.ts should also have a DependsOn edge (re-exports also show up in imports)
+        let depends_on: Vec<_> = edges
+            .iter()
+            .filter(|e| e.rel == EdgeKind::DependsOn)
+            .collect();
+        assert_eq!(
+            depends_on.len(),
+            1,
+            "expected exactly one DependsOn edge from re-export import, got: {:?}",
+            depends_on
+        );
+    }
+
+    #[test]
+    fn ts_bare_import_not_emitted() {
+        let tmp = tempfile::tempdir().unwrap();
+        let src_dir = tmp.path().join("src");
+        std::fs::create_dir_all(&src_dir).unwrap();
+
+        // File with only bare/package imports
+        std::fs::write(
+            src_dir.join("app.ts"),
+            "import React from 'react';\nimport { z } from 'zod';\n",
+        )
+        .unwrap();
+
+        let store = Store::open_in_memory().unwrap();
+        let _stats = index_project(&store, tmp.path()).unwrap();
+
+        let app_su_id = id::file_entity_id("src/app.ts");
+        let edges = store.edges_from(&app_su_id).unwrap();
+        let depends_on: Vec<_> = edges
+            .iter()
+            .filter(|e| e.rel == EdgeKind::DependsOn)
+            .collect();
+
+        assert!(
+            depends_on.is_empty(),
+            "bare imports should not produce DependsOn edges"
+        );
+    }
+
+    #[test]
+    fn normalize_path_handles_parent() {
+        let p = Path::new("src/sub/../utils.ts");
+        assert_eq!(normalize_path(p), PathBuf::from("src/utils.ts"));
+    }
+
+    #[test]
+    fn normalize_path_handles_current_dir() {
+        let p = Path::new("src/./utils.ts");
+        assert_eq!(normalize_path(p), PathBuf::from("src/utils.ts"));
     }
 }
