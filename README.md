@@ -9,6 +9,8 @@ enables fast semantic search over your code.
 The goal is simple: help agents and developers answer "what should I read
 first?" before they start opening files blindly.
 
+![Chizu Knowledge Graph](docs/knowledge-graph.svg)
+
 ## Architecture
 
 Chizu uses a **dual-backend storage system**:
