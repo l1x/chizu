@@ -498,11 +498,11 @@ mod tests {
     fn config_round_trip() {
         let config = Config::default();
         let mut file = NamedTempFile::new().unwrap();
-        
+
         // Write config as TOML
         let content = toml::to_string_pretty(&config).unwrap();
         file.write_all(content.as_bytes()).unwrap();
-        
+
         let loaded = Config::load(file.path()).unwrap().unwrap();
 
         assert_eq!(loaded.index.parallel_workers, config.index.parallel_workers);

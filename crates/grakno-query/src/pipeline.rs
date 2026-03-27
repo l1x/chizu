@@ -16,6 +16,8 @@ pub struct PipelineConfig {
     pub vector_k: usize,
     /// Maximum neighbor entities to expand per seed.
     pub max_neighbors_per_seed: usize,
+    /// Override the heuristic query classification.
+    pub category_override: Option<TaskCategory>,
 }
 
 impl Default for PipelineConfig {
@@ -24,6 +26,7 @@ impl Default for PipelineConfig {
             limit: 15,
             vector_k: 20,
             max_neighbors_per_seed: 5,
+            category_override: None,
         }
     }
 }
@@ -41,8 +44,17 @@ impl QueryPipeline {
         config: &PipelineConfig,
     ) -> grakno_core::Result<ReadingPlan> {
         // 1. Classify
-        let category = Self::classify(query);
-        debug!(category = %category, "query classified");
+        let category = match config.category_override {
+            Some(cat) => {
+                debug!(category = %cat, "using category override");
+                cat
+            }
+            None => {
+                let cat = Self::classify(query);
+                debug!(category = %cat, "query classified");
+                cat
+            }
+        };
 
         // 2. Tokenize
         let query_tokens = Self::tokenize(query);
@@ -580,6 +592,29 @@ mod tests {
                 e.score
             );
         }
+    }
+
+    #[test]
+    fn pipeline_category_override() {
+        let store = build_pipeline_store();
+        let config = PipelineConfig {
+            category_override: Some(TaskCategory::Deploy),
+            ..Default::default()
+        };
+        // "store" would normally classify as General, but override forces Deploy
+        let plan = QueryPipeline::run(&store, "store", None, &config).unwrap();
+        assert_eq!(plan.category, "deploy");
+    }
+
+    #[test]
+    fn pipeline_category_override_none_uses_heuristic() {
+        let store = build_pipeline_store();
+        let config = PipelineConfig {
+            category_override: None,
+            ..Default::default()
+        };
+        let plan = QueryPipeline::run(&store, "fix the entity bug", None, &config).unwrap();
+        assert_eq!(plan.category, "debug");
     }
 
     #[test]

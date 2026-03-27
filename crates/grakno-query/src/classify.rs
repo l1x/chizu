@@ -131,6 +131,26 @@ impl TaskCategory {
     }
 }
 
+impl std::str::FromStr for TaskCategory {
+    type Err = String;
+
+    fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
+        match s.to_lowercase().as_str() {
+            "understand" => Ok(TaskCategory::Understand),
+            "debug" => Ok(TaskCategory::Debug),
+            "build" => Ok(TaskCategory::Build),
+            "test" => Ok(TaskCategory::Test),
+            "deploy" => Ok(TaskCategory::Deploy),
+            "configure" => Ok(TaskCategory::Configure),
+            "general" => Ok(TaskCategory::General),
+            _ => Err(format!(
+                "invalid category '{}'. Valid values: understand, debug, build, test, deploy, configure, general",
+                s
+            )),
+        }
+    }
+}
+
 impl std::fmt::Display for TaskCategory {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(self.as_str())
@@ -413,6 +433,43 @@ mod tests {
             assert_eq!(cat.as_str(), *expected);
             assert_eq!(cat.to_string(), *expected);
         }
+    }
+
+    // --- serde ---
+
+    // --- FromStr ---
+
+    #[test]
+    fn from_str_all_variants() {
+        let cases = [
+            ("understand", TaskCategory::Understand),
+            ("debug", TaskCategory::Debug),
+            ("build", TaskCategory::Build),
+            ("test", TaskCategory::Test),
+            ("deploy", TaskCategory::Deploy),
+            ("configure", TaskCategory::Configure),
+            ("general", TaskCategory::General),
+        ];
+        for (input, expected) in &cases {
+            let parsed: TaskCategory = input.parse().unwrap();
+            assert_eq!(parsed, *expected);
+        }
+    }
+
+    #[test]
+    fn from_str_case_insensitive() {
+        let parsed: TaskCategory = "DEBUG".parse().unwrap();
+        assert_eq!(parsed, TaskCategory::Debug);
+        let parsed: TaskCategory = "Deploy".parse().unwrap();
+        assert_eq!(parsed, TaskCategory::Deploy);
+    }
+
+    #[test]
+    fn from_str_invalid() {
+        let result = "invalid".parse::<TaskCategory>();
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert!(err.contains("invalid category"));
     }
 
     // --- serde ---

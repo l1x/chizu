@@ -186,7 +186,11 @@ fn cmd_config_init(cmd: &ConfigInitCmd, repo_path: &std::path::Path) {
 fn cmd_config_validate(cmd: &ConfigValidateCmd, repo_path: &std::path::Path) {
     let config_result = if let Some(ref path_str) = cmd.path {
         let p = std::path::PathBuf::from(path_str);
-        let resolved = if p.is_absolute() { p } else { repo_path.join(p) };
+        let resolved = if p.is_absolute() {
+            p
+        } else {
+            repo_path.join(p)
+        };
         config::Config::load(&resolved)
     } else {
         config::Config::find_from(repo_path).map(|opt| opt.map(|(cfg, _)| cfg))
@@ -891,9 +895,9 @@ fn cmd_search(store: &Store, cmd: SearchCmd) {
     }
 }
 
-
 fn cmd_guide() {
-    println!(r#"
+    println!(
+        r#"
 ╔══════════════════════════════════════════════════════════════════════════════╗
 ║                         GRAKNO AGENT GUIDE                                   ║
 ║             How to use grakno effectively in your workflow                   ║
@@ -1125,5 +1129,6 @@ Remember: grakno.plan is for task-oriented discovery, grakno.search is for
 semantic similarity. Start with plan, drill down with inspect.
 
 For more details: grakno --help
-"#);
+"#
+    );
 }
