@@ -14,9 +14,16 @@ pub struct MiseConfig {
 
 pub fn parse_mise_toml(path: &Path) -> Result<Option<MiseConfig>, IndexError> {
     let mise_path = path.join("mise.toml");
-    if !mise_path.exists() {
-        return Ok(None);
-    }
+    let mise_path = if mise_path.exists() {
+        mise_path
+    } else {
+        let hidden = path.join(".mise.toml");
+        if hidden.exists() {
+            hidden
+        } else {
+            return Ok(None);
+        }
+    };
 
     let content = std::fs::read_to_string(&mise_path)?;
     let table: toml::Value =
@@ -64,26 +71,17 @@ fn collect_tasks(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::fs;
-
-    fn test_dir(name: &str) -> std::path::PathBuf {
-        let dir = std::env::temp_dir().join(format!("grakno_test_mise_{name}"));
-        let _ = fs::remove_dir_all(&dir);
-        fs::create_dir_all(&dir).unwrap();
-        dir
-    }
 
     #[test]
     fn parse_missing_mise_toml() {
-        let dir = test_dir("missing");
-        let result = parse_mise_toml(&dir).unwrap();
+        let dir = tempfile::tempdir().unwrap();
+        let result = parse_mise_toml(dir.path()).unwrap();
         assert!(result.is_none());
-        let _ = fs::remove_dir_all(&dir);
     }
 
     #[test]
     fn parse_basic_mise_toml() {
-        let dir = test_dir("basic");
+        let dir = tempfile::tempdir().unwrap();
         let content = r#"
 [tasks]
 build = "cargo build"
@@ -92,12 +90,21 @@ test = "cargo test"
 [tasks.lint]
 run = "cargo clippy"
 "#;
-        fs::write(dir.join("mise.toml"), content).unwrap();
-        let config = parse_mise_toml(&dir).unwrap().unwrap();
+        std::fs::write(dir.path().join("mise.toml"), content).unwrap();
+        let config = parse_mise_toml(dir.path()).unwrap().unwrap();
         let names: Vec<_> = config.tasks.iter().map(|t| t.name.as_str()).collect();
         assert!(names.contains(&"build"));
         assert!(names.contains(&"test"));
         assert!(names.contains(&"lint"));
-        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn parse_hidden_mise_toml() {
+        let dir = tempfile::tempdir().unwrap();
+        let content = "[tasks]\nfmt = \"cargo fmt\"\n";
+        std::fs::write(dir.path().join(".mise.toml"), content).unwrap();
+        let config = parse_mise_toml(dir.path()).unwrap().unwrap();
+        let names: Vec<_> = config.tasks.iter().map(|t| t.name.as_str()).collect();
+        assert!(names.contains(&"fmt"));
     }
 }

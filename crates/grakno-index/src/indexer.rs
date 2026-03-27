@@ -37,6 +37,7 @@ pub struct IndexStats {
     pub sites_detected: usize,
     pub content_pages_indexed: usize,
     pub packages_indexed: usize,
+    pub parse_failures: usize,
 }
 
 impl fmt::Display for IndexStats {
@@ -60,6 +61,7 @@ impl fmt::Display for IndexStats {
         writeln!(f, "sites:         {}", self.sites_detected)?;
         writeln!(f, "content_pages: {}", self.content_pages_indexed)?;
         writeln!(f, "packages:      {}", self.packages_indexed)?;
+        writeln!(f, "parse_errors:  {}", self.parse_failures)?;
         writeln!(f, "routes:        {}", self.task_routes_generated)?;
         write!(f, "edges:         {}", self.edges_created)
     }
@@ -415,6 +417,11 @@ fn resolve_ts_import(
     let probes: &[&str] = &["", ".ts", ".tsx", ".js", ".jsx", "/index.ts", "/index.tsx"];
 
     let normalized_str = normalized.display().to_string();
+
+    // Guard against path traversal outside the project root
+    if normalized_str.starts_with("..") {
+        return None;
+    }
 
     for ext in probes {
         let candidate = format!("{normalized_str}{ext}");
@@ -1157,6 +1164,7 @@ fn index_package_json_file(
         Ok(pkg) => pkg,
         Err(e) => {
             tracing::warn!(path = %rel_path_str, error = %e, "failed to parse package.json");
+            stats.parse_failures += 1;
             return Ok(());
         }
     };
@@ -1532,25 +1540,20 @@ mod tests {
 
     #[test]
     fn index_project_emits_repo_and_mise_tasks() {
-        use std::fs;
-
-        // Create a temp directory with a unique name
-        let dir = std::env::temp_dir().join("grakno_test_mise_indexer");
-        let _ = fs::remove_dir_all(&dir);
-        fs::create_dir_all(&dir).unwrap();
+        let dir = tempfile::tempdir().unwrap();
 
         // Write a mise.toml with two tasks
-        fs::write(
-            dir.join("mise.toml"),
+        std::fs::write(
+            dir.path().join("mise.toml"),
             "[tasks]\nbuild = \"cargo build\"\ntest = \"cargo test\"\n",
         )
         .unwrap();
 
         // Write a dummy .rs file so the indexer has something to walk
-        fs::write(dir.join("dummy.rs"), "fn main() {}\n").unwrap();
+        std::fs::write(dir.path().join("dummy.rs"), "fn main() {}\n").unwrap();
 
         let store = Store::open_in_memory().unwrap();
-        let stats = index_project(&store, &dir).unwrap();
+        let stats = index_project(&store, dir.path()).unwrap();
 
         // Verify task stats
         assert_eq!(stats.tasks_extracted, 2, "should extract 2 tasks");
@@ -1589,23 +1592,17 @@ mod tests {
                 "provenance_path should be mise.toml"
             );
         }
-
-        let _ = fs::remove_dir_all(&dir);
     }
 
     #[test]
     fn index_project_creates_repo_without_mise_toml() {
-        use std::fs;
-
-        let dir = std::env::temp_dir().join("grakno_test_no_mise_indexer");
-        let _ = fs::remove_dir_all(&dir);
-        fs::create_dir_all(&dir).unwrap();
+        let dir = tempfile::tempdir().unwrap();
 
         // Write only a dummy .rs file, no mise.toml
-        fs::write(dir.join("dummy.rs"), "fn main() {}\n").unwrap();
+        std::fs::write(dir.path().join("dummy.rs"), "fn main() {}\n").unwrap();
 
         let store = Store::open_in_memory().unwrap();
-        let stats = index_project(&store, &dir).unwrap();
+        let stats = index_project(&store, dir.path()).unwrap();
 
         // Should still create a Repo entity
         let all_entities = store.list_entities().unwrap();
@@ -1617,8 +1614,6 @@ mod tests {
 
         // But no tasks
         assert_eq!(stats.tasks_extracted, 0, "no tasks without mise.toml");
-
-        let _ = fs::remove_dir_all(&dir);
     }
 
     #[test]
@@ -1818,6 +1813,20 @@ mod tests {
     }
 
     #[test]
+    fn resolve_ts_import_prefers_ts_over_tsx() {
+        let tmp = tempfile::tempdir().unwrap();
+        let src_dir = tmp.path().join("src");
+        std::fs::create_dir_all(&src_dir).unwrap();
+        // Create both .ts and .tsx with the same stem
+        std::fs::write(src_dir.join("utils.ts"), "export {};").unwrap();
+        std::fs::write(src_dir.join("utils.tsx"), "export {};").unwrap();
+
+        // .ts should be found first because it appears before .tsx in the probe list
+        let result = resolve_ts_import("./utils", "src/app.ts", tmp.path());
+        assert_eq!(result, Some("src/utils.ts".to_string()));
+    }
+
+    #[test]
     fn ts_import_emits_depends_on_edges() {
         let tmp = tempfile::tempdir().unwrap();
         let src_dir = tmp.path().join("src");
@@ -1956,9 +1965,7 @@ mod tests {
 
     #[test]
     fn index_package_json_creates_component_and_deps() {
-        let tmp = std::env::temp_dir().join("grakno_test_pkg_json");
-        let _ = std::fs::remove_dir_all(&tmp);
-        std::fs::create_dir_all(&tmp).unwrap();
+        let tmp = tempfile::tempdir().unwrap();
 
         let pkg_content = r#"{
             "name": "my-web-app",
@@ -1971,10 +1978,10 @@ mod tests {
                 "typescript": "^5.0.0"
             }
         }"#;
-        std::fs::write(tmp.join("package.json"), pkg_content).unwrap();
+        std::fs::write(tmp.path().join("package.json"), pkg_content).unwrap();
 
         let store = Store::open_in_memory().unwrap();
-        let stats = index_project(&store, &tmp).unwrap();
+        let stats = index_project(&store, tmp.path()).unwrap();
 
         assert_eq!(stats.packages_indexed, 1, "should index one package");
 
@@ -1995,34 +2002,28 @@ mod tests {
         assert!(dep_targets.contains("component::express"));
         assert!(dep_targets.contains("component::lodash"));
         assert!(dep_targets.contains("component::typescript"));
-
-        let _ = std::fs::remove_dir_all(&tmp);
     }
 
     #[test]
     fn index_package_json_falls_back_to_dir_name() {
-        let tmp = std::env::temp_dir().join("grakno_test_pkg_noname");
-        let _ = std::fs::remove_dir_all(&tmp);
-        std::fs::create_dir_all(&tmp).unwrap();
+        let tmp = tempfile::tempdir().unwrap();
 
         std::fs::write(
-            tmp.join("package.json"),
+            tmp.path().join("package.json"),
             r#"{ "dependencies": { "foo": "1.0" } }"#,
         )
         .unwrap();
 
         let store = Store::open_in_memory().unwrap();
-        let stats = index_project(&store, &tmp).unwrap();
+        let stats = index_project(&store, tmp.path()).unwrap();
 
         assert_eq!(stats.packages_indexed, 1);
 
-        let dir_name = tmp.file_name().unwrap().to_str().unwrap();
+        let dir_name = tmp.path().file_name().unwrap().to_str().unwrap();
         let comp = store.get_entity(&format!("component::{dir_name}"));
         assert!(
             comp.is_ok(),
             "component should use directory name as fallback"
         );
-
-        let _ = std::fs::remove_dir_all(&tmp);
     }
 }

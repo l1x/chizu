@@ -44,9 +44,15 @@ pub fn resolve_workspaces(root: &Path, config: &WorkspacesConfig) -> Vec<PathBuf
         let full_pattern = root.join(pattern).display().to_string();
         if let Ok(paths) = glob::glob(&full_pattern) {
             for entry in paths.flatten() {
-                // Only include directories that contain a package.json
-                if entry.is_dir() && entry.join("package.json").exists() {
-                    results.push(entry);
+                if entry.is_dir() {
+                    if entry.join("package.json").exists() {
+                        results.push(entry);
+                    } else {
+                        tracing::warn!(
+                            "workspace dir {} has no package.json, skipping",
+                            entry.display()
+                        );
+                    }
                 }
             }
         }
@@ -159,22 +165,19 @@ mod tests {
 
     #[test]
     fn resolve_workspaces_with_temp_dir() {
-        let tmp = std::env::temp_dir().join("grakno_test_ws");
-        let _ = std::fs::remove_dir_all(&tmp);
-        std::fs::create_dir_all(tmp.join("packages/foo")).unwrap();
-        std::fs::write(tmp.join("packages/foo/package.json"), "{}").unwrap();
-        std::fs::create_dir_all(tmp.join("packages/bar")).unwrap();
-        std::fs::write(tmp.join("packages/bar/package.json"), "{}").unwrap();
+        let tmp = tempfile::tempdir().unwrap();
+        std::fs::create_dir_all(tmp.path().join("packages/foo")).unwrap();
+        std::fs::write(tmp.path().join("packages/foo/package.json"), "{}").unwrap();
+        std::fs::create_dir_all(tmp.path().join("packages/bar")).unwrap();
+        std::fs::write(tmp.path().join("packages/bar/package.json"), "{}").unwrap();
         // A directory without package.json should be excluded
-        std::fs::create_dir_all(tmp.join("packages/no-pkg")).unwrap();
+        std::fs::create_dir_all(tmp.path().join("packages/no-pkg")).unwrap();
 
         let config = WorkspacesConfig::Array(vec!["packages/*".to_string()]);
-        let resolved = resolve_workspaces(&tmp, &config);
+        let resolved = resolve_workspaces(tmp.path(), &config);
 
         assert_eq!(resolved.len(), 2);
         assert!(resolved.iter().any(|p| p.ends_with("foo")));
         assert!(resolved.iter().any(|p| p.ends_with("bar")));
-
-        let _ = std::fs::remove_dir_all(&tmp);
     }
 }
