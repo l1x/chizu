@@ -396,4 +396,49 @@ mod tests {
             assert_eq!(via, "e::A", "all neighbors should trace back to seed A");
         }
     }
+
+    #[test]
+    fn expand_uses_context_source_not_name_match() {
+        let (store, seeds) = build_expand_store();
+        let neighbors = expand(&store, &seeds, 10).unwrap();
+
+        // Check that B has Context source, not NameMatch
+        let (b_cand, _) = &neighbors["e::B"];
+        assert!(
+            b_cand.sources.iter().any(|s| matches!(s, RetrievalSource::Context { .. })),
+            "B should have Context source from expansion, not NameMatch"
+        );
+        assert!(
+            !b_cand.sources.iter().any(|s| matches!(s, RetrievalSource::NameMatch)),
+            "B should NOT have fake NameMatch source"
+        );
+
+        // Same for D (incoming edge)
+        let (d_cand, _) = &neighbors["e::D"];
+        assert!(
+            d_cand.sources.iter().any(|s| matches!(s, RetrievalSource::Context { .. })),
+            "D should have Context source from expansion"
+        );
+        assert!(
+            !d_cand.sources.iter().any(|s| matches!(s, RetrievalSource::NameMatch)),
+            "D should NOT have fake NameMatch source"
+        );
+    }
+
+    #[test]
+    fn context_source_includes_via_entity_id() {
+        let (store, seeds) = build_expand_store();
+        let neighbors = expand(&store, &seeds, 10).unwrap();
+
+        // Check that Context source includes the via entity id
+        let (b_cand, _) = &neighbors["e::B"];
+        let has_correct_via = b_cand.sources.iter().any(|s| {
+            if let RetrievalSource::Context { via_entity_id } = s {
+                via_entity_id == "e::A"
+            } else {
+                false
+            }
+        });
+        assert!(has_correct_via, "Context source should reference seed A");
+    }
 }

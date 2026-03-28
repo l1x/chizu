@@ -2119,4 +2119,202 @@ mod tests {
             "component should use directory name as fallback"
         );
     }
+
+    // =========================================================================
+    // BUG FIX TESTS
+    // =========================================================================
+
+    /// Test that entities get correct component_id assigned
+    #[test]
+    fn component_id_assigned_to_source_files_and_symbols() {
+        let tmp = tempfile::tempdir().unwrap();
+        
+        // Create a crate structure
+        let crate_dir = tmp.path().join("my-crate");
+        std::fs::create_dir(&crate_dir).unwrap();
+        std::fs::create_dir(crate_dir.join("src")).unwrap();
+        
+        // Cargo.toml makes this a component
+        std::fs::write(
+            crate_dir.join("Cargo.toml"),
+            r#"[package]
+name = "my-crate"
+version = "0.1.0"
+"#,
+        ).unwrap();
+        
+        // Source file with symbols
+        std::fs::write(
+            crate_dir.join("src/lib.rs"),
+            r#"pub fn hello() {}
+pub struct MyStruct;"#,
+        ).unwrap();
+
+        let store = Store::open_in_memory().unwrap();
+        let _stats = index_project(&store, tmp.path()).unwrap();
+
+        // Check component exists
+        let comp = store.get_entity("component::my-crate").unwrap();
+        assert_eq!(comp.kind, EntityKind::Component);
+
+        // Check source file has component_id (entity ID uses "file::" prefix)
+        let source_unit = store.get_entity("file::my-crate/src/lib.rs").unwrap();
+        assert_eq!(source_unit.component_id, Some("component::my-crate".to_string()));
+
+        // Check symbols have component_id
+        let symbol = store.get_entity("symbol::my-crate/src/lib.rs::hello").unwrap();
+        assert_eq!(symbol.component_id, Some("component::my-crate".to_string()));
+        
+        let struct_symbol = store.get_entity("symbol::my-crate/src/lib.rs::MyStruct").unwrap();
+        assert_eq!(struct_symbol.component_id, Some("component::my-crate".to_string()));
+    }
+
+    /// Test that cleanup removes all related data (edges, summaries, embeddings)
+    #[test]
+    fn cleanup_removes_edges_summaries_and_embeddings() {
+        use chizu_core::model::{EmbeddingRecord, Summary};
+        
+        let tmp = tempfile::tempdir().unwrap();
+        
+        // Create a source file
+        let src_dir = tmp.path().join("src");
+        std::fs::create_dir(&src_dir).unwrap();
+        std::fs::write(src_dir.join("lib.rs"), "pub fn foo() {}").unwrap();
+
+        let store = Store::open_in_memory().unwrap();
+        
+        // First index
+        let _ = index_project(&store, tmp.path()).unwrap();
+        
+        // Add summary for the symbol
+        let symbol_id = "symbol::src/lib.rs::foo";
+        store.upsert_summary(&Summary {
+            entity_id: symbol_id.to_string(),
+            short_summary: "Test summary".to_string(),
+            detailed_summary: None,
+            keywords: vec!["test".to_string()],
+            updated_at: "2026-01-01T00:00:00Z".to_string(),
+            source_hash: None,
+        }).unwrap();
+        
+        // Add embedding for the symbol
+        store.upsert_embedding(&EmbeddingRecord {
+            entity_id: symbol_id.to_string(),
+            model: "test".to_string(),
+            dimensions: 3,
+            vector: vec![1.0, 2.0, 3.0],
+            updated_at: "2026-01-01T00:00:00Z".to_string(),
+        }).unwrap();
+        
+        // Verify data exists
+        assert!(store.get_summary(symbol_id).is_ok());
+        assert!(store.get_embedding(symbol_id).is_ok());
+        let edges_before = store.edges_from("file::src/lib.rs").unwrap();
+        assert!(!edges_before.is_empty(), "Should have edges before cleanup");
+        
+        // Delete the source file
+        std::fs::remove_file(src_dir.join("lib.rs")).unwrap();
+        
+        // Re-index (should trigger cleanup)
+        let _ = index_project(&store, tmp.path()).unwrap();
+        
+        // Verify symbol is gone
+        assert!(store.get_entity(symbol_id).is_err(), "Symbol should be deleted");
+        
+        // Verify summary is gone
+        assert!(store.get_summary(symbol_id).is_err(), "Summary should be deleted");
+        
+        // Verify embedding is gone  
+        assert!(store.get_embedding(symbol_id).is_err(), "Embedding should be deleted");
+        
+        // Verify source_unit is gone (entity ID uses "file::" prefix)
+        assert!(store.get_entity("file::src/lib.rs").is_err(), "Source unit should be deleted");
+    }
+
+    /// Test that TypeScript imports outside repo root are rejected
+    #[test]
+    fn ts_import_outside_root_is_rejected() {
+        // Path deep in tree trying to escape: src/a/b/c/../../../../../../foo
+        // From file at src/a/b/c/main.ts
+        let importing_file = "src/a/b/c/main.ts";
+        let import_path = "../../../../../../foo";
+        
+        let result = resolve_ts_import(import_path, importing_file, Path::new("/project"));
+        
+        assert!(result.is_none(), "Import outside repo root should be rejected");
+    }
+
+    /// Test that valid TypeScript imports work
+    #[test]
+    fn ts_import_valid_resolves_correctly() {
+        let tmp = tempfile::tempdir().unwrap();
+        
+        // Create structure
+        let src_dir = tmp.path().join("src");
+        std::fs::create_dir(&src_dir).unwrap();
+        let utils_dir = src_dir.join("utils");
+        std::fs::create_dir(&utils_dir).unwrap();
+        
+        // Create files
+        std::fs::write(src_dir.join("main.ts"), r#"import { helper } from "./utils/helper";"#).unwrap();
+        std::fs::write(utils_dir.join("helper.ts"), "export function helper() {}").unwrap();
+
+        // Test resolution
+        let resolved = resolve_ts_import("./utils/helper", "src/main.ts", tmp.path());
+        assert_eq!(resolved, Some("src/utils/helper.ts".to_string()));
+        
+        // Test parent import
+        std::fs::write(utils_dir.join("nested.ts"), r#"import { main } from "../main";"#).unwrap();
+        let resolved_parent = resolve_ts_import("../main", "src/utils/nested.ts", tmp.path());
+        assert_eq!(resolved_parent, Some("src/main.ts".to_string()));
+    }
+
+    /// Test workspace packages get component_id assigned
+    #[test]
+    fn workspace_packages_get_component_ids() {
+        let tmp = tempfile::tempdir().unwrap();
+        
+        // Root package.json with workspaces
+        std::fs::write(
+            tmp.path().join("package.json"),
+            r#"{
+                "name": "root",
+                "workspaces": ["packages/*"]
+            }"#,
+        ).unwrap();
+        
+        // Create workspace packages
+        let packages_dir = tmp.path().join("packages");
+        std::fs::create_dir(&packages_dir).unwrap();
+        
+        let pkg_a_dir = packages_dir.join("pkg-a");
+        std::fs::create_dir(&pkg_a_dir).unwrap();
+        std::fs::write(
+            pkg_a_dir.join("package.json"),
+            r#"{"name": "pkg-a", "version": "1.0.0"}"#,
+        ).unwrap();
+        std::fs::create_dir(pkg_a_dir.join("src")).unwrap();
+        std::fs::write(pkg_a_dir.join("src/index.ts"), "export const foo = 1;").unwrap();
+        
+        let pkg_b_dir = packages_dir.join("pkg-b");
+        std::fs::create_dir(&pkg_b_dir).unwrap();
+        std::fs::write(
+            pkg_b_dir.join("package.json"),
+            r#"{"name": "pkg-b", "version": "1.0.0"}"#,
+        ).unwrap();
+
+        let store = Store::open_in_memory().unwrap();
+        let _ = index_project(&store, tmp.path()).unwrap();
+
+        // Check both components exist
+        let comp_a = store.get_entity("component::pkg-a").unwrap();
+        assert_eq!(comp_a.kind, EntityKind::Component);
+        
+        let comp_b = store.get_entity("component::pkg-b").unwrap();
+        assert_eq!(comp_b.kind, EntityKind::Component);
+
+        // Check source file in pkg-a has correct component_id (entity ID uses "file::" prefix)
+        let source_unit = store.get_entity("file::packages/pkg-a/src/index.ts").unwrap();
+        assert_eq!(source_unit.component_id, Some("component::pkg-a".to_string()));
+    }
 }
