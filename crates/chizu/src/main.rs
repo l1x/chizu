@@ -1200,8 +1200,9 @@ fn cmd_visualize(store: &Store, cmd: VisualizeCmd) {
         }
     };
 
-    // Default to meaningful entity types if no --kind specified
-    let default_kinds: Vec<String> = vec!["symbol", "source_unit", "test", "doc"]
+    // Default to component-level view (high level architecture)
+    // repo -> directories/crates -> source files
+    let default_kinds: Vec<String> = vec!["repo", "directory", "component", "source_unit"]
         .into_iter()
         .map(|s| s.to_string())
         .collect();

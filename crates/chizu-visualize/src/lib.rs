@@ -40,10 +40,10 @@ impl Default for VisualizeConfig {
             layout: LayoutType::Hierarchical,
             max_nodes: 100,
             include_legend: true,
-            width: 1200.0,
-            height: 800.0,
-            node_spacing: 150.0,
-            layer_spacing: 100.0,
+            width: 2400.0,  // Wider canvas
+            height: 1200.0, // Taller canvas
+            node_spacing: 160.0,
+            layer_spacing: 120.0,
         }
     }
 }
@@ -162,17 +162,18 @@ impl SvgGenerator {
 
         let mut svg = String::new();
 
-        // SVG header
+        // SVG header with interactive pan/zoom
         let width = self.config.width;
         let height = self.config.height;
         let bg = self.theme.canvas;
         svg.push_str(&format!(
-            r##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {width} {height}" width="{width}" height="{height}" style="background: {bg}">
+            r##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {width} {height}" width="100%" height="100%" style="background: {bg}; cursor: grab;" id="chizu-svg">
   <defs>
     <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
       <polygon points="0 0, 10 3.5, 0 7" fill="#94a3b8"/>
     </marker>
   </defs>
+  <g id="viewport">
 "##
         ));
 
@@ -195,13 +196,82 @@ impl SvgGenerator {
             }
         }
 
-        // Render legend
+        // Close viewport group
+        svg.push_str("  </g>\n");
+
+        // Render legend (outside viewport so it stays fixed)
         if self.config.include_legend {
             svg.push_str(&self.render_legend(node_count));
         }
 
-        // Close SVG
-        svg.push_str("</svg>");
+        // Add interactivity script
+        svg.push_str(&format!(
+            r##"  <script type="text/javascript">
+    <![CDATA[
+    (function() {{
+      const svg = document.getElementById('chizu-svg');
+      const viewport = document.getElementById('viewport');
+      let isPanning = false;
+      let startPoint = {{ x: 0, y: 0 }};
+      let currentTranslate = {{ x: 0, y: 0 }};
+      let scale = 1;
+      
+      // Get point in SVG coordinates
+      function getSVGPoint(clientX, clientY) {{
+        const point = svg.createSVGPoint();
+        point.x = clientX;
+        point.y = clientY;
+        return point.matrixTransform(viewport.getCTM().inverse());
+      }}
+      
+      // Mouse wheel zoom
+      svg.addEventListener('wheel', function(e) {{
+        e.preventDefault();
+        const delta = e.deltaY > 0 ? 0.9 : 1.1;
+        const newScale = Math.max(0.1, Math.min(5, scale * delta));
+        
+        // Zoom towards mouse pointer
+        const mousePos = getSVGPoint(e.clientX, e.clientY);
+        currentTranslate.x += mousePos.x * (1 - delta);
+        currentTranslate.y += mousePos.y * (1 - delta);
+        scale = newScale;
+        
+        viewport.setAttribute('transform', 'translate(' + currentTranslate.x + ',' + currentTranslate.y + ') scale(' + scale + ')');
+      }}, {{ passive: false }});
+      
+      // Pan with mouse drag
+      svg.addEventListener('mousedown', function(e) {{
+        isPanning = true;
+        startPoint = {{ x: e.clientX, y: e.clientY }};
+        svg.style.cursor = 'grabbing';
+      }});
+      
+      window.addEventListener('mousemove', function(e) {{
+        if (!isPanning) return;
+        const dx = (e.clientX - startPoint.x) / scale;
+        const dy = (e.clientY - startPoint.y) / scale;
+        currentTranslate.x += dx;
+        currentTranslate.y += dy;
+        startPoint = {{ x: e.clientX, y: e.clientY }};
+        viewport.setAttribute('transform', 'translate(' + currentTranslate.x + ',' + currentTranslate.y + ') scale(' + scale + ')');
+      }});
+      
+      window.addEventListener('mouseup', function() {{
+        isPanning = false;
+        svg.style.cursor = 'grab';
+      }});
+      
+      // Reset on double click
+      svg.addEventListener('dblclick', function() {{
+        currentTranslate = {{ x: 0, y: 0 }};
+        scale = 1;
+        viewport.setAttribute('transform', 'translate(0,0) scale(1)');
+      }});
+    }})();
+    ]]>
+  </script>
+</svg>"##
+        ));
 
         Ok(svg)
     }
