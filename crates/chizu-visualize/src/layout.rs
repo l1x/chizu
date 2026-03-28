@@ -5,6 +5,7 @@ use petgraph::Direction;
 use std::collections::{HashMap, HashSet, VecDeque};
 
 /// Layout engine for positioning nodes in the visualization
+/// Uses a wrapped hierarchical layout where wide levels are split into multiple rows
 pub fn hierarchical_layout<N, E>(
     graph: &Graph<N, E>,
     config: &VisualizeConfig,
@@ -60,6 +61,18 @@ pub fn hierarchical_layout<N, E>(
         }
     }
 
+    // Calculate layout parameters
+    let node_width = 160.0;
+    let node_height = 60.0;
+    let margin_x = 60.0;
+    let margin_y = 80.0;
+    let row_height = node_height + 60.0; // Vertical space between rows
+    
+    let available_width = config.width - 2.0 * margin_x;
+    
+    // Calculate max nodes per row based on available width
+    let max_per_row = ((available_width / (node_width + 20.0)).floor() as usize).max(1);
+
     // Group nodes by level
     let max_level = *levels.values().max().unwrap_or(&0);
     let mut level_groups: Vec<Vec<NodeIndex>> = vec![Vec::new(); max_level + 1];
@@ -68,54 +81,38 @@ pub fn hierarchical_layout<N, E>(
         level_groups[*level].push(*node);
     }
 
-    // Calculate positions with better spacing
-    let margin_x = 100.0;
-    let margin_y = 80.0;
-    let node_width = 140.0;
-    let _node_height = 60.0;
-    
-    let available_width = config.width - 2.0 * margin_x;
-    let available_height = if config.include_legend {
-        config.height - 100.0 - 2.0 * margin_y
-    } else {
-        config.height - 2.0 * margin_y
-    };
-
-    let level_height = if max_level > 0 {
-        available_height / max_level as f64
-    } else {
-        available_height
-    };
-
     let mut positions: HashMap<NodeIndex, (f64, f64)> = HashMap::new();
+    let mut current_y = margin_y;
 
-    for (level, nodes) in level_groups.iter().enumerate() {
-        let y = margin_y + level as f64 * level_height;
-        let node_count = nodes.len();
-
-        if node_count == 0 {
+    // Place each level, wrapping to multiple rows if needed
+    for level_nodes in level_groups.iter() {
+        if level_nodes.is_empty() {
             continue;
         }
 
-        // Calculate spacing to fit all nodes with minimum gap
-        let min_spacing = node_width + 40.0;
-        let total_width_needed = node_count as f64 * min_spacing;
-        
-        let spacing = if total_width_needed > available_width {
-            // Too many nodes - compress but keep minimum
-            (available_width - node_width) / (node_count - 1).max(1) as f64
-        } else {
-            // Center the group
-            min_spacing
-        };
+        // Split into rows
+        let chunks: Vec<Vec<NodeIndex>> = level_nodes
+            .chunks(max_per_row)
+            .map(|c| c.to_vec())
+            .collect();
 
-        let total_width = (node_count - 1) as f64 * spacing + node_width;
-        let start_x = margin_x + (available_width - total_width) / 2.0 + node_width / 2.0;
+        for (row_idx, row_nodes) in chunks.iter().enumerate() {
+            let row_y = current_y + row_idx as f64 * row_height;
+            let node_count = row_nodes.len();
+            
+            // Center this row
+            let total_width = node_count as f64 * node_width + (node_count - 1) as f64 * 40.0;
+            let start_x = margin_x + (available_width - total_width) / 2.0 + node_width / 2.0;
 
-        for (i, node) in nodes.iter().enumerate() {
-            let x = start_x + i as f64 * spacing;
-            positions.insert(*node, (x, y));
+            for (i, node) in row_nodes.iter().enumerate() {
+                let x = start_x + i as f64 * (node_width + 40.0);
+                positions.insert(*node, (x, row_y));
+            }
         }
+
+        // Move to next level position (account for wrapped rows)
+        let rows_in_this_level = ((level_nodes.len() - 1) / max_per_row) + 1;
+        current_y += rows_in_this_level as f64 * row_height + 40.0;
     }
 
     Ok(positions)

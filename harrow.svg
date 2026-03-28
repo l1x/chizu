@@ -1,307 +1,493 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 800" width="1200" height="800" style="background: #fafafa">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 2400 1200" width="100%" height="100%" style="background: #fafafa; cursor: grab;" id="chizu-svg">
   <defs>
     <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
       <polygon points="0 0, 10 3.5, 0 7" fill="#94a3b8"/>
     </marker>
   </defs>
-  <g transform="translate(959.7959183673469, 80)">
+  <g id="viewport">
+  <path d="M 1110 80 C 1110 253.33333333333334, 1596.1538461538462 253.33333333333334, 1596.1538461538462 426.6666666666667" 
+        stroke="#cbd5e1" stroke-width="1" stroke-dasharray="none" 
+        fill="none" marker-end="url(#arrowhead)"/>
+  <path d="M 1110 80 C 1110 253.33333333333334, 1913.0769230769229 253.33333333333334, 1913.0769230769229 426.6666666666667" 
+        stroke="#cbd5e1" stroke-width="1" stroke-dasharray="none" 
+        fill="none" marker-end="url(#arrowhead)"/>
+  <path d="M 1110 80 C 1110 253.33333333333334, 486.9230769230769 253.33333333333334, 486.9230769230769 426.6666666666667" 
+        stroke="#cbd5e1" stroke-width="1" stroke-dasharray="none" 
+        fill="none" marker-end="url(#arrowhead)"/>
+  <path d="M 1913.0769230769229 426.6666666666667 C 1913.0769230769229 600, 1200 600, 1200 773.3333333333334" 
+        stroke="#cbd5e1" stroke-width="1" stroke-dasharray="none" 
+        fill="none" marker-end="url(#arrowhead)"/>
+  <path d="M 1200 773.3333333333334 C 1200 946.6666666666667, 1480.909090909091 946.6666666666667, 1480.909090909091 1120" 
+        stroke="#cbd5e1" stroke-width="1" stroke-dasharray="none" 
+        fill="none" marker-end="url(#arrowhead)"/>
+  <path d="M 1200 773.3333333333334 C 1200 946.6666666666667, 1200 946.6666666666667, 1200 1120" 
+        stroke="#cbd5e1" stroke-width="1" stroke-dasharray="none" 
+        fill="none" marker-end="url(#arrowhead)"/>
+  <path d="M 1200 773.3333333333334 C 1200 946.6666666666667, 357.27272727272725 946.6666666666667, 357.27272727272725 1120" 
+        stroke="#cbd5e1" stroke-width="1" stroke-dasharray="none" 
+        fill="none" marker-end="url(#arrowhead)"/>
+  <path d="M 1200 773.3333333333334 C 1200 946.6666666666667, 919.0909090909091 946.6666666666667, 919.0909090909091 1120" 
+        stroke="#cbd5e1" stroke-width="1" stroke-dasharray="none" 
+        fill="none" marker-end="url(#arrowhead)"/>
+  <path d="M 1200 773.3333333333334 C 1200 946.6666666666667, 825.4545454545455 946.6666666666667, 825.4545454545455 1120" 
+        stroke="#cbd5e1" stroke-width="1" stroke-dasharray="none" 
+        fill="none" marker-end="url(#arrowhead)"/>
+  <path d="M 1200 773.3333333333334 C 1200 946.6666666666667, 2136.3636363636365 946.6666666666667, 2136.3636363636365 1120" 
+        stroke="#cbd5e1" stroke-width="1" stroke-dasharray="none" 
+        fill="none" marker-end="url(#arrowhead)"/>
+  <path d="M 1200 773.3333333333334 C 1200 946.6666666666667, 1761.818181818182 946.6666666666667, 1761.818181818182 1120" 
+        stroke="#cbd5e1" stroke-width="1" stroke-dasharray="none" 
+        fill="none" marker-end="url(#arrowhead)"/>
+  <path d="M 1200 773.3333333333334 C 1200 946.6666666666667, 1106.3636363636365 946.6666666666667, 1106.3636363636365 1120" 
+        stroke="#cbd5e1" stroke-width="1" stroke-dasharray="none" 
+        fill="none" marker-end="url(#arrowhead)"/>
+  <path d="M 1200 773.3333333333334 C 1200 946.6666666666667, 544.5454545454545 946.6666666666667, 544.5454545454545 1120" 
+        stroke="#cbd5e1" stroke-width="1" stroke-dasharray="none" 
+        fill="none" marker-end="url(#arrowhead)"/>
+  <path d="M 1200 773.3333333333334 C 1200 946.6666666666667, 2042.7272727272727 946.6666666666667, 2042.7272727272727 1120" 
+        stroke="#cbd5e1" stroke-width="1" stroke-dasharray="none" 
+        fill="none" marker-end="url(#arrowhead)"/>
+  <path d="M 1200 773.3333333333334 C 1200 946.6666666666667, 263.6363636363636 946.6666666666667, 263.6363636363636 1120" 
+        stroke="#cbd5e1" stroke-width="1" stroke-dasharray="none" 
+        fill="none" marker-end="url(#arrowhead)"/>
+  <path d="M 1200 773.3333333333334 C 1200 946.6666666666667, 2230 946.6666666666667, 2230 1120" 
+        stroke="#cbd5e1" stroke-width="1" stroke-dasharray="none" 
+        fill="none" marker-end="url(#arrowhead)"/>
+  <path d="M 1200 773.3333333333334 C 1200 946.6666666666667, 638.1818181818182 946.6666666666667, 638.1818181818182 1120" 
+        stroke="#cbd5e1" stroke-width="1" stroke-dasharray="none" 
+        fill="none" marker-end="url(#arrowhead)"/>
+  <path d="M 1200 773.3333333333334 C 1200 946.6666666666667, 1293.6363636363637 946.6666666666667, 1293.6363636363637 1120" 
+        stroke="#cbd5e1" stroke-width="1" stroke-dasharray="none" 
+        fill="none" marker-end="url(#arrowhead)"/>
+  <path d="M 1200 773.3333333333334 C 1200 946.6666666666667, 1387.2727272727273 946.6666666666667, 1387.2727272727273 1120" 
+        stroke="#cbd5e1" stroke-width="1" stroke-dasharray="none" 
+        fill="none" marker-end="url(#arrowhead)"/>
+  <path d="M 1200 773.3333333333334 C 1200 946.6666666666667, 1668.1818181818182 946.6666666666667, 1668.1818181818182 1120" 
+        stroke="#cbd5e1" stroke-width="1" stroke-dasharray="none" 
+        fill="none" marker-end="url(#arrowhead)"/>
+  <path d="M 1200 773.3333333333334 C 1200 946.6666666666667, 450.90909090909093 946.6666666666667, 450.90909090909093 1120" 
+        stroke="#cbd5e1" stroke-width="1" stroke-dasharray="none" 
+        fill="none" marker-end="url(#arrowhead)"/>
+  <path d="M 1200 773.3333333333334 C 1200 946.6666666666667, 1949.0909090909092 946.6666666666667, 1949.0909090909092 1120" 
+        stroke="#cbd5e1" stroke-width="1" stroke-dasharray="none" 
+        fill="none" marker-end="url(#arrowhead)"/>
+  <path d="M 1200 773.3333333333334 C 1200 946.6666666666667, 1855.4545454545455 946.6666666666667, 1855.4545454545455 1120" 
+        stroke="#cbd5e1" stroke-width="1" stroke-dasharray="none" 
+        fill="none" marker-end="url(#arrowhead)"/>
+  <path d="M 1200 773.3333333333334 C 1200 946.6666666666667, 1012.7272727272727 946.6666666666667, 1012.7272727272727 1120" 
+        stroke="#cbd5e1" stroke-width="1" stroke-dasharray="none" 
+        fill="none" marker-end="url(#arrowhead)"/>
+  <path d="M 1200 773.3333333333334 C 1200 946.6666666666667, 1574.5454545454545 946.6666666666667, 1574.5454545454545 1120" 
+        stroke="#cbd5e1" stroke-width="1" stroke-dasharray="none" 
+        fill="none" marker-end="url(#arrowhead)"/>
+  <path d="M 1200 773.3333333333334 C 1200 946.6666666666667, 170 946.6666666666667, 170 1120" 
+        stroke="#cbd5e1" stroke-width="1" stroke-dasharray="none" 
+        fill="none" marker-end="url(#arrowhead)"/>
+  <path d="M 1200 773.3333333333334 C 1200 946.6666666666667, 731.8181818181819 946.6666666666667, 731.8181818181819 1120" 
+        stroke="#cbd5e1" stroke-width="1" stroke-dasharray="none" 
+        fill="none" marker-end="url(#arrowhead)"/>
+  <path d="M 390 80 C 390 253.33333333333334, 2230 253.33333333333334, 2230 426.6666666666667" 
+        stroke="#cbd5e1" stroke-width="1" stroke-dasharray="none" 
+        fill="none" marker-end="url(#arrowhead)"/>
+  <path d="M 390 80 C 390 253.33333333333334, 1279.230769230769 253.33333333333334, 1279.230769230769 426.6666666666667" 
+        stroke="#cbd5e1" stroke-width="1" stroke-dasharray="none" 
+        fill="none" marker-end="url(#arrowhead)"/>
+  <path d="M 390 80 C 390 253.33333333333334, 1120.7692307692307 253.33333333333334, 1120.7692307692307 426.6666666666667" 
+        stroke="#cbd5e1" stroke-width="1" stroke-dasharray="none" 
+        fill="none" marker-end="url(#arrowhead)"/>
+  <path d="M 1120.7692307692307 426.6666666666667 C 1120.7692307692307 600, 1380 600, 1380 773.3333333333334" 
+        stroke="#cbd5e1" stroke-width="1" stroke-dasharray="none" 
+        fill="none" marker-end="url(#arrowhead)"/>
+  <path d="M 1830 80 C 1830 253.33333333333334, 962.3076923076923 253.33333333333334, 962.3076923076923 426.6666666666667" 
+        stroke="#cbd5e1" stroke-width="1" stroke-dasharray="none" 
+        fill="none" marker-end="url(#arrowhead)"/>
+  <path d="M 1830 80 C 1830 253.33333333333334, 2071.5384615384614 253.33333333333334, 2071.5384615384614 426.6666666666667" 
+        stroke="#cbd5e1" stroke-width="1" stroke-dasharray="none" 
+        fill="none" marker-end="url(#arrowhead)"/>
+  <path d="M 1830 80 C 1830 253.33333333333334, 170 253.33333333333334, 170 426.6666666666667" 
+        stroke="#cbd5e1" stroke-width="1" stroke-dasharray="none" 
+        fill="none" marker-end="url(#arrowhead)"/>
+  <path d="M 962.3076923076923 426.6666666666667 C 962.3076923076923 600, 1020 600, 1020 773.3333333333334" 
+        stroke="#cbd5e1" stroke-width="1" stroke-dasharray="none" 
+        fill="none" marker-end="url(#arrowhead)"/>
+  <path d="M 930 80 C 930 253.33333333333334, 645.3846153846154 253.33333333333334, 645.3846153846154 426.6666666666667" 
+        stroke="#cbd5e1" stroke-width="1" stroke-dasharray="none" 
+        fill="none" marker-end="url(#arrowhead)"/>
+  <path d="M 930 80 C 930 253.33333333333334, 1437.6923076923076 253.33333333333334, 1437.6923076923076 426.6666666666667" 
+        stroke="#cbd5e1" stroke-width="1" stroke-dasharray="none" 
+        fill="none" marker-end="url(#arrowhead)"/>
+  <path d="M 1470 80 C 1470 253.33333333333334, 328.46153846153845 253.33333333333334, 328.46153846153845 426.6666666666667" 
+        stroke="#cbd5e1" stroke-width="1" stroke-dasharray="none" 
+        fill="none" marker-end="url(#arrowhead)"/>
+  <path d="M 1650 80 C 1650 253.33333333333334, 803.8461538461538 253.33333333333334, 803.8461538461538 426.6666666666667" 
+        stroke="#cbd5e1" stroke-width="1" stroke-dasharray="none" 
+        fill="none" marker-end="url(#arrowhead)"/>
+  <path d="M 570 80 C 570 253.33333333333334, 1754.6153846153845 253.33333333333334, 1754.6153846153845 426.6666666666667" 
+        stroke="#cbd5e1" stroke-width="1" stroke-dasharray="none" 
+        fill="none" marker-end="url(#arrowhead)"/>
+  <g transform="translate(1110, 80)">
     <rect x="-70" y="-27.5" width="140" height="55" rx="6" 
-          fill="#fffbeb" stroke="#f59e0b" stroke-width="1.5"/>
-    <text y="-8" text-anchor="middle" font-family="system-ui" font-size="12" font-weight="600" fill="#1e293b">AGENTS</text>
-    <text y="14" text-anchor="middle" font-family="monospace" font-size="10" fill="#f59e0b">doc</text>
+          fill="#f8fafc" stroke="#64748b" stroke-width="1.5"/>
+    <text y="-8" text-anchor="middle" font-family="system-ui" font-size="12" font-weight="600" fill="#1e293b">docs</text>
+    <text y="14" text-anchor="middle" font-family="monospace" font-size="10" fill="#64748b">directory</text>
   </g>
-  <g transform="translate(889.5918367346939, 80)">
+  <g transform="translate(1596.1538461538462, 426.6666666666667)">
     <rect x="-70" y="-27.5" width="140" height="55" rx="6" 
-          fill="#fffbeb" stroke="#f59e0b" stroke-width="1.5"/>
-    <text y="-8" text-anchor="middle" font-family="system-ui" font-size="12" font-weight="600" fill="#1e293b">README</text>
-    <text y="14" text-anchor="middle" font-family="monospace" font-size="10" fill="#f59e0b">doc</text>
+          fill="#f8fafc" stroke="#64748b" stroke-width="1.5"/>
+    <text y="-8" text-anchor="middle" font-family="system-ui" font-size="12" font-weight="600" fill="#1e293b">flamegraphs</text>
+    <text y="14" text-anchor="middle" font-family="monospace" font-size="10" fill="#64748b">directory</text>
   </g>
-  <g transform="translate(749.1836734693877, 80)">
+  <g transform="translate(1913.0769230769229, 426.6666666666667)">
     <rect x="-70" y="-27.5" width="140" height="55" rx="6" 
-          fill="#fffbeb" stroke="#f59e0b" stroke-width="1.5"/>
-    <text y="-8" text-anchor="middle" font-family="system-ui" font-size="12" font-weight="600" fill="#1e293b">article</text>
-    <text y="14" text-anchor="middle" font-family="monospace" font-size="10" fill="#f59e0b">doc</text>
+          fill="#f8fafc" stroke="#64748b" stroke-width="1.5"/>
+    <text y="-8" text-anchor="middle" font-family="system-ui" font-size="12" font-weight="600" fill="#1e293b">perf</text>
+    <text y="14" text-anchor="middle" font-family="monospace" font-size="10" fill="#64748b">directory</text>
   </g>
-  <g transform="translate(187.55102040816325, 80)">
+  <g transform="translate(1200, 773.3333333333334)">
     <rect x="-70" y="-27.5" width="140" height="55" rx="6" 
-          fill="#fffbeb" stroke="#f59e0b" stroke-width="1.5"/>
-    <text y="-8" text-anchor="middle" font-family="system-ui" font-size="12" font-weight="600" fill="#1e293b">auth-middleware</text>
-    <text y="14" text-anchor="middle" font-family="monospace" font-size="10" fill="#f59e0b">doc</text>
+          fill="#f8fafc" stroke="#64748b" stroke-width="1.5"/>
+    <text y="-8" text-anchor="middle" font-family="system-ui" font-size="12" font-weight="600" fill="#1e293b">c8g.12xlarge</text>
+    <text y="14" text-anchor="middle" font-family="monospace" font-size="10" fill="#64748b">directory</text>
   </g>
-  <g transform="translate(1030, 80)">
+  <g transform="translate(1480.909090909091, 1120)">
     <rect x="-70" y="-27.5" width="140" height="55" rx="6" 
-          fill="#fffbeb" stroke="#f59e0b" stroke-width="1.5"/>
-    <text y="-8" text-anchor="middle" font-family="system-ui" font-size="12" font-weight="600" fill="#1e293b">benchmarking-aws</text>
-    <text y="14" text-anchor="middle" font-family="monospace" font-size="10" fill="#f59e0b">doc</text>
+          fill="#f8fafc" stroke="#64748b" stroke-width="1.5"/>
+    <text y="-8" text-anchor="middle" font-family="system-ui" font-size="12" font-weight="600" fill="#1e293b">2026-03-18T14-33-42Z</text>
+    <text y="14" text-anchor="middle" font-family="monospace" font-size="10" fill="#64748b">directory</text>
   </g>
-  <g transform="translate(222.6530612244898, 80)">
+  <g transform="translate(1200, 1120)">
     <rect x="-70" y="-27.5" width="140" height="55" rx="6" 
-          fill="#fffbeb" stroke="#f59e0b" stroke-width="1.5"/>
-    <text y="-8" text-anchor="middle" font-family="system-ui" font-size="12" font-weight="600" fill="#1e293b">connection-safety</text>
-    <text y="14" text-anchor="middle" font-family="monospace" font-size="10" fill="#f59e0b">doc</text>
+          fill="#f8fafc" stroke="#64748b" stroke-width="1.5"/>
+    <text y="-8" text-anchor="middle" font-family="system-ui" font-size="12" font-weight="600" fill="#1e293b">2026-03-18T18-50-57Z</text>
+    <text y="14" text-anchor="middle" font-family="monospace" font-size="10" fill="#64748b">directory</text>
   </g>
-  <g transform="translate(678.9795918367347, 80)">
+  <g transform="translate(357.27272727272725, 1120)">
     <rect x="-70" y="-27.5" width="140" height="55" rx="6" 
-          fill="#fffbeb" stroke="#f59e0b" stroke-width="1.5"/>
-    <text y="-8" text-anchor="middle" font-family="system-ui" font-size="12" font-weight="600" fill="#1e293b">docker-performance</text>
-    <text y="14" text-anchor="middle" font-family="monospace" font-size="10" fill="#f59e0b">doc</text>
+          fill="#f8fafc" stroke="#64748b" stroke-width="1.5"/>
+    <text y="-8" text-anchor="middle" font-family="system-ui" font-size="12" font-weight="600" fill="#1e293b">2026-03-18T19-32-58Z</text>
+    <text y="14" text-anchor="middle" font-family="monospace" font-size="10" fill="#64748b">directory</text>
   </g>
-  <g transform="translate(924.6938775510204, 80)">
+  <g transform="translate(919.0909090909091, 1120)">
     <rect x="-70" y="-27.5" width="140" height="55" rx="6" 
-          fill="#fffbeb" stroke="#f59e0b" stroke-width="1.5"/>
-    <text y="-8" text-anchor="middle" font-family="system-ui" font-size="12" font-weight="600" fill="#1e293b">explicit-extractors</text>
-    <text y="14" text-anchor="middle" font-family="monospace" font-size="10" fill="#f59e0b">doc</text>
+          fill="#f8fafc" stroke="#64748b" stroke-width="1.5"/>
+    <text y="-8" text-anchor="middle" font-family="system-ui" font-size="12" font-weight="600" fill="#1e293b">2026-03-18T19-42-50Z</text>
+    <text y="14" text-anchor="middle" font-family="monospace" font-size="10" fill="#64748b">directory</text>
   </g>
-  <g transform="translate(994.8979591836734, 80)">
+  <g transform="translate(825.4545454545455, 1120)">
     <rect x="-70" y="-27.5" width="140" height="55" rx="6" 
-          fill="#fffbeb" stroke="#f59e0b" stroke-width="1.5"/>
-    <text y="-8" text-anchor="middle" font-family="system-ui" font-size="12" font-weight="600" fill="#1e293b">h2-abstraction-summary</text>
-    <text y="14" text-anchor="middle" font-family="monospace" font-size="10" fill="#f59e0b">doc</text>
+          fill="#f8fafc" stroke="#64748b" stroke-width="1.5"/>
+    <text y="-8" text-anchor="middle" font-family="system-ui" font-size="12" font-weight="600" fill="#1e293b">2026-03-18T19-50-13Z</text>
+    <text y="14" text-anchor="middle" font-family="monospace" font-size="10" fill="#64748b">directory</text>
   </g>
-  <g transform="translate(556.1224489795918, 80)">
+  <g transform="translate(2136.3636363636365, 1120)">
     <rect x="-70" y="-27.5" width="140" height="55" rx="6" 
-          fill="#fffbeb" stroke="#f59e0b" stroke-width="1.5"/>
-    <text y="-8" text-anchor="middle" font-family="system-ui" font-size="12" font-weight="600" fill="#1e293b">h2-design</text>
-    <text y="14" text-anchor="middle" font-family="monospace" font-size="10" fill="#f59e0b">doc</text>
+          fill="#f8fafc" stroke="#64748b" stroke-width="1.5"/>
+    <text y="-8" text-anchor="middle" font-family="system-ui" font-size="12" font-weight="600" fill="#1e293b">2026-03-18T20-46-59Z</text>
+    <text y="14" text-anchor="middle" font-family="monospace" font-size="10" fill="#64748b">directory</text>
   </g>
-  <g transform="translate(521.0204081632653, 80)">
+  <g transform="translate(1761.818181818182, 1120)">
     <rect x="-70" y="-27.5" width="140" height="55" rx="6" 
-          fill="#fffbeb" stroke="#f59e0b" stroke-width="1.5"/>
-    <text y="-8" text-anchor="middle" font-family="system-ui" font-size="12" font-weight="600" fill="#1e293b">linux-perf</text>
-    <text y="14" text-anchor="middle" font-family="monospace" font-size="10" fill="#f59e0b">doc</text>
+          fill="#f8fafc" stroke="#64748b" stroke-width="1.5"/>
+    <text y="-8" text-anchor="middle" font-family="system-ui" font-size="12" font-weight="600" fill="#1e293b">2026-03-18T20-50-32Z</text>
+    <text y="14" text-anchor="middle" font-family="monospace" font-size="10" fill="#64748b">directory</text>
   </g>
-  <g transform="translate(872.0408163265306, 80)">
+  <g transform="translate(1106.3636363636365, 1120)">
     <rect x="-70" y="-27.5" width="140" height="55" rx="6" 
-          fill="#fffbeb" stroke="#f59e0b" stroke-width="1.5"/>
-    <text y="-8" text-anchor="middle" font-family="system-ui" font-size="12" font-weight="600" fill="#1e293b">middleware</text>
-    <text y="14" text-anchor="middle" font-family="monospace" font-size="10" fill="#f59e0b">doc</text>
+          fill="#f8fafc" stroke="#64748b" stroke-width="1.5"/>
+    <text y="-8" text-anchor="middle" font-family="system-ui" font-size="12" font-weight="600" fill="#1e293b">2026-03-18T21-02-27Z</text>
+    <text y="14" text-anchor="middle" font-family="monospace" font-size="10" fill="#64748b">directory</text>
   </g>
-  <g transform="translate(398.1632653061224, 80)">
+  <g transform="translate(544.5454545454545, 1120)">
     <rect x="-70" y="-27.5" width="140" height="55" rx="6" 
-          fill="#fffbeb" stroke="#f59e0b" stroke-width="1.5"/>
-    <text y="-8" text-anchor="middle" font-family="system-ui" font-size="12" font-weight="600" fill="#1e293b">mimalloc</text>
-    <text y="14" text-anchor="middle" font-family="monospace" font-size="10" fill="#f59e0b">doc</text>
+          fill="#f8fafc" stroke="#64748b" stroke-width="1.5"/>
+    <text y="-8" text-anchor="middle" font-family="system-ui" font-size="12" font-weight="600" fill="#1e293b">2026-03-18T21-09-40Z</text>
+    <text y="14" text-anchor="middle" font-family="monospace" font-size="10" fill="#64748b">directory</text>
   </g>
-  <g transform="translate(170, 80)">
+  <g transform="translate(2042.7272727272727, 1120)">
     <rect x="-70" y="-27.5" width="140" height="55" rx="6" 
-          fill="#fffbeb" stroke="#f59e0b" stroke-width="1.5"/>
-    <text y="-8" text-anchor="middle" font-family="system-ui" font-size="12" font-weight="600" fill="#1e293b">opus-review</text>
-    <text y="14" text-anchor="middle" font-family="monospace" font-size="10" fill="#f59e0b">doc</text>
+          fill="#f8fafc" stroke="#64748b" stroke-width="1.5"/>
+    <text y="-8" text-anchor="middle" font-family="system-ui" font-size="12" font-weight="600" fill="#1e293b">2026-03-18T21-54-55Z</text>
+    <text y="14" text-anchor="middle" font-family="monospace" font-size="10" fill="#64748b">directory</text>
   </g>
-  <g transform="translate(836.9387755102041, 80)">
+  <g transform="translate(263.6363636363636, 1120)">
     <rect x="-70" y="-27.5" width="140" height="55" rx="6" 
-          fill="#fffbeb" stroke="#f59e0b" stroke-width="1.5"/>
-    <text y="-8" text-anchor="middle" font-family="system-ui" font-size="12" font-weight="600" fill="#1e293b">summary</text>
-    <text y="14" text-anchor="middle" font-family="monospace" font-size="10" fill="#f59e0b">doc</text>
+          fill="#f8fafc" stroke="#64748b" stroke-width="1.5"/>
+    <text y="-8" text-anchor="middle" font-family="system-ui" font-size="12" font-weight="600" fill="#1e293b">2026-03-18T21-57-18Z</text>
+    <text y="14" text-anchor="middle" font-family="monospace" font-size="10" fill="#64748b">directory</text>
   </g>
-  <g transform="translate(591.2244897959183, 80)">
+  <g transform="translate(2230, 1120)">
     <rect x="-70" y="-27.5" width="140" height="55" rx="6" 
-          fill="#fffbeb" stroke="#f59e0b" stroke-width="1.5"/>
-    <text y="-8" text-anchor="middle" font-family="system-ui" font-size="12" font-weight="600" fill="#1e293b">summary</text>
-    <text y="14" text-anchor="middle" font-family="monospace" font-size="10" fill="#f59e0b">doc</text>
+          fill="#f8fafc" stroke="#64748b" stroke-width="1.5"/>
+    <text y="-8" text-anchor="middle" font-family="system-ui" font-size="12" font-weight="600" fill="#1e293b">2026-03-19T07-36-23Z</text>
+    <text y="14" text-anchor="middle" font-family="monospace" font-size="10" fill="#64748b">directory</text>
   </g>
-  <g transform="translate(205.10204081632654, 80)">
+  <g transform="translate(638.1818181818182, 1120)">
     <rect x="-70" y="-27.5" width="140" height="55" rx="6" 
-          fill="#fffbeb" stroke="#f59e0b" stroke-width="1.5"/>
-    <text y="-8" text-anchor="middle" font-family="system-ui" font-size="12" font-weight="600" fill="#1e293b">summary</text>
-    <text y="14" text-anchor="middle" font-family="monospace" font-size="10" fill="#f59e0b">doc</text>
+          fill="#f8fafc" stroke="#64748b" stroke-width="1.5"/>
+    <text y="-8" text-anchor="middle" font-family="system-ui" font-size="12" font-weight="600" fill="#1e293b">2026-03-19T07-36-57Z</text>
+    <text y="14" text-anchor="middle" font-family="monospace" font-size="10" fill="#64748b">directory</text>
   </g>
-  <g transform="translate(942.2448979591836, 80)">
+  <g transform="translate(1293.6363636363637, 1120)">
     <rect x="-70" y="-27.5" width="140" height="55" rx="6" 
-          fill="#fffbeb" stroke="#f59e0b" stroke-width="1.5"/>
-    <text y="-8" text-anchor="middle" font-family="system-ui" font-size="12" font-weight="600" fill="#1e293b">summary</text>
-    <text y="14" text-anchor="middle" font-family="monospace" font-size="10" fill="#f59e0b">doc</text>
+          fill="#f8fafc" stroke="#64748b" stroke-width="1.5"/>
+    <text y="-8" text-anchor="middle" font-family="system-ui" font-size="12" font-weight="600" fill="#1e293b">2026-03-19T13-34-49Z</text>
+    <text y="14" text-anchor="middle" font-family="monospace" font-size="10" fill="#64748b">directory</text>
   </g>
-  <g transform="translate(538.5714285714286, 80)">
+  <g transform="translate(1387.2727272727273, 1120)">
     <rect x="-70" y="-27.5" width="140" height="55" rx="6" 
-          fill="#fffbeb" stroke="#f59e0b" stroke-width="1.5"/>
-    <text y="-8" text-anchor="middle" font-family="system-ui" font-size="12" font-weight="600" fill="#1e293b">summary</text>
-    <text y="14" text-anchor="middle" font-family="monospace" font-size="10" fill="#f59e0b">doc</text>
+          fill="#f8fafc" stroke="#64748b" stroke-width="1.5"/>
+    <text y="-8" text-anchor="middle" font-family="system-ui" font-size="12" font-weight="600" fill="#1e293b">2026-03-19T15-15-02Z</text>
+    <text y="14" text-anchor="middle" font-family="monospace" font-size="10" fill="#64748b">directory</text>
   </g>
-  <g transform="translate(784.2857142857142, 80)">
+  <g transform="translate(1668.1818181818182, 1120)">
     <rect x="-70" y="-27.5" width="140" height="55" rx="6" 
-          fill="#fffbeb" stroke="#f59e0b" stroke-width="1.5"/>
-    <text y="-8" text-anchor="middle" font-family="system-ui" font-size="12" font-weight="600" fill="#1e293b">summary</text>
-    <text y="14" text-anchor="middle" font-family="monospace" font-size="10" fill="#f59e0b">doc</text>
+          fill="#f8fafc" stroke="#64748b" stroke-width="1.5"/>
+    <text y="-8" text-anchor="middle" font-family="system-ui" font-size="12" font-weight="600" fill="#1e293b">2026-03-21T12-34-56Z</text>
+    <text y="14" text-anchor="middle" font-family="monospace" font-size="10" fill="#64748b">directory</text>
   </g>
-  <g transform="translate(819.3877551020407, 80)">
+  <g transform="translate(450.90909090909093, 1120)">
     <rect x="-70" y="-27.5" width="140" height="55" rx="6" 
-          fill="#fffbeb" stroke="#f59e0b" stroke-width="1.5"/>
-    <text y="-8" text-anchor="middle" font-family="system-ui" font-size="12" font-weight="600" fill="#1e293b">summary</text>
-    <text y="14" text-anchor="middle" font-family="monospace" font-size="10" fill="#f59e0b">doc</text>
+          fill="#f8fafc" stroke="#64748b" stroke-width="1.5"/>
+    <text y="-8" text-anchor="middle" font-family="system-ui" font-size="12" font-weight="600" fill="#1e293b">2026-03-21T14-14-04Z</text>
+    <text y="14" text-anchor="middle" font-family="monospace" font-size="10" fill="#64748b">directory</text>
   </g>
-  <g transform="translate(643.8775510204082, 80)">
+  <g transform="translate(1949.0909090909092, 1120)">
     <rect x="-70" y="-27.5" width="140" height="55" rx="6" 
-          fill="#fffbeb" stroke="#f59e0b" stroke-width="1.5"/>
-    <text y="-8" text-anchor="middle" font-family="system-ui" font-size="12" font-weight="600" fill="#1e293b">summary</text>
-    <text y="14" text-anchor="middle" font-family="monospace" font-size="10" fill="#f59e0b">doc</text>
+          fill="#f8fafc" stroke="#64748b" stroke-width="1.5"/>
+    <text y="-8" text-anchor="middle" font-family="system-ui" font-size="12" font-weight="600" fill="#1e293b">2026-03-21T14-45-07Z</text>
+    <text y="14" text-anchor="middle" font-family="monospace" font-size="10" fill="#64748b">directory</text>
   </g>
-  <g transform="translate(503.46938775510205, 80)">
+  <g transform="translate(1855.4545454545455, 1120)">
     <rect x="-70" y="-27.5" width="140" height="55" rx="6" 
-          fill="#fffbeb" stroke="#f59e0b" stroke-width="1.5"/>
-    <text y="-8" text-anchor="middle" font-family="system-ui" font-size="12" font-weight="600" fill="#1e293b">summary</text>
-    <text y="14" text-anchor="middle" font-family="monospace" font-size="10" fill="#f59e0b">doc</text>
+          fill="#f8fafc" stroke="#64748b" stroke-width="1.5"/>
+    <text y="-8" text-anchor="middle" font-family="system-ui" font-size="12" font-weight="600" fill="#1e293b">2026-03-24T11-05-17Z</text>
+    <text y="14" text-anchor="middle" font-family="monospace" font-size="10" fill="#64748b">directory</text>
   </g>
-  <g transform="translate(310.40816326530614, 80)">
+  <g transform="translate(1012.7272727272727, 1120)">
     <rect x="-70" y="-27.5" width="140" height="55" rx="6" 
-          fill="#fffbeb" stroke="#f59e0b" stroke-width="1.5"/>
-    <text y="-8" text-anchor="middle" font-family="system-ui" font-size="12" font-weight="600" fill="#1e293b">summary</text>
-    <text y="14" text-anchor="middle" font-family="monospace" font-size="10" fill="#f59e0b">doc</text>
+          fill="#f8fafc" stroke="#64748b" stroke-width="1.5"/>
+    <text y="-8" text-anchor="middle" font-family="system-ui" font-size="12" font-weight="600" fill="#1e293b">2026-03-24T11-18-08Z</text>
+    <text y="14" text-anchor="middle" font-family="monospace" font-size="10" fill="#64748b">directory</text>
   </g>
-  <g transform="translate(766.734693877551, 80)">
+  <g transform="translate(1574.5454545454545, 1120)">
     <rect x="-70" y="-27.5" width="140" height="55" rx="6" 
-          fill="#fffbeb" stroke="#f59e0b" stroke-width="1.5"/>
-    <text y="-8" text-anchor="middle" font-family="system-ui" font-size="12" font-weight="600" fill="#1e293b">summary</text>
-    <text y="14" text-anchor="middle" font-family="monospace" font-size="10" fill="#f59e0b">doc</text>
+          fill="#f8fafc" stroke="#64748b" stroke-width="1.5"/>
+    <text y="-8" text-anchor="middle" font-family="system-ui" font-size="12" font-weight="600" fill="#1e293b">2026-03-24T11-24-37Z</text>
+    <text y="14" text-anchor="middle" font-family="monospace" font-size="10" fill="#64748b">directory</text>
   </g>
-  <g transform="translate(1012.4489795918366, 80)">
+  <g transform="translate(170, 1120)">
     <rect x="-70" y="-27.5" width="140" height="55" rx="6" 
-          fill="#fffbeb" stroke="#f59e0b" stroke-width="1.5"/>
-    <text y="-8" text-anchor="middle" font-family="system-ui" font-size="12" font-weight="600" fill="#1e293b">summary</text>
-    <text y="14" text-anchor="middle" font-family="monospace" font-size="10" fill="#f59e0b">doc</text>
+          fill="#f8fafc" stroke="#64748b" stroke-width="1.5"/>
+    <text y="-8" text-anchor="middle" font-family="system-ui" font-size="12" font-weight="600" fill="#1e293b">2026-03-24T11-31-04Z</text>
+    <text y="14" text-anchor="middle" font-family="monospace" font-size="10" fill="#64748b">directory</text>
   </g>
-  <g transform="translate(801.8367346938775, 80)">
+  <g transform="translate(731.8181818181819, 1120)">
     <rect x="-70" y="-27.5" width="140" height="55" rx="6" 
-          fill="#fffbeb" stroke="#f59e0b" stroke-width="1.5"/>
-    <text y="-8" text-anchor="middle" font-family="system-ui" font-size="12" font-weight="600" fill="#1e293b">summary</text>
-    <text y="14" text-anchor="middle" font-family="monospace" font-size="10" fill="#f59e0b">doc</text>
+          fill="#f8fafc" stroke="#64748b" stroke-width="1.5"/>
+    <text y="-8" text-anchor="middle" font-family="system-ui" font-size="12" font-weight="600" fill="#1e293b">2026-03-24T13-34-22Z</text>
+    <text y="14" text-anchor="middle" font-family="monospace" font-size="10" fill="#64748b">directory</text>
   </g>
-  <g transform="translate(450.81632653061223, 80)">
+  <g transform="translate(486.9230769230769, 426.6666666666667)">
     <rect x="-70" y="-27.5" width="140" height="55" rx="6" 
-          fill="#fffbeb" stroke="#f59e0b" stroke-width="1.5"/>
-    <text y="-8" text-anchor="middle" font-family="system-ui" font-size="12" font-weight="600" fill="#1e293b">summary</text>
-    <text y="14" text-anchor="middle" font-family="monospace" font-size="10" fill="#f59e0b">doc</text>
+          fill="#f8fafc" stroke="#64748b" stroke-width="1.5"/>
+    <text y="-8" text-anchor="middle" font-family="system-ui" font-size="12" font-weight="600" fill="#1e293b">prds</text>
+    <text y="14" text-anchor="middle" font-family="monospace" font-size="10" fill="#64748b">directory</text>
   </g>
-  <g transform="translate(731.6326530612245, 80)">
+  <g transform="translate(2010, 80)">
     <rect x="-70" y="-27.5" width="140" height="55" rx="6" 
-          fill="#fffbeb" stroke="#f59e0b" stroke-width="1.5"/>
-    <text y="-8" text-anchor="middle" font-family="system-ui" font-size="12" font-weight="600" fill="#1e293b">summary</text>
-    <text y="14" text-anchor="middle" font-family="monospace" font-size="10" fill="#f59e0b">doc</text>
+          fill="#f8fafc" stroke="#64748b" stroke-width="1.5"/>
+    <text y="-8" text-anchor="middle" font-family="system-ui" font-size="12" font-weight="600" fill="#1e293b">flamegraphs</text>
+    <text y="14" text-anchor="middle" font-family="monospace" font-size="10" fill="#64748b">directory</text>
   </g>
-  <g transform="translate(415.71428571428567, 80)">
+  <g transform="translate(1290, 80)">
     <rect x="-70" y="-27.5" width="140" height="55" rx="6" 
-          fill="#fffbeb" stroke="#f59e0b" stroke-width="1.5"/>
-    <text y="-8" text-anchor="middle" font-family="system-ui" font-size="12" font-weight="600" fill="#1e293b">summary</text>
-    <text y="14" text-anchor="middle" font-family="monospace" font-size="10" fill="#f59e0b">doc</text>
+          fill="#f8fafc" stroke="#64748b" stroke-width="1.5"/>
+    <text y="-8" text-anchor="middle" font-family="system-ui" font-size="12" font-weight="600" fill="#1e293b">harrow</text>
+    <text y="14" text-anchor="middle" font-family="monospace" font-size="10" fill="#64748b">directory</text>
   </g>
-  <g transform="translate(345.51020408163265, 80)">
+  <g transform="translate(390, 80)">
     <rect x="-70" y="-27.5" width="140" height="55" rx="6" 
-          fill="#fffbeb" stroke="#f59e0b" stroke-width="1.5"/>
-    <text y="-8" text-anchor="middle" font-family="system-ui" font-size="12" font-weight="600" fill="#1e293b">performance</text>
-    <text y="14" text-anchor="middle" font-family="monospace" font-size="10" fill="#f59e0b">doc</text>
+          fill="#f8fafc" stroke="#64748b" stroke-width="1.5"/>
+    <text y="-8" text-anchor="middle" font-family="system-ui" font-size="12" font-weight="600" fill="#1e293b">harrow-bench</text>
+    <text y="14" text-anchor="middle" font-family="monospace" font-size="10" fill="#64748b">directory</text>
   </g>
-  <g transform="translate(907.1428571428571, 80)">
+  <g transform="translate(2230, 426.6666666666667)">
     <rect x="-70" y="-27.5" width="140" height="55" rx="6" 
-          fill="#fffbeb" stroke="#f59e0b" stroke-width="1.5"/>
-    <text y="-8" text-anchor="middle" font-family="system-ui" font-size="12" font-weight="600" fill="#1e293b">harrow-http-framework</text>
-    <text y="14" text-anchor="middle" font-family="monospace" font-size="10" fill="#f59e0b">doc</text>
+          fill="#f8fafc" stroke="#64748b" stroke-width="1.5"/>
+    <text y="-8" text-anchor="middle" font-family="system-ui" font-size="12" font-weight="600" fill="#1e293b">benches</text>
+    <text y="14" text-anchor="middle" font-family="monospace" font-size="10" fill="#64748b">directory</text>
   </g>
-  <g transform="translate(292.85714285714283, 80)">
+  <g transform="translate(1279.230769230769, 426.6666666666667)">
     <rect x="-70" y="-27.5" width="140" height="55" rx="6" 
-          fill="#fffbeb" stroke="#f59e0b" stroke-width="1.5"/>
-    <text y="-8" text-anchor="middle" font-family="system-ui" font-size="12" font-weight="600" fill="#1e293b">profiling-rust-on-l...</text>
-    <text y="14" text-anchor="middle" font-family="monospace" font-size="10" fill="#f59e0b">doc</text>
+          fill="#f8fafc" stroke="#64748b" stroke-width="1.5"/>
+    <text y="-8" text-anchor="middle" font-family="system-ui" font-size="12" font-weight="600" fill="#1e293b">spinr</text>
+    <text y="14" text-anchor="middle" font-family="monospace" font-size="10" fill="#64748b">directory</text>
   </g>
-  <g transform="translate(977.3469387755101, 80)">
+  <g transform="translate(1120.7692307692307, 426.6666666666667)">
     <rect x="-70" y="-27.5" width="140" height="55" rx="6" 
-          fill="#fffbeb" stroke="#f59e0b" stroke-width="1.5"/>
-    <text y="-8" text-anchor="middle" font-family="system-ui" font-size="12" font-weight="600" fill="#1e293b">rate-limiting-middl...</text>
-    <text y="14" text-anchor="middle" font-family="monospace" font-size="10" fill="#f59e0b">doc</text>
+          fill="#f8fafc" stroke="#64748b" stroke-width="1.5"/>
+    <text y="-8" text-anchor="middle" font-family="system-ui" font-size="12" font-weight="600" fill="#1e293b">src</text>
+    <text y="14" text-anchor="middle" font-family="monospace" font-size="10" fill="#64748b">directory</text>
   </g>
-  <g transform="translate(240.20408163265307, 80)">
+  <g transform="translate(1380, 773.3333333333334)">
     <rect x="-70" y="-27.5" width="140" height="55" rx="6" 
-          fill="#fffbeb" stroke="#f59e0b" stroke-width="1.5"/>
-    <text y="-8" text-anchor="middle" font-family="system-ui" font-size="12" font-weight="600" fill="#1e293b">strategy-io-uring</text>
-    <text y="14" text-anchor="middle" font-family="monospace" font-size="10" fill="#f59e0b">doc</text>
+          fill="#f8fafc" stroke="#64748b" stroke-width="1.5"/>
+    <text y="-8" text-anchor="middle" font-family="system-ui" font-size="12" font-weight="600" fill="#1e293b">bin</text>
+    <text y="14" text-anchor="middle" font-family="monospace" font-size="10" fill="#64748b">directory</text>
   </g>
-  <g transform="translate(854.4897959183673, 80)">
+  <g transform="translate(1830, 80)">
     <rect x="-70" y="-27.5" width="140" height="55" rx="6" 
-          fill="#fffbeb" stroke="#f59e0b" stroke-width="1.5"/>
-    <text y="-8" text-anchor="middle" font-family="system-ui" font-size="12" font-weight="600" fill="#1e293b">strategy-tpc</text>
-    <text y="14" text-anchor="middle" font-family="monospace" font-size="10" fill="#f59e0b">doc</text>
+          fill="#f8fafc" stroke="#64748b" stroke-width="1.5"/>
+    <text y="-8" text-anchor="middle" font-family="system-ui" font-size="12" font-weight="600" fill="#1e293b">harrow-core</text>
+    <text y="14" text-anchor="middle" font-family="monospace" font-size="10" fill="#64748b">directory</text>
   </g>
-  <g transform="translate(696.530612244898, 80)">
+  <g transform="translate(962.3076923076923, 426.6666666666667)">
     <rect x="-70" y="-27.5" width="140" height="55" rx="6" 
-          fill="#fffbeb" stroke="#f59e0b" stroke-width="1.5"/>
-    <text y="-8" text-anchor="middle" font-family="system-ui" font-size="12" font-weight="600" fill="#1e293b">verification</text>
-    <text y="14" text-anchor="middle" font-family="monospace" font-size="10" fill="#f59e0b">doc</text>
+          fill="#f8fafc" stroke="#64748b" stroke-width="1.5"/>
+    <text y="-8" text-anchor="middle" font-family="system-ui" font-size="12" font-weight="600" fill="#1e293b">fuzz</text>
+    <text y="14" text-anchor="middle" font-family="monospace" font-size="10" fill="#64748b">directory</text>
   </g>
-  <g transform="translate(485.91836734693874, 80)">
+  <g transform="translate(1020, 773.3333333333334)">
     <rect x="-70" y="-27.5" width="140" height="55" rx="6" 
-          fill="#fffbeb" stroke="#f59e0b" stroke-width="1.5"/>
-    <text y="-8" text-anchor="middle" font-family="system-ui" font-size="12" font-weight="600" fill="#1e293b">README</text>
-    <text y="14" text-anchor="middle" font-family="monospace" font-size="10" fill="#f59e0b">doc</text>
+          fill="#f8fafc" stroke="#64748b" stroke-width="1.5"/>
+    <text y="-8" text-anchor="middle" font-family="system-ui" font-size="12" font-weight="600" fill="#1e293b">fuzz_targets</text>
+    <text y="14" text-anchor="middle" font-family="monospace" font-size="10" fill="#64748b">directory</text>
   </g>
-  <g transform="translate(661.4285714285713, 80)">
+  <g transform="translate(2071.5384615384614, 426.6666666666667)">
     <rect x="-70" y="-27.5" width="140" height="55" rx="6" 
-          fill="#fffbeb" stroke="#f59e0b" stroke-width="1.5"/>
-    <text y="-8" text-anchor="middle" font-family="system-ui" font-size="12" font-weight="600" fill="#1e293b">COLIMA</text>
-    <text y="14" text-anchor="middle" font-family="monospace" font-size="10" fill="#f59e0b">doc</text>
+          fill="#f8fafc" stroke="#64748b" stroke-width="1.5"/>
+    <text y="-8" text-anchor="middle" font-family="system-ui" font-size="12" font-weight="600" fill="#1e293b">proptest-regressions</text>
+    <text y="14" text-anchor="middle" font-family="monospace" font-size="10" fill="#64748b">directory</text>
   </g>
-  <g transform="translate(257.7551020408163, 80)">
+  <g transform="translate(170, 426.6666666666667)">
     <rect x="-70" y="-27.5" width="140" height="55" rx="6" 
-          fill="#fffbeb" stroke="#f59e0b" stroke-width="1.5"/>
-    <text y="-8" text-anchor="middle" font-family="system-ui" font-size="12" font-weight="600" fill="#1e293b">QUICKSTART</text>
-    <text y="14" text-anchor="middle" font-family="monospace" font-size="10" fill="#f59e0b">doc</text>
+          fill="#f8fafc" stroke="#64748b" stroke-width="1.5"/>
+    <text y="-8" text-anchor="middle" font-family="system-ui" font-size="12" font-weight="600" fill="#1e293b">src</text>
+    <text y="14" text-anchor="middle" font-family="monospace" font-size="10" fill="#64748b">directory</text>
   </g>
-  <g transform="translate(573.6734693877551, 80)">
+  <g transform="translate(930, 80)">
     <rect x="-70" y="-27.5" width="140" height="55" rx="6" 
-          fill="#fffbeb" stroke="#f59e0b" stroke-width="1.5"/>
-    <text y="-8" text-anchor="middle" font-family="system-ui" font-size="12" font-weight="600" fill="#1e293b">README</text>
-    <text y="14" text-anchor="middle" font-family="monospace" font-size="10" fill="#f59e0b">doc</text>
+          fill="#f8fafc" stroke="#64748b" stroke-width="1.5"/>
+    <text y="-8" text-anchor="middle" font-family="system-ui" font-size="12" font-weight="600" fill="#1e293b">harrow-middleware</text>
+    <text y="14" text-anchor="middle" font-family="monospace" font-size="10" fill="#64748b">directory</text>
   </g>
-  <g transform="translate(275.3061224489796, 80)">
+  <g transform="translate(645.3846153846154, 426.6666666666667)">
     <rect x="-70" y="-27.5" width="140" height="55" rx="6" 
-          fill="#f1f5f9" stroke="#94a3b8" stroke-width="1.5"/>
-    <text y="-8" text-anchor="middle" font-family="system-ui" font-size="12" font-weight="600" fill="#1e293b">aws_iam_instance_pr...</text>
-    <text y="14" text-anchor="middle" font-family="monospace" font-size="10" fill="#94a3b8">symbol</text>
+          fill="#f8fafc" stroke="#64748b" stroke-width="1.5"/>
+    <text y="-8" text-anchor="middle" font-family="system-ui" font-size="12" font-weight="600" fill="#1e293b">proptest-regressions</text>
+    <text y="14" text-anchor="middle" font-family="monospace" font-size="10" fill="#64748b">directory</text>
   </g>
-  <g transform="translate(608.7755102040817, 80)">
+  <g transform="translate(1437.6923076923076, 426.6666666666667)">
     <rect x="-70" y="-27.5" width="140" height="55" rx="6" 
-          fill="#f1f5f9" stroke="#94a3b8" stroke-width="1.5"/>
-    <text y="-8" text-anchor="middle" font-family="system-ui" font-size="12" font-weight="600" fill="#1e293b">aws_iam_role.bench</text>
-    <text y="14" text-anchor="middle" font-family="monospace" font-size="10" fill="#94a3b8">symbol</text>
+          fill="#f8fafc" stroke="#64748b" stroke-width="1.5"/>
+    <text y="-8" text-anchor="middle" font-family="system-ui" font-size="12" font-weight="600" fill="#1e293b">src</text>
+    <text y="14" text-anchor="middle" font-family="monospace" font-size="10" fill="#64748b">directory</text>
   </g>
-  <g transform="translate(714.0816326530612, 80)">
+  <g transform="translate(1470, 80)">
     <rect x="-70" y="-27.5" width="140" height="55" rx="6" 
-          fill="#f1f5f9" stroke="#94a3b8" stroke-width="1.5"/>
-    <text y="-8" text-anchor="middle" font-family="system-ui" font-size="12" font-weight="600" fill="#1e293b">aws_iam_role_policy...</text>
-    <text y="14" text-anchor="middle" font-family="monospace" font-size="10" fill="#94a3b8">symbol</text>
+          fill="#f8fafc" stroke="#64748b" stroke-width="1.5"/>
+    <text y="-8" text-anchor="middle" font-family="system-ui" font-size="12" font-weight="600" fill="#1e293b">harrow-o11y</text>
+    <text y="14" text-anchor="middle" font-family="monospace" font-size="10" fill="#64748b">directory</text>
   </g>
-  <g transform="translate(327.9591836734694, 80)">
+  <g transform="translate(328.46153846153845, 426.6666666666667)">
     <rect x="-70" y="-27.5" width="140" height="55" rx="6" 
-          fill="#f1f5f9" stroke="#94a3b8" stroke-width="1.5"/>
-    <text y="-8" text-anchor="middle" font-family="system-ui" font-size="12" font-weight="600" fill="#1e293b">aws_placement_group...</text>
-    <text y="14" text-anchor="middle" font-family="monospace" font-size="10" fill="#94a3b8">symbol</text>
+          fill="#f8fafc" stroke="#64748b" stroke-width="1.5"/>
+    <text y="-8" text-anchor="middle" font-family="system-ui" font-size="12" font-weight="600" fill="#1e293b">src</text>
+    <text y="14" text-anchor="middle" font-family="monospace" font-size="10" fill="#64748b">directory</text>
   </g>
-  <g transform="translate(626.3265306122448, 80)">
+  <g transform="translate(1650, 80)">
     <rect x="-70" y="-27.5" width="140" height="55" rx="6" 
-          fill="#f1f5f9" stroke="#94a3b8" stroke-width="1.5"/>
-    <text y="-8" text-anchor="middle" font-family="system-ui" font-size="12" font-weight="600" fill="#1e293b">aws_security_group....</text>
-    <text y="14" text-anchor="middle" font-family="monospace" font-size="10" fill="#94a3b8">symbol</text>
+          fill="#f8fafc" stroke="#64748b" stroke-width="1.5"/>
+    <text y="-8" text-anchor="middle" font-family="system-ui" font-size="12" font-weight="600" fill="#1e293b">harrow-serde</text>
+    <text y="14" text-anchor="middle" font-family="monospace" font-size="10" fill="#64748b">directory</text>
   </g>
-  <g transform="translate(380.61224489795916, 80)">
+  <g transform="translate(803.8461538461538, 426.6666666666667)">
     <rect x="-70" y="-27.5" width="140" height="55" rx="6" 
-          fill="#f1f5f9" stroke="#94a3b8" stroke-width="1.5"/>
-    <text y="-8" text-anchor="middle" font-family="system-ui" font-size="12" font-weight="600" fill="#1e293b">aws_vpc_security_gr...</text>
-    <text y="14" text-anchor="middle" font-family="monospace" font-size="10" fill="#94a3b8">symbol</text>
+          fill="#f8fafc" stroke="#64748b" stroke-width="1.5"/>
+    <text y="-8" text-anchor="middle" font-family="system-ui" font-size="12" font-weight="600" fill="#1e293b">src</text>
+    <text y="14" text-anchor="middle" font-family="monospace" font-size="10" fill="#64748b">directory</text>
   </g>
-  <g transform="translate(363.0612244897959, 80)">
+  <g transform="translate(750, 80)">
     <rect x="-70" y="-27.5" width="140" height="55" rx="6" 
-          fill="#f1f5f9" stroke="#94a3b8" stroke-width="1.5"/>
-    <text y="-8" text-anchor="middle" font-family="system-ui" font-size="12" font-weight="600" fill="#1e293b">aws_vpc_security_gr...</text>
-    <text y="14" text-anchor="middle" font-family="monospace" font-size="10" fill="#94a3b8">symbol</text>
+          fill="#f8fafc" stroke="#64748b" stroke-width="1.5"/>
+    <text y="-8" text-anchor="middle" font-family="system-ui" font-size="12" font-weight="600" fill="#1e293b">harrow-server</text>
+    <text y="14" text-anchor="middle" font-family="monospace" font-size="10" fill="#64748b">directory</text>
   </g>
-  <g transform="translate(468.3673469387755, 80)">
+  <g transform="translate(570, 80)">
     <rect x="-70" y="-27.5" width="140" height="55" rx="6" 
-          fill="#f1f5f9" stroke="#94a3b8" stroke-width="1.5"/>
-    <text y="-8" text-anchor="middle" font-family="system-ui" font-size="12" font-weight="600" fill="#1e293b">aws_vpc_security_gr...</text>
-    <text y="14" text-anchor="middle" font-family="monospace" font-size="10" fill="#94a3b8">symbol</text>
+          fill="#f8fafc" stroke="#64748b" stroke-width="1.5"/>
+    <text y="-8" text-anchor="middle" font-family="system-ui" font-size="12" font-weight="600" fill="#1e293b">harrow-server-monoio</text>
+    <text y="14" text-anchor="middle" font-family="monospace" font-size="10" fill="#64748b">directory</text>
   </g>
-  <g transform="translate(433.265306122449, 80)">
+  <g transform="translate(1754.6153846153845, 426.6666666666667)">
     <rect x="-70" y="-27.5" width="140" height="55" rx="6" 
-          fill="#f1f5f9" stroke="#94a3b8" stroke-width="1.5"/>
-    <text y="-8" text-anchor="middle" font-family="system-ui" font-size="12" font-weight="600" fill="#1e293b">aws_vpc_security_gr...</text>
-    <text y="14" text-anchor="middle" font-family="monospace" font-size="10" fill="#94a3b8">symbol</text>
+          fill="#f8fafc" stroke="#64748b" stroke-width="1.5"/>
+    <text y="-8" text-anchor="middle" font-family="system-ui" font-size="12" font-weight="600" fill="#1e293b">src</text>
+    <text y="14" text-anchor="middle" font-family="monospace" font-size="10" fill="#64748b">directory</text>
   </g>
+  </g>
+  <script type="text/javascript">
+    <![CDATA[
+    (function() {
+      const svg = document.getElementById('chizu-svg');
+      const viewport = document.getElementById('viewport');
+      let isPanning = false;
+      let startPoint = { x: 0, y: 0 };
+      let currentTranslate = { x: 0, y: 0 };
+      let scale = 1;
+      
+      // Get point in SVG coordinates
+      function getSVGPoint(clientX, clientY) {
+        const point = svg.createSVGPoint();
+        point.x = clientX;
+        point.y = clientY;
+        return point.matrixTransform(viewport.getCTM().inverse());
+      }
+      
+      // Mouse wheel zoom
+      svg.addEventListener('wheel', function(e) {
+        e.preventDefault();
+        const delta = e.deltaY > 0 ? 0.9 : 1.1;
+        const newScale = Math.max(0.1, Math.min(5, scale * delta));
+        
+        // Zoom towards mouse pointer
+        const mousePos = getSVGPoint(e.clientX, e.clientY);
+        currentTranslate.x += mousePos.x * (1 - delta);
+        currentTranslate.y += mousePos.y * (1 - delta);
+        scale = newScale;
+        
+        viewport.setAttribute('transform', 'translate(' + currentTranslate.x + ',' + currentTranslate.y + ') scale(' + scale + ')');
+      }, { passive: false });
+      
+      // Pan with mouse drag
+      svg.addEventListener('mousedown', function(e) {
+        isPanning = true;
+        startPoint = { x: e.clientX, y: e.clientY };
+        svg.style.cursor = 'grabbing';
+      });
+      
+      window.addEventListener('mousemove', function(e) {
+        if (!isPanning) return;
+        const dx = (e.clientX - startPoint.x) / scale;
+        const dy = (e.clientY - startPoint.y) / scale;
+        currentTranslate.x += dx;
+        currentTranslate.y += dy;
+        startPoint = { x: e.clientX, y: e.clientY };
+        viewport.setAttribute('transform', 'translate(' + currentTranslate.x + ',' + currentTranslate.y + ') scale(' + scale + ')');
+      });
+      
+      window.addEventListener('mouseup', function() {
+        isPanning = false;
+        svg.style.cursor = 'grab';
+      });
+      
+      // Reset on double click
+      svg.addEventListener('dblclick', function() {
+        currentTranslate = { x: 0, y: 0 };
+        scale = 1;
+        viewport.setAttribute('transform', 'translate(0,0) scale(1)');
+      });
+    })();
+    ]]>
+  </script>
 </svg>

@@ -1,0 +1,562 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 2400 1200" width="100%" height="100%" style="background: #fafafa; cursor: grab;" id="chizu-svg">
+  <defs>
+    <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#94a3b8"/>
+    </marker>
+  </defs>
+  <g id="viewport">
+  <path d="M 464.28571428571433 80 C 464.28571428571433 166.66666666666669, 1470 166.66666666666669, 1470 253.33333333333334" 
+        stroke="#64748b" stroke-width="1" stroke-dasharray="5,5" 
+        fill="none" marker-end="url(#arrowhead)"/>
+  <path d="M 1470 253.33333333333334 C 1200 223.33333333333334, 1200 223.33333333333334, 930 253.33333333333334" 
+        stroke="#64748b" stroke-width="1" stroke-dasharray="5,5" 
+        fill="none" marker-end="url(#arrowhead)"/>
+  <path d="M 1052.857142857143 80 C 1052.857142857143 166.66666666666669, 1470 166.66666666666669, 1470 253.33333333333334" 
+        stroke="#64748b" stroke-width="1" stroke-dasharray="5,5" 
+        fill="none" marker-end="url(#arrowhead)"/>
+  <path d="M 1052.857142857143 80 C 1052.857142857143 166.66666666666669, 930 166.66666666666669, 930 253.33333333333334" 
+        stroke="#64748b" stroke-width="1" stroke-dasharray="5,5" 
+        fill="none" marker-end="url(#arrowhead)"/>
+  <path d="M 1052.857142857143 80 C 1052.857142857143 166.66666666666669, 210 166.66666666666669, 210 253.33333333333334" 
+        stroke="#64748b" stroke-width="1" stroke-dasharray="5,5" 
+        fill="none" marker-end="url(#arrowhead)"/>
+  <path d="M 1052.857142857143 80 C 1052.857142857143 166.66666666666669, 1830 166.66666666666669, 1830 253.33333333333334" 
+        stroke="#64748b" stroke-width="1" stroke-dasharray="5,5" 
+        fill="none" marker-end="url(#arrowhead)"/>
+  <path d="M 1052.857142857143 80 C 1052.857142857143 166.66666666666669, 570 166.66666666666669, 570 253.33333333333334" 
+        stroke="#64748b" stroke-width="1" stroke-dasharray="5,5" 
+        fill="none" marker-end="url(#arrowhead)"/>
+  <path d="M 1052.857142857143 80 C 1052.857142857143 166.66666666666669, 2190 166.66666666666669, 2190 253.33333333333334" 
+        stroke="#64748b" stroke-width="1" stroke-dasharray="5,5" 
+        fill="none" marker-end="url(#arrowhead)"/>
+  <path d="M 1543.3333333333335 80 C 1543.3333333333335 166.66666666666669, 1470 166.66666666666669, 1470 253.33333333333334" 
+        stroke="#64748b" stroke-width="1" stroke-dasharray="5,5" 
+        fill="none" marker-end="url(#arrowhead)"/>
+  <path d="M 1543.3333333333335 80 C 1543.3333333333335 166.66666666666669, 930 166.66666666666669, 930 253.33333333333334" 
+        stroke="#64748b" stroke-width="1" stroke-dasharray="5,5" 
+        fill="none" marker-end="url(#arrowhead)"/>
+  <path d="M 2010 253.33333333333334 C 1560 223.33333333333334, 1560 223.33333333333334, 1110 253.33333333333334" 
+        stroke="#64748b" stroke-width="1" stroke-dasharray="5,5" 
+        fill="none" marker-end="url(#arrowhead)"/>
+  <path d="M 750 253.33333333333334 C 930 223.33333333333334, 930 223.33333333333334, 1110 253.33333333333334" 
+        stroke="#64748b" stroke-width="1" stroke-dasharray="5,5" 
+        fill="none" marker-end="url(#arrowhead)"/>
+  <path d="M 562.3809523809524 80 C 562.3809523809524 166.66666666666669, 2190 166.66666666666669, 2190 253.33333333333334" 
+        stroke="#64748b" stroke-width="1" stroke-dasharray="5,5" 
+        fill="none" marker-end="url(#arrowhead)"/>
+  <path d="M 758.5714285714287 80 C 758.5714285714287 166.66666666666669, 1470 166.66666666666669, 1470 253.33333333333334" 
+        stroke="#64748b" stroke-width="1" stroke-dasharray="5,5" 
+        fill="none" marker-end="url(#arrowhead)"/>
+  <path d="M 758.5714285714287 80 C 758.5714285714287 166.66666666666669, 390 166.66666666666669, 390 253.33333333333334" 
+        stroke="#64748b" stroke-width="1" stroke-dasharray="5,5" 
+        fill="none" marker-end="url(#arrowhead)"/>
+  <path d="M 758.5714285714287 80 C 758.5714285714287 166.66666666666669, 210 166.66666666666669, 210 253.33333333333334" 
+        stroke="#64748b" stroke-width="1" stroke-dasharray="5,5" 
+        fill="none" marker-end="url(#arrowhead)"/>
+  <path d="M 2131.904761904762 80 C 2131.904761904762 166.66666666666669, 1470 166.66666666666669, 1470 253.33333333333334" 
+        stroke="#64748b" stroke-width="1" stroke-dasharray="5,5" 
+        fill="none" marker-end="url(#arrowhead)"/>
+  <path d="M 1249.047619047619 80 C 1249.047619047619 166.66666666666669, 1470 166.66666666666669, 1470 253.33333333333334" 
+        stroke="#64748b" stroke-width="1" stroke-dasharray="5,5" 
+        fill="none" marker-end="url(#arrowhead)"/>
+  <path d="M 1249.047619047619 80 C 1249.047619047619 166.66666666666669, 390 166.66666666666669, 390 253.33333333333334" 
+        stroke="#64748b" stroke-width="1" stroke-dasharray="5,5" 
+        fill="none" marker-end="url(#arrowhead)"/>
+  <path d="M 1249.047619047619 80 C 1249.047619047619 166.66666666666669, 210 166.66666666666669, 210 253.33333333333334" 
+        stroke="#64748b" stroke-width="1" stroke-dasharray="5,5" 
+        fill="none" marker-end="url(#arrowhead)"/>
+  <path d="M 1830 253.33333333333334 C 1650 223.33333333333334, 1650 223.33333333333334, 1470 253.33333333333334" 
+        stroke="#64748b" stroke-width="1" stroke-dasharray="5,5" 
+        fill="none" marker-end="url(#arrowhead)"/>
+  <path d="M 1830 253.33333333333334 C 1110 223.33333333333334, 1110 223.33333333333334, 390 253.33333333333334" 
+        stroke="#64748b" stroke-width="1" stroke-dasharray="5,5" 
+        fill="none" marker-end="url(#arrowhead)"/>
+  <path d="M 1830 253.33333333333334 C 1020 223.33333333333334, 1020 223.33333333333334, 210 253.33333333333334" 
+        stroke="#64748b" stroke-width="1" stroke-dasharray="5,5" 
+        fill="none" marker-end="url(#arrowhead)"/>
+  <path d="M 1347.1428571428573 80 C 1347.1428571428573 166.66666666666669, 1470 166.66666666666669, 1470 253.33333333333334" 
+        stroke="#64748b" stroke-width="1" stroke-dasharray="5,5" 
+        fill="none" marker-end="url(#arrowhead)"/>
+  <path d="M 1347.1428571428573 80 C 1347.1428571428573 166.66666666666669, 390 166.66666666666669, 390 253.33333333333334" 
+        stroke="#64748b" stroke-width="1" stroke-dasharray="5,5" 
+        fill="none" marker-end="url(#arrowhead)"/>
+  <path d="M 1347.1428571428573 80 C 1347.1428571428573 166.66666666666669, 210 166.66666666666669, 210 253.33333333333334" 
+        stroke="#64748b" stroke-width="1" stroke-dasharray="5,5" 
+        fill="none" marker-end="url(#arrowhead)"/>
+  <path d="M 170 80 C 170 166.66666666666669, 1470 166.66666666666669, 1470 253.33333333333334" 
+        stroke="#64748b" stroke-width="1" stroke-dasharray="5,5" 
+        fill="none" marker-end="url(#arrowhead)"/>
+  <path d="M 170 80 C 170 166.66666666666669, 390 166.66666666666669, 390 253.33333333333334" 
+        stroke="#64748b" stroke-width="1" stroke-dasharray="5,5" 
+        fill="none" marker-end="url(#arrowhead)"/>
+  <path d="M 170 80 C 170 166.66666666666669, 210 166.66666666666669, 210 253.33333333333334" 
+        stroke="#64748b" stroke-width="1" stroke-dasharray="5,5" 
+        fill="none" marker-end="url(#arrowhead)"/>
+  <path d="M 1650 253.33333333333334 C 1560 223.33333333333334, 1560 223.33333333333334, 1470 253.33333333333334" 
+        stroke="#64748b" stroke-width="1" stroke-dasharray="5,5" 
+        fill="none" marker-end="url(#arrowhead)"/>
+  <path d="M 1650 253.33333333333334 C 1290 223.33333333333334, 1290 223.33333333333334, 930 253.33333333333334" 
+        stroke="#64748b" stroke-width="1" stroke-dasharray="5,5" 
+        fill="none" marker-end="url(#arrowhead)"/>
+  <path d="M 1650 253.33333333333334 C 1020 223.33333333333334, 1020 223.33333333333334, 390 253.33333333333334" 
+        stroke="#64748b" stroke-width="1" stroke-dasharray="5,5" 
+        fill="none" marker-end="url(#arrowhead)"/>
+  <path d="M 268.0952380952381 80 C 268.0952380952381 166.66666666666669, 1470 166.66666666666669, 1470 253.33333333333334" 
+        stroke="#64748b" stroke-width="1" stroke-dasharray="5,5" 
+        fill="none" marker-end="url(#arrowhead)"/>
+  <path d="M 268.0952380952381 80 C 268.0952380952381 166.66666666666669, 930 166.66666666666669, 930 253.33333333333334" 
+        stroke="#64748b" stroke-width="1" stroke-dasharray="5,5" 
+        fill="none" marker-end="url(#arrowhead)"/>
+  <path d="M 1150.952380952381 80 C 1150.952380952381 166.66666666666669, 1470 166.66666666666669, 1470 253.33333333333334" 
+        stroke="#64748b" stroke-width="1" stroke-dasharray="5,5" 
+        fill="none" marker-end="url(#arrowhead)"/>
+  <path d="M 1150.952380952381 80 C 1150.952380952381 166.66666666666669, 390 166.66666666666669, 390 253.33333333333334" 
+        stroke="#64748b" stroke-width="1" stroke-dasharray="5,5" 
+        fill="none" marker-end="url(#arrowhead)"/>
+  <path d="M 1150.952380952381 80 C 1150.952380952381 166.66666666666669, 210 166.66666666666669, 210 253.33333333333334" 
+        stroke="#64748b" stroke-width="1" stroke-dasharray="5,5" 
+        fill="none" marker-end="url(#arrowhead)"/>
+  <path d="M 570 253.33333333333334 C 1020 223.33333333333334, 1020 223.33333333333334, 1470 253.33333333333334" 
+        stroke="#64748b" stroke-width="1" stroke-dasharray="5,5" 
+        fill="none" marker-end="url(#arrowhead)"/>
+  <path d="M 570 253.33333333333334 C 480 223.33333333333334, 480 223.33333333333334, 390 253.33333333333334" 
+        stroke="#64748b" stroke-width="1" stroke-dasharray="5,5" 
+        fill="none" marker-end="url(#arrowhead)"/>
+  <path d="M 570 253.33333333333334 C 390 223.33333333333334, 390 223.33333333333334, 210 253.33333333333334" 
+        stroke="#64748b" stroke-width="1" stroke-dasharray="5,5" 
+        fill="none" marker-end="url(#arrowhead)"/>
+  <path d="M 856.6666666666667 80 C 856.6666666666667 166.66666666666669, 2010 166.66666666666669, 2010 253.33333333333334" 
+        stroke="#cbd5e1" stroke-width="1" stroke-dasharray="none" 
+        fill="none" marker-end="url(#arrowhead)"/>
+  <path d="M 856.6666666666667 80 C 856.6666666666667 166.66666666666669, 750 166.66666666666669, 750 253.33333333333334" 
+        stroke="#cbd5e1" stroke-width="1" stroke-dasharray="none" 
+        fill="none" marker-end="url(#arrowhead)"/>
+  <path d="M 856.6666666666667 80 C 856.6666666666667 166.66666666666669, 1110 166.66666666666669, 1110 253.33333333333334" 
+        stroke="#cbd5e1" stroke-width="1" stroke-dasharray="none" 
+        fill="none" marker-end="url(#arrowhead)"/>
+  <path d="M 856.6666666666667 80 C 856.6666666666667 166.66666666666669, 1650 166.66666666666669, 1650 253.33333333333334" 
+        stroke="#64748b" stroke-width="1" stroke-dasharray="5,5" 
+        fill="none" marker-end="url(#arrowhead)"/>
+  <path d="M 1739.5238095238096 80 C 1739.5238095238096 166.66666666666669, 2190 166.66666666666669, 2190 253.33333333333334" 
+        stroke="#64748b" stroke-width="1" stroke-dasharray="5,5" 
+        fill="none" marker-end="url(#arrowhead)"/>
+  <path d="M 1837.6190476190477 80 C 1837.6190476190477 166.66666666666669, 2190 166.66666666666669, 2190 253.33333333333334" 
+        stroke="#64748b" stroke-width="1" stroke-dasharray="5,5" 
+        fill="none" marker-end="url(#arrowhead)"/>
+  <path d="M 1445.2380952380954 80 C 1445.2380952380954 166.66666666666669, 1290 166.66666666666669, 1290 253.33333333333334" 
+        stroke="#cbd5e1" stroke-width="1" stroke-dasharray="none" 
+        fill="none" marker-end="url(#arrowhead)"/>
+  <path d="M 1290 253.33333333333334 C 1290 340, 1290 340, 1290 426.6666666666667" 
+        stroke="#cbd5e1" stroke-width="1" stroke-dasharray="none" 
+        fill="none" marker-end="url(#arrowhead)"/>
+  <path d="M 1290 253.33333333333334 C 1290 340, 1110 340, 1110 426.6666666666667" 
+        stroke="#cbd5e1" stroke-width="1" stroke-dasharray="none" 
+        fill="none" marker-end="url(#arrowhead)"/>
+  <path d="M 1110 426.6666666666667 C 1110 513.3333333333334, 1200 513.3333333333334, 1200 600" 
+        stroke="#cbd5e1" stroke-width="1" stroke-dasharray="none" 
+        fill="none" marker-end="url(#arrowhead)"/>
+  <path d="M 1200 600 C 1200 686.6666666666667, 1110 686.6666666666667, 1110 773.3333333333334" 
+        stroke="#cbd5e1" stroke-width="1" stroke-dasharray="none" 
+        fill="none" marker-end="url(#arrowhead)"/>
+  <path d="M 1200 600 C 1200 686.6666666666667, 1290 686.6666666666667, 1290 773.3333333333334" 
+        stroke="#cbd5e1" stroke-width="1" stroke-dasharray="none" 
+        fill="none" marker-end="url(#arrowhead)"/>
+  <path d="M 1110 773.3333333333334 C 1110 860, 1290 860, 1290 946.6666666666667" 
+        stroke="#cbd5e1" stroke-width="1" stroke-dasharray="none" 
+        fill="none" marker-end="url(#arrowhead)"/>
+  <path d="M 1290 946.6666666666667 C 1290 1033.3333333333335, 1020 1033.3333333333335, 1020 1120" 
+        stroke="#cbd5e1" stroke-width="1" stroke-dasharray="none" 
+        fill="none" marker-end="url(#arrowhead)"/>
+  <path d="M 1290 946.6666666666667 C 1290 1033.3333333333335, 480 1033.3333333333335, 480 1120" 
+        stroke="#cbd5e1" stroke-width="1" stroke-dasharray="none" 
+        fill="none" marker-end="url(#arrowhead)"/>
+  <path d="M 1290 946.6666666666667 C 1290 1033.3333333333335, 1920 1033.3333333333335, 1920 1120" 
+        stroke="#cbd5e1" stroke-width="1" stroke-dasharray="none" 
+        fill="none" marker-end="url(#arrowhead)"/>
+  <path d="M 1290 773.3333333333334 C 1290 860, 1110 860, 1110 946.6666666666667" 
+        stroke="#cbd5e1" stroke-width="1" stroke-dasharray="none" 
+        fill="none" marker-end="url(#arrowhead)"/>
+  <path d="M 1110 946.6666666666667 C 1110 1033.3333333333335, 1740 1033.3333333333335, 1740 1120" 
+        stroke="#cbd5e1" stroke-width="1" stroke-dasharray="none" 
+        fill="none" marker-end="url(#arrowhead)"/>
+  <path d="M 1110 946.6666666666667 C 1110 1033.3333333333335, 1380 1033.3333333333335, 1380 1120" 
+        stroke="#cbd5e1" stroke-width="1" stroke-dasharray="none" 
+        fill="none" marker-end="url(#arrowhead)"/>
+  <path d="M 1110 946.6666666666667 C 1110 1033.3333333333335, 840 1033.3333333333335, 840 1120" 
+        stroke="#cbd5e1" stroke-width="1" stroke-dasharray="none" 
+        fill="none" marker-end="url(#arrowhead)"/>
+  <path d="M 1110 946.6666666666667 C 1110 1033.3333333333335, 1560 1033.3333333333335, 1560 1120" 
+        stroke="#cbd5e1" stroke-width="1" stroke-dasharray="none" 
+        fill="none" marker-end="url(#arrowhead)"/>
+  <path d="M 1110 946.6666666666667 C 1110 1033.3333333333335, 660 1033.3333333333335, 660 1120" 
+        stroke="#cbd5e1" stroke-width="1" stroke-dasharray="none" 
+        fill="none" marker-end="url(#arrowhead)"/>
+  <path d="M 1110 946.6666666666667 C 1110 1033.3333333333335, 1200 1033.3333333333335, 1200 1120" 
+        stroke="#cbd5e1" stroke-width="1" stroke-dasharray="none" 
+        fill="none" marker-end="url(#arrowhead)"/>
+  <g transform="translate(464.28571428571433, 80)">
+    <rect x="-70" y="-27.5" width="140" height="55" rx="6" 
+          fill="#eef2ff" stroke="#6366f1" stroke-width="1.5"/>
+    <text y="-8" text-anchor="middle" font-family="system-ui" font-size="12" font-weight="600" fill="#1e293b">@lucide/astro</text>
+    <text y="14" text-anchor="middle" font-family="monospace" font-size="10" fill="#6366f1">component</text>
+  </g>
+  <g transform="translate(1470, 253.33333333333334)">
+    <rect x="-70" y="-27.5" width="140" height="55" rx="6" 
+          fill="#eef2ff" stroke="#6366f1" stroke-width="1.5"/>
+    <text y="-8" text-anchor="middle" font-family="system-ui" font-size="12" font-weight="600" fill="#1e293b">@lucide/build-icons</text>
+    <text y="14" text-anchor="middle" font-family="monospace" font-size="10" fill="#6366f1">component</text>
+  </g>
+  <g transform="translate(1052.857142857143, 80)">
+    <rect x="-70" y="-27.5" width="140" height="55" rx="6" 
+          fill="#eef2ff" stroke="#6366f1" stroke-width="1.5"/>
+    <text y="-8" text-anchor="middle" font-family="system-ui" font-size="12" font-weight="600" fill="#1e293b">@lucide/docs</text>
+    <text y="14" text-anchor="middle" font-family="monospace" font-size="10" fill="#6366f1">component</text>
+  </g>
+  <g transform="translate(930, 253.33333333333334)">
+    <rect x="-70" y="-27.5" width="140" height="55" rx="6" 
+          fill="#eef2ff" stroke="#6366f1" stroke-width="1.5"/>
+    <text y="-8" text-anchor="middle" font-family="system-ui" font-size="12" font-weight="600" fill="#1e293b">@lucide/helpers</text>
+    <text y="14" text-anchor="middle" font-family="monospace" font-size="10" fill="#6366f1">component</text>
+  </g>
+  <g transform="translate(366.1904761904762, 80)">
+    <rect x="-70" y="-27.5" width="140" height="55" rx="6" 
+          fill="#eef2ff" stroke="#6366f1" stroke-width="1.5"/>
+    <text y="-8" text-anchor="middle" font-family="system-ui" font-size="12" font-weight="600" fill="#1e293b">@lucide/outline-svg</text>
+    <text y="14" text-anchor="middle" font-family="monospace" font-size="10" fill="#6366f1">component</text>
+  </g>
+  <g transform="translate(390, 253.33333333333334)">
+    <rect x="-70" y="-27.5" width="140" height="55" rx="6" 
+          fill="#eef2ff" stroke="#6366f1" stroke-width="1.5"/>
+    <text y="-8" text-anchor="middle" font-family="system-ui" font-size="12" font-weight="600" fill="#1e293b">@lucide/rollup-plugins</text>
+    <text y="14" text-anchor="middle" font-family="monospace" font-size="10" fill="#6366f1">component</text>
+  </g>
+  <g transform="translate(210, 253.33333333333334)">
+    <rect x="-70" y="-27.5" width="140" height="55" rx="6" 
+          fill="#eef2ff" stroke="#6366f1" stroke-width="1.5"/>
+    <text y="-8" text-anchor="middle" font-family="system-ui" font-size="12" font-weight="600" fill="#1e293b">@lucide/shared</text>
+    <text y="14" text-anchor="middle" font-family="monospace" font-size="10" fill="#6366f1">component</text>
+  </g>
+  <g transform="translate(1543.3333333333335, 80)">
+    <rect x="-70" y="-27.5" width="140" height="55" rx="6" 
+          fill="#eef2ff" stroke="#6366f1" stroke-width="1.5"/>
+    <text y="-8" text-anchor="middle" font-family="system-ui" font-size="12" font-weight="600" fill="#1e293b">@lucide/svelte</text>
+    <text y="14" text-anchor="middle" font-family="monospace" font-size="10" fill="#6366f1">component</text>
+  </g>
+  <g transform="translate(1641.4285714285716, 80)">
+    <rect x="-70" y="-27.5" width="140" height="55" rx="6" 
+          fill="#eef2ff" stroke="#6366f1" stroke-width="1.5"/>
+    <text y="-8" text-anchor="middle" font-family="system-ui" font-size="12" font-weight="600" fill="#1e293b">@panzerotti/costs-d...</text>
+    <text y="14" text-anchor="middle" font-family="monospace" font-size="10" fill="#6366f1">component</text>
+  </g>
+  <g transform="translate(2010, 253.33333333333334)">
+    <rect x="-70" y="-27.5" width="140" height="55" rx="6" 
+          fill="#eef2ff" stroke="#6366f1" stroke-width="1.5"/>
+    <text y="-8" text-anchor="middle" font-family="system-ui" font-size="12" font-weight="600" fill="#1e293b">@panzerotti/demo-page</text>
+    <text y="14" text-anchor="middle" font-family="monospace" font-size="10" fill="#6366f1">component</text>
+  </g>
+  <g transform="translate(750, 253.33333333333334)">
+    <rect x="-70" y="-27.5" width="140" height="55" rx="6" 
+          fill="#eef2ff" stroke="#6366f1" stroke-width="1.5"/>
+    <text y="-8" text-anchor="middle" font-family="system-ui" font-size="12" font-weight="600" fill="#1e293b">@panzerotti/landing...</text>
+    <text y="14" text-anchor="middle" font-family="monospace" font-size="10" fill="#6366f1">component</text>
+  </g>
+  <g transform="translate(1110, 253.33333333333334)">
+    <rect x="-70" y="-27.5" width="140" height="55" rx="6" 
+          fill="#eef2ff" stroke="#6366f1" stroke-width="1.5"/>
+    <text y="-8" text-anchor="middle" font-family="system-ui" font-size="12" font-weight="600" fill="#1e293b">@panzerotti/protect...</text>
+    <text y="14" text-anchor="middle" font-family="monospace" font-size="10" fill="#6366f1">component</text>
+  </g>
+  <g transform="translate(954.7619047619048, 80)">
+    <rect x="-70" y="-27.5" width="140" height="55" rx="6" 
+          fill="#eef2ff" stroke="#6366f1" stroke-width="1.5"/>
+    <text y="-8" text-anchor="middle" font-family="system-ui" font-size="12" font-weight="600" fill="#1e293b">build-font</text>
+    <text y="14" text-anchor="middle" font-family="monospace" font-size="10" fill="#6366f1">component</text>
+  </g>
+  <g transform="translate(2033.8095238095239, 80)">
+    <rect x="-70" y="-27.5" width="140" height="55" rx="6" 
+          fill="#eef2ff" stroke="#6366f1" stroke-width="1.5"/>
+    <text y="-8" text-anchor="middle" font-family="system-ui" font-size="12" font-weight="600" fill="#1e293b">dashboard</text>
+    <text y="14" text-anchor="middle" font-family="monospace" font-size="10" fill="#6366f1">component</text>
+  </g>
+  <g transform="translate(562.3809523809524, 80)">
+    <rect x="-70" y="-27.5" width="140" height="55" rx="6" 
+          fill="#eef2ff" stroke="#6366f1" stroke-width="1.5"/>
+    <text y="-8" text-anchor="middle" font-family="system-ui" font-size="12" font-weight="600" fill="#1e293b">docs</text>
+    <text y="14" text-anchor="middle" font-family="monospace" font-size="10" fill="#6366f1">component</text>
+  </g>
+  <g transform="translate(1935.7142857142858, 80)">
+    <rect x="-70" y="-27.5" width="140" height="55" rx="6" 
+          fill="#eef2ff" stroke="#6366f1" stroke-width="1.5"/>
+    <text y="-8" text-anchor="middle" font-family="system-ui" font-size="12" font-weight="600" fill="#1e293b">icons</text>
+    <text y="14" text-anchor="middle" font-family="monospace" font-size="10" fill="#6366f1">component</text>
+  </g>
+  <g transform="translate(758.5714285714287, 80)">
+    <rect x="-70" y="-27.5" width="140" height="55" rx="6" 
+          fill="#eef2ff" stroke="#6366f1" stroke-width="1.5"/>
+    <text y="-8" text-anchor="middle" font-family="system-ui" font-size="12" font-weight="600" fill="#1e293b">lucide</text>
+    <text y="14" text-anchor="middle" font-family="monospace" font-size="10" fill="#6366f1">component</text>
+  </g>
+  <g transform="translate(2131.904761904762, 80)">
+    <rect x="-70" y="-27.5" width="140" height="55" rx="6" 
+          fill="#eef2ff" stroke="#6366f1" stroke-width="1.5"/>
+    <text y="-8" text-anchor="middle" font-family="system-ui" font-size="12" font-weight="600" fill="#1e293b">lucide-angular</text>
+    <text y="14" text-anchor="middle" font-family="monospace" font-size="10" fill="#6366f1">component</text>
+  </g>
+  <g transform="translate(1249.047619047619, 80)">
+    <rect x="-70" y="-27.5" width="140" height="55" rx="6" 
+          fill="#eef2ff" stroke="#6366f1" stroke-width="1.5"/>
+    <text y="-8" text-anchor="middle" font-family="system-ui" font-size="12" font-weight="600" fill="#1e293b">lucide-preact</text>
+    <text y="14" text-anchor="middle" font-family="monospace" font-size="10" fill="#6366f1">component</text>
+  </g>
+  <g transform="translate(1830, 253.33333333333334)">
+    <rect x="-70" y="-27.5" width="140" height="55" rx="6" 
+          fill="#eef2ff" stroke="#6366f1" stroke-width="1.5"/>
+    <text y="-8" text-anchor="middle" font-family="system-ui" font-size="12" font-weight="600" fill="#1e293b">lucide-react</text>
+    <text y="14" text-anchor="middle" font-family="monospace" font-size="10" fill="#6366f1">component</text>
+  </g>
+  <g transform="translate(1347.1428571428573, 80)">
+    <rect x="-70" y="-27.5" width="140" height="55" rx="6" 
+          fill="#eef2ff" stroke="#6366f1" stroke-width="1.5"/>
+    <text y="-8" text-anchor="middle" font-family="system-ui" font-size="12" font-weight="600" fill="#1e293b">lucide-react-native</text>
+    <text y="14" text-anchor="middle" font-family="monospace" font-size="10" fill="#6366f1">component</text>
+  </g>
+  <g transform="translate(170, 80)">
+    <rect x="-70" y="-27.5" width="140" height="55" rx="6" 
+          fill="#eef2ff" stroke="#6366f1" stroke-width="1.5"/>
+    <text y="-8" text-anchor="middle" font-family="system-ui" font-size="12" font-weight="600" fill="#1e293b">lucide-solid</text>
+    <text y="14" text-anchor="middle" font-family="monospace" font-size="10" fill="#6366f1">component</text>
+  </g>
+  <g transform="translate(1650, 253.33333333333334)">
+    <rect x="-70" y="-27.5" width="140" height="55" rx="6" 
+          fill="#eef2ff" stroke="#6366f1" stroke-width="1.5"/>
+    <text y="-8" text-anchor="middle" font-family="system-ui" font-size="12" font-weight="600" fill="#1e293b">lucide-static</text>
+    <text y="14" text-anchor="middle" font-family="monospace" font-size="10" fill="#6366f1">component</text>
+  </g>
+  <g transform="translate(268.0952380952381, 80)">
+    <rect x="-70" y="-27.5" width="140" height="55" rx="6" 
+          fill="#eef2ff" stroke="#6366f1" stroke-width="1.5"/>
+    <text y="-8" text-anchor="middle" font-family="system-ui" font-size="12" font-weight="600" fill="#1e293b">lucide-svelte</text>
+    <text y="14" text-anchor="middle" font-family="monospace" font-size="10" fill="#6366f1">component</text>
+  </g>
+  <g transform="translate(1150.952380952381, 80)">
+    <rect x="-70" y="-27.5" width="140" height="55" rx="6" 
+          fill="#eef2ff" stroke="#6366f1" stroke-width="1.5"/>
+    <text y="-8" text-anchor="middle" font-family="system-ui" font-size="12" font-weight="600" fill="#1e293b">lucide-vue</text>
+    <text y="14" text-anchor="middle" font-family="monospace" font-size="10" fill="#6366f1">component</text>
+  </g>
+  <g transform="translate(570, 253.33333333333334)">
+    <rect x="-70" y="-27.5" width="140" height="55" rx="6" 
+          fill="#eef2ff" stroke="#6366f1" stroke-width="1.5"/>
+    <text y="-8" text-anchor="middle" font-family="system-ui" font-size="12" font-weight="600" fill="#1e293b">lucide-vue-next</text>
+    <text y="14" text-anchor="middle" font-family="monospace" font-size="10" fill="#6366f1">component</text>
+  </g>
+  <g transform="translate(856.6666666666667, 80)">
+    <rect x="-70" y="-27.5" width="140" height="55" rx="6" 
+          fill="#eef2ff" stroke="#6366f1" stroke-width="1.5"/>
+    <text y="-8" text-anchor="middle" font-family="system-ui" font-size="12" font-weight="600" fill="#1e293b">panzerotti</text>
+    <text y="14" text-anchor="middle" font-family="monospace" font-size="10" fill="#6366f1">component</text>
+  </g>
+  <g transform="translate(660.4761904761905, 80)">
+    <rect x="-70" y="-27.5" width="140" height="55" rx="6" 
+          fill="#eef2ff" stroke="#6366f1" stroke-width="1.5"/>
+    <text y="-8" text-anchor="middle" font-family="system-ui" font-size="12" font-weight="600" fill="#1e293b">peaceful-planet</text>
+    <text y="14" text-anchor="middle" font-family="monospace" font-size="10" fill="#6366f1">component</text>
+  </g>
+  <g transform="translate(2230, 80)">
+    <rect x="-70" y="-27.5" width="140" height="55" rx="6" 
+          fill="#eef2ff" stroke="#6366f1" stroke-width="1.5"/>
+    <text y="-8" text-anchor="middle" font-family="system-ui" font-size="12" font-weight="600" fill="#1e293b">pitch-deck</text>
+    <text y="14" text-anchor="middle" font-family="monospace" font-size="10" fill="#6366f1">component</text>
+  </g>
+  <g transform="translate(1739.5238095238096, 80)">
+    <rect x="-70" y="-27.5" width="140" height="55" rx="6" 
+          fill="#eef2ff" stroke="#6366f1" stroke-width="1.5"/>
+    <text y="-8" text-anchor="middle" font-family="system-ui" font-size="12" font-weight="600" fill="#1e293b">tests-e2e</text>
+    <text y="14" text-anchor="middle" font-family="monospace" font-size="10" fill="#6366f1">component</text>
+  </g>
+  <g transform="translate(1837.6190476190477, 80)">
+    <rect x="-70" y="-27.5" width="140" height="55" rx="6" 
+          fill="#eef2ff" stroke="#6366f1" stroke-width="1.5"/>
+    <text y="-8" text-anchor="middle" font-family="system-ui" font-size="12" font-weight="600" fill="#1e293b">tests-init</text>
+    <text y="14" text-anchor="middle" font-family="monospace" font-size="10" fill="#6366f1">component</text>
+  </g>
+  <g transform="translate(2190, 253.33333333333334)">
+    <rect x="-70" y="-27.5" width="140" height="55" rx="6" 
+          fill="#eef2ff" stroke="#6366f1" stroke-width="1.5"/>
+    <text y="-8" text-anchor="middle" font-family="system-ui" font-size="12" font-weight="600" fill="#1e293b">vitepress</text>
+    <text y="14" text-anchor="middle" font-family="monospace" font-size="10" fill="#6366f1">component</text>
+  </g>
+  <g transform="translate(1445.2380952380954, 80)">
+    <rect x="-70" y="-27.5" width="140" height="55" rx="6" 
+          fill="#f8fafc" stroke="#64748b" stroke-width="1.5"/>
+    <text y="-8" text-anchor="middle" font-family="system-ui" font-size="12" font-weight="600" fill="#1e293b">3rdparty</text>
+    <text y="14" text-anchor="middle" font-family="monospace" font-size="10" fill="#64748b">directory</text>
+  </g>
+  <g transform="translate(1290, 253.33333333333334)">
+    <rect x="-70" y="-27.5" width="140" height="55" rx="6" 
+          fill="#f8fafc" stroke="#64748b" stroke-width="1.5"/>
+    <text y="-8" text-anchor="middle" font-family="system-ui" font-size="12" font-weight="600" fill="#1e293b">lucide</text>
+    <text y="14" text-anchor="middle" font-family="monospace" font-size="10" fill="#64748b">directory</text>
+  </g>
+  <g transform="translate(1290, 426.6666666666667)">
+    <rect x="-70" y="-27.5" width="140" height="55" rx="6" 
+          fill="#f8fafc" stroke="#64748b" stroke-width="1.5"/>
+    <text y="-8" text-anchor="middle" font-family="system-ui" font-size="12" font-weight="600" fill="#1e293b">categories</text>
+    <text y="14" text-anchor="middle" font-family="monospace" font-size="10" fill="#64748b">directory</text>
+  </g>
+  <g transform="translate(1110, 426.6666666666667)">
+    <rect x="-70" y="-27.5" width="140" height="55" rx="6" 
+          fill="#f8fafc" stroke="#64748b" stroke-width="1.5"/>
+    <text y="-8" text-anchor="middle" font-family="system-ui" font-size="12" font-weight="600" fill="#1e293b">docs</text>
+    <text y="14" text-anchor="middle" font-family="monospace" font-size="10" fill="#64748b">directory</text>
+  </g>
+  <g transform="translate(1200, 600)">
+    <rect x="-70" y="-27.5" width="140" height="55" rx="6" 
+          fill="#f8fafc" stroke="#64748b" stroke-width="1.5"/>
+    <text y="-8" text-anchor="middle" font-family="system-ui" font-size="12" font-weight="600" fill="#1e293b">guide</text>
+    <text y="14" text-anchor="middle" font-family="monospace" font-size="10" fill="#64748b">directory</text>
+  </g>
+  <g transform="translate(1110, 773.3333333333334)">
+    <rect x="-70" y="-27.5" width="140" height="55" rx="6" 
+          fill="#f8fafc" stroke="#64748b" stroke-width="1.5"/>
+    <text y="-8" text-anchor="middle" font-family="system-ui" font-size="12" font-weight="600" fill="#1e293b">advanced</text>
+    <text y="14" text-anchor="middle" font-family="monospace" font-size="10" fill="#64748b">directory</text>
+  </g>
+  <g transform="translate(1290, 946.6666666666667)">
+    <rect x="-70" y="-27.5" width="140" height="55" rx="6" 
+          fill="#f8fafc" stroke="#64748b" stroke-width="1.5"/>
+    <text y="-8" text-anchor="middle" font-family="system-ui" font-size="12" font-weight="600" fill="#1e293b">examples</text>
+    <text y="14" text-anchor="middle" font-family="monospace" font-size="10" fill="#64748b">directory</text>
+  </g>
+  <g transform="translate(1020, 1120)">
+    <rect x="-70" y="-27.5" width="140" height="55" rx="6" 
+          fill="#f8fafc" stroke="#64748b" stroke-width="1.5"/>
+    <text y="-8" text-anchor="middle" font-family="system-ui" font-size="12" font-weight="600" fill="#1e293b">filled-icon-example</text>
+    <text y="14" text-anchor="middle" font-family="monospace" font-size="10" fill="#64748b">directory</text>
+  </g>
+  <g transform="translate(480, 1120)">
+    <rect x="-70" y="-27.5" width="140" height="55" rx="6" 
+          fill="#f8fafc" stroke="#64748b" stroke-width="1.5"/>
+    <text y="-8" text-anchor="middle" font-family="system-ui" font-size="12" font-weight="600" fill="#1e293b">global-styling-abso...</text>
+    <text y="14" text-anchor="middle" font-family="monospace" font-size="10" fill="#64748b">directory</text>
+  </g>
+  <g transform="translate(1920, 1120)">
+    <rect x="-70" y="-27.5" width="140" height="55" rx="6" 
+          fill="#f8fafc" stroke="#64748b" stroke-width="1.5"/>
+    <text y="-8" text-anchor="middle" font-family="system-ui" font-size="12" font-weight="600" fill="#1e293b">global-styling-css-...</text>
+    <text y="14" text-anchor="middle" font-family="monospace" font-size="10" fill="#64748b">directory</text>
+  </g>
+  <g transform="translate(1290, 773.3333333333334)">
+    <rect x="-70" y="-27.5" width="140" height="55" rx="6" 
+          fill="#f8fafc" stroke="#64748b" stroke-width="1.5"/>
+    <text y="-8" text-anchor="middle" font-family="system-ui" font-size="12" font-weight="600" fill="#1e293b">basics</text>
+    <text y="14" text-anchor="middle" font-family="monospace" font-size="10" fill="#64748b">directory</text>
+  </g>
+  <g transform="translate(1110, 946.6666666666667)">
+    <rect x="-70" y="-27.5" width="140" height="55" rx="6" 
+          fill="#f8fafc" stroke="#64748b" stroke-width="1.5"/>
+    <text y="-8" text-anchor="middle" font-family="system-ui" font-size="12" font-weight="600" fill="#1e293b">examples</text>
+    <text y="14" text-anchor="middle" font-family="monospace" font-size="10" fill="#64748b">directory</text>
+  </g>
+  <g transform="translate(1740, 1120)">
+    <rect x="-70" y="-27.5" width="140" height="55" rx="6" 
+          fill="#f8fafc" stroke="#64748b" stroke-width="1.5"/>
+    <text y="-8" text-anchor="middle" font-family="system-ui" font-size="12" font-weight="600" fill="#1e293b">absolute-stroke-wid...</text>
+    <text y="14" text-anchor="middle" font-family="monospace" font-size="10" fill="#64748b">directory</text>
+  </g>
+  <g transform="translate(1380, 1120)">
+    <rect x="-70" y="-27.5" width="140" height="55" rx="6" 
+          fill="#f8fafc" stroke="#64748b" stroke-width="1.5"/>
+    <text y="-8" text-anchor="middle" font-family="system-ui" font-size="12" font-weight="600" fill="#1e293b">button-example</text>
+    <text y="14" text-anchor="middle" font-family="monospace" font-size="10" fill="#64748b">directory</text>
+  </g>
+  <g transform="translate(840, 1120)">
+    <rect x="-70" y="-27.5" width="140" height="55" rx="6" 
+          fill="#f8fafc" stroke="#64748b" stroke-width="1.5"/>
+    <text y="-8" text-anchor="middle" font-family="system-ui" font-size="12" font-weight="600" fill="#1e293b">color-icon</text>
+    <text y="14" text-anchor="middle" font-family="monospace" font-size="10" fill="#64748b">directory</text>
+  </g>
+  <g transform="translate(1560, 1120)">
+    <rect x="-70" y="-27.5" width="140" height="55" rx="6" 
+          fill="#f8fafc" stroke="#64748b" stroke-width="1.5"/>
+    <text y="-8" text-anchor="middle" font-family="system-ui" font-size="12" font-weight="600" fill="#1e293b">size-icon-css-example</text>
+    <text y="14" text-anchor="middle" font-family="monospace" font-size="10" fill="#64748b">directory</text>
+  </g>
+  <g transform="translate(660, 1120)">
+    <rect x="-70" y="-27.5" width="140" height="55" rx="6" 
+          fill="#f8fafc" stroke="#64748b" stroke-width="1.5"/>
+    <text y="-8" text-anchor="middle" font-family="system-ui" font-size="12" font-weight="600" fill="#1e293b">size-icon-example</text>
+    <text y="14" text-anchor="middle" font-family="monospace" font-size="10" fill="#64748b">directory</text>
+  </g>
+  <g transform="translate(1200, 1120)">
+    <rect x="-70" y="-27.5" width="140" height="55" rx="6" 
+          fill="#f8fafc" stroke="#64748b" stroke-width="1.5"/>
+    <text y="-8" text-anchor="middle" font-family="system-ui" font-size="12" font-weight="600" fill="#1e293b">size-icon-font-example</text>
+    <text y="14" text-anchor="middle" font-family="monospace" font-size="10" fill="#64748b">directory</text>
+  </g>
+  </g>
+  <script type="text/javascript">
+    <![CDATA[
+    (function() {
+      const svg = document.getElementById('chizu-svg');
+      const viewport = document.getElementById('viewport');
+      let isPanning = false;
+      let startPoint = { x: 0, y: 0 };
+      let currentTranslate = { x: 0, y: 0 };
+      let scale = 1;
+      
+      // Get point in SVG coordinates
+      function getSVGPoint(clientX, clientY) {
+        const point = svg.createSVGPoint();
+        point.x = clientX;
+        point.y = clientY;
+        return point.matrixTransform(viewport.getCTM().inverse());
+      }
+      
+      // Mouse wheel zoom
+      svg.addEventListener('wheel', function(e) {
+        e.preventDefault();
+        const delta = e.deltaY > 0 ? 0.9 : 1.1;
+        const newScale = Math.max(0.1, Math.min(5, scale * delta));
+        
+        // Zoom towards mouse pointer
+        const mousePos = getSVGPoint(e.clientX, e.clientY);
+        currentTranslate.x += mousePos.x * (1 - delta);
+        currentTranslate.y += mousePos.y * (1 - delta);
+        scale = newScale;
+        
+        viewport.setAttribute('transform', 'translate(' + currentTranslate.x + ',' + currentTranslate.y + ') scale(' + scale + ')');
+      }, { passive: false });
+      
+      // Pan with mouse drag
+      svg.addEventListener('mousedown', function(e) {
+        isPanning = true;
+        startPoint = { x: e.clientX, y: e.clientY };
+        svg.style.cursor = 'grabbing';
+      });
+      
+      window.addEventListener('mousemove', function(e) {
+        if (!isPanning) return;
+        const dx = (e.clientX - startPoint.x) / scale;
+        const dy = (e.clientY - startPoint.y) / scale;
+        currentTranslate.x += dx;
+        currentTranslate.y += dy;
+        startPoint = { x: e.clientX, y: e.clientY };
+        viewport.setAttribute('transform', 'translate(' + currentTranslate.x + ',' + currentTranslate.y + ') scale(' + scale + ')');
+      });
+      
+      window.addEventListener('mouseup', function() {
+        isPanning = false;
+        svg.style.cursor = 'grab';
+      });
+      
+      // Reset on double click
+      svg.addEventListener('dblclick', function() {
+        currentTranslate = { x: 0, y: 0 };
+        scale = 1;
+        viewport.setAttribute('transform', 'translate(0,0) scale(1)');
+      });
+    })();
+    ]]>
+  </script>
+</svg>
