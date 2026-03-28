@@ -1310,14 +1310,47 @@ fn find_symbol_by_name(store: &Store, name: &str) -> Option<String> {
 }
 
 fn cleanup_generic_file_entities(store: &Store, rel_path: &str) -> Result<(), IndexError> {
-    // Delete all entities associated with this file path
-    if let Ok(entities) = store.list_entities() {
-        for entity in entities {
-            if entity.path.as_deref() == Some(rel_path) {
-                let _ = store.delete_entity(&entity.id);
+    // Find all entities associated with this file path
+    let entities_to_cleanup: Vec<String> = store
+        .list_entities()
+        .unwrap_or_default()
+        .into_iter()
+        .filter(|e| e.path.as_deref() == Some(rel_path))
+        .map(|e| e.id)
+        .collect();
+    
+    for entity_id in entities_to_cleanup {
+        // Delete outgoing edges (entity as source)
+        if let Ok(edges) = store.edges_from(&entity_id) {
+            for edge in edges {
+                let _ = store.delete_edge(&edge.src_id, edge.rel, &edge.dst_id);
             }
         }
+        
+        // Delete incoming edges (entity as destination)  
+        if let Ok(edges) = store.edges_to(&entity_id) {
+            for edge in edges {
+                let _ = store.delete_edge(&edge.src_id, edge.rel, &edge.dst_id);
+            }
+        }
+        
+        // Delete task routes for this entity
+        if let Ok(routes) = store.routes_for_entity(&entity_id) {
+            for route in routes {
+                let _ = store.delete_task_route(&route.task_name, &route.entity_id);
+            }
+        }
+        
+        // Delete summary for this entity
+        let _ = store.delete_summary(&entity_id);
+        
+        // Delete embedding for this entity
+        let _ = store.delete_embedding(&entity_id);
+        
+        // Finally delete the entity itself
+        let _ = store.delete_entity(&entity_id);
     }
+    
     Ok(())
 }
 
