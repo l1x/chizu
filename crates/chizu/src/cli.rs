@@ -170,17 +170,17 @@ pub struct EmbedCmd {
 #[derive(FromArgs, Debug)]
 #[argh(subcommand, name = "search")]
 pub struct SearchCmd {
-    /// base URL for the OpenAI-compatible API
+    /// base URL for the OpenAI-compatible API (overrides config)
     #[argh(option)]
-    pub base_url: String,
+    pub base_url: Option<String>,
 
-    /// API key for authentication
+    /// API key for authentication (overrides config)
     #[argh(option)]
-    pub api_key: String,
+    pub api_key: Option<String>,
 
-    /// embedding model identifier (e.g. text-embedding-3-small)
+    /// embedding model identifier (overrides config)
     #[argh(option)]
-    pub model: String,
+    pub model: Option<String>,
 
     /// the search query
     #[argh(positional)]

@@ -121,7 +121,7 @@ fn main() {
         },
         Command::Summarize(cmd) => cmd_summarize(&store, cmd, &repo_path, _config.as_ref()),
         Command::Embed(cmd) => cmd_embed(&store, cmd),
-        Command::Search(cmd) => cmd_search(&store, cmd),
+        Command::Search(cmd) => cmd_search(&store, cmd, _config.as_ref()),
         Command::Watch(cmd) => cmd_watch(&store, &repo_path, cmd.debounce_ms),
         Command::Plan(cmd) => cmd_plan(&store, cmd),
         Command::Config(_) => {
@@ -884,9 +884,24 @@ fn cmd_plan(store: &Store, cmd: PlanCmd) {
     }
 }
 
-fn cmd_search(store: &Store, cmd: SearchCmd) {
-    let config = chizu_summarize::SummarizeConfig::new(cmd.base_url, cmd.api_key, cmd.model);
-    let client = match chizu_summarize::EmbeddingClient::new(&config) {
+fn cmd_search(store: &Store, cmd: SearchCmd, config: Option<&config::Config>) {
+    // Use CLI args if provided, otherwise fall back to config
+    let embed_cfg = config.map(|c| &c.embedding);
+    
+    let base_url = cmd.base_url
+        .or_else(|| embed_cfg.map(|c| c.base_url.clone()))
+        .unwrap_or_else(|| "http://localhost:11434/v1".to_string());
+    
+    let api_key = cmd.api_key
+        .or_else(|| embed_cfg.map(|c| c.api_key.clone()))
+        .unwrap_or_default();
+    
+    let model = cmd.model
+        .or_else(|| embed_cfg.map(|c| c.model.clone()))
+        .unwrap_or_else(|| "nomic-embed-text-v2-moe:latest".to_string());
+
+    let summarize_config = chizu_summarize::SummarizeConfig::new(base_url, api_key, model);
+    let client = match chizu_summarize::EmbeddingClient::new(&summarize_config) {
         Ok(c) => c,
         Err(e) => {
             eprintln!("error: {e}");
