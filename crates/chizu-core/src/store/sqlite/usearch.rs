@@ -62,7 +62,7 @@ impl SqliteStore {
 
         let idx_ref = self.vector_index.borrow();
         let index = idx_ref.as_ref().unwrap();
-        
+
         // Ensure capacity - reserve more if needed
         let current_size = index.size();
         let capacity = index.capacity();
@@ -72,7 +72,7 @@ impl SqliteStore {
                 .reserve(new_capacity)
                 .map_err(|e| crate::error::ChizuError::Other(format!("usearch: {e}")))?;
         }
-        
+
         // Idempotent upsert: remove old key first (ignore errors if not found)
         let _ = index.remove(key);
         index

@@ -243,7 +243,7 @@ dependencies = [
 
 [[package]]
 name = "chizu"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "argh",
  "chizu-core",
@@ -264,7 +264,7 @@ dependencies = [
 
 [[package]]
 name = "chizu-core"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "blake3",
  "criterion",
@@ -279,7 +279,7 @@ dependencies = [
 
 [[package]]
 name = "chizu-index"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "blake3",
  "cargo_metadata",
@@ -301,7 +301,7 @@ dependencies = [
 
 [[package]]
 name = "chizu-query"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "chizu-core",
  "serde",
@@ -312,7 +312,7 @@ dependencies = [
 
 [[package]]
 name = "chizu-summarize"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "blake3",
  "chizu-core",
@@ -324,7 +324,7 @@ dependencies = [
 
 [[package]]
 name = "chizu-visualize"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "chizu-core",
  "petgraph",
