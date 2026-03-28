@@ -455,17 +455,13 @@ fn resolve_ts_import(
     let resolved = importing_dir.join(import_path);
 
     // Normalize the path (collapse .. and .)
-    let normalized = normalize_path(&resolved);
+    // Returns None if path goes outside project root
+    let normalized = normalize_path(&resolved)?;
 
     // Extensions to probe
     let probes: &[&str] = &["", ".ts", ".tsx", ".js", ".jsx", "/index.ts", "/index.tsx"];
 
     let normalized_str = normalized.display().to_string();
-
-    // Guard against path traversal outside the project root
-    if normalized_str.starts_with("..") {
-        return None;
-    }
 
     for ext in probes {
         let candidate = format!("{normalized_str}{ext}");
@@ -479,21 +475,23 @@ fn resolve_ts_import(
 }
 
 /// Normalize a path by collapsing `.` and `..` components without touching the filesystem.
-fn normalize_path(path: &Path) -> PathBuf {
+/// Normalize a path by resolving `.` and `..` components.
+/// Returns `None` if the path goes outside the root (e.g., `../../foo` when only one level deep).
+fn normalize_path(path: &Path) -> Option<PathBuf> {
     let mut components = Vec::new();
     for component in path.components() {
         match component {
             std::path::Component::CurDir => {} // skip "."
             std::path::Component::ParentDir => {
-                // Pop last component unless we're at root
-                if !components.is_empty() {
-                    components.pop();
+                // Pop last component, or return None if we're already at root
+                if components.pop().is_none() {
+                    return None; // Path goes outside root
                 }
             }
             other => components.push(other),
         }
     }
-    components.iter().collect()
+    Some(components.iter().collect())
 }
 
 fn index_generic_source_file(
@@ -1708,6 +1706,7 @@ mod tests {
             &rs_path,
             tmp.path(),
             "rust",
+            None,
             &mut stats,
             &mut indexed,
         )
@@ -1745,6 +1744,7 @@ mod tests {
             &rs_path,
             tmp.path(),
             "rust",
+            None,
             &mut stats,
             &mut indexed,
         )
@@ -1784,6 +1784,7 @@ mod tests {
             &rs_path,
             tmp.path(),
             "rust",
+            None,
             &mut stats,
             &mut indexed,
         )
@@ -2032,13 +2033,27 @@ mod tests {
     #[test]
     fn normalize_path_handles_parent() {
         let p = Path::new("src/sub/../utils.ts");
-        assert_eq!(normalize_path(p), PathBuf::from("src/utils.ts"));
+        assert_eq!(normalize_path(p), Some(PathBuf::from("src/utils.ts")));
     }
 
     #[test]
     fn normalize_path_handles_current_dir() {
         let p = Path::new("src/./utils.ts");
-        assert_eq!(normalize_path(p), PathBuf::from("src/utils.ts"));
+        assert_eq!(normalize_path(p), Some(PathBuf::from("src/utils.ts")));
+    }
+    
+    #[test]
+    fn normalize_path_detects_traversal_outside_root() {
+        // Path goes outside root: src/../../foo from src/file.ts
+        let p = Path::new("src/../../foo");
+        assert_eq!(normalize_path(p), None);
+    }
+    
+    #[test]
+    fn normalize_path_detects_deep_traversal() {
+        // Many parent components from deep path
+        let p = Path::new("a/b/c/../../../../../../foo");
+        assert_eq!(normalize_path(p), None);
     }
 
     #[test]
