@@ -67,10 +67,7 @@ impl QueryMetrics {
                 "Number of candidates per query",
                 &[1.0, 5.0, 10.0, 25.0, 50.0, 100.0, 250.0, 500.0],
             ),
-            vector_searches: counter(
-                "chizu.query.vector_searches",
-                "Queries using vector search",
-            ),
+            vector_searches: counter("chizu.query.vector_searches", "Queries using vector search"),
         }
     }
 }

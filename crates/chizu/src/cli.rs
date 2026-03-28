@@ -40,6 +40,7 @@ pub enum Command {
     Plan(PlanCmd),
     Guide(GuideCmd),
     Config(ConfigCmd),
+    Visualize(VisualizeCmd),
 }
 
 /// index a codebase into the graph
@@ -111,25 +112,25 @@ pub struct InspectCmd {
 #[derive(FromArgs, Debug)]
 #[argh(subcommand, name = "summarize")]
 pub struct SummarizeCmd {
-    /// base URL for the OpenAI-compatible API
+    /// base URL for the OpenAI-compatible API (overrides config)
     #[argh(option)]
-    pub base_url: String,
+    pub base_url: Option<String>,
 
-    /// API key for authentication
+    /// API key for authentication (overrides config)
     #[argh(option)]
-    pub api_key: String,
+    pub api_key: Option<String>,
 
-    /// model identifier (e.g. gpt-4o-mini)
+    /// model identifier (overrides config)
     #[argh(option)]
-    pub model: String,
+    pub model: Option<String>,
 
-    /// maximum tokens in the response (default: 512)
-    #[argh(option, default = "512")]
-    pub max_tokens: u32,
+    /// maximum tokens in the response (overrides config)
+    #[argh(option)]
+    pub max_tokens: Option<u32>,
 
-    /// sampling temperature (default: 0.2)
-    #[argh(option, default = "0.2")]
-    pub temperature: f32,
+    /// sampling temperature (overrides config)
+    #[argh(option)]
+    pub temperature: Option<f32>,
 
     /// only summarize this component
     #[argh(option)]
@@ -272,4 +273,37 @@ pub struct ConfigValidateCmd {
     /// path to config file (default: search upwards for .chizu.toml)
     #[argh(option)]
     pub path: Option<String>,
+}
+
+/// visualize the knowledge graph as an SVG
+#[derive(FromArgs, Debug)]
+#[argh(subcommand, name = "visualize")]
+pub struct VisualizeCmd {
+    /// entity id to visualize as root (if not set, visualizes all)
+    #[argh(option)]
+    pub entity_id: Option<String>,
+
+    /// traversal depth from root entity (default: 2)
+    #[argh(option, default = "2")]
+    pub depth: usize,
+
+    /// filter by entity kind (can specify multiple)
+    #[argh(option)]
+    pub kind: Vec<String>,
+
+    /// layout algorithm: hierarchical, force-directed, radial (default: hierarchical)
+    #[argh(option, default = "String::from(\"hierarchical\")")]
+    pub layout: String,
+
+    /// maximum number of nodes to render (default: 100)
+    #[argh(option, default = "100")]
+    pub max_nodes: usize,
+
+    /// output file path (default: stdout)
+    #[argh(option)]
+    pub output: Option<String>,
+
+    /// include legend in the visualization
+    #[argh(switch)]
+    pub legend: bool,
 }

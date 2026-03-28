@@ -2,11 +2,11 @@ mod cli;
 mod config;
 mod observability;
 
+use chizu_core::Store;
 use cli::{
     Command, ConfigInitCmd, ConfigSub, ConfigValidateCmd, EmbedCmd, PlanCmd, QuerySub, SearchCmd,
-    SummarizeCmd, TopLevel,
+    SummarizeCmd, TopLevel, VisualizeCmd,
 };
-use chizu_core::Store;
 use observability::{record_store_stats, ObservabilityConfig};
 use std::str::FromStr;
 
@@ -119,7 +119,7 @@ fn main() {
             Some(ref id) => cmd_inspect_entity(&store, id),
             None => cmd_inspect_overview(&store),
         },
-        Command::Summarize(cmd) => cmd_summarize(&store, cmd, &repo_path),
+        Command::Summarize(cmd) => cmd_summarize(&store, cmd, &repo_path, _config.as_ref()),
         Command::Embed(cmd) => cmd_embed(&store, cmd),
         Command::Search(cmd) => cmd_search(&store, cmd),
         Command::Watch(cmd) => cmd_watch(&store, &repo_path, cmd.debounce_ms),
@@ -131,6 +131,7 @@ fn main() {
             // Already handled above
             unreachable!()
         }
+        Command::Visualize(cmd) => cmd_visualize(&store, cmd),
     }
 }
 
@@ -229,6 +230,15 @@ fn cmd_config_validate(cmd: &ConfigValidateCmd, repo_path: &std::path::Path) {
                 config.query.rerank_weights.path_match
             );
             println!("\n[llm]");
+            println!("  base_url: {}", config.llm.base_url);
+            println!(
+                "  api_key: {}",
+                if config.llm.api_key.is_empty() {
+                    "(none)"
+                } else {
+                    "(set)"
+                }
+            );
             println!("  default_model: {}", config.llm.default_model);
             println!("  timeout_secs: {}", config.llm.timeout_secs);
             println!("  retry_attempts: {}", config.llm.retry_attempts);
@@ -383,12 +393,43 @@ fn cmd_index(
     }
 }
 
-fn cmd_summarize(store: &Store, cmd: SummarizeCmd, repo_path: &std::path::Path) {
-    let config = chizu_summarize::SummarizeConfig::new(cmd.base_url, cmd.api_key, cmd.model);
-    let config = chizu_summarize::SummarizeConfig {
-        max_tokens: cmd.max_tokens,
-        temperature: cmd.temperature,
-        ..config
+fn cmd_summarize(
+    store: &Store,
+    cmd: SummarizeCmd,
+    repo_path: &std::path::Path,
+    config: Option<&config::Config>,
+) {
+    // Use CLI args if provided, otherwise fall back to config, then defaults
+    let llm_cfg = config.map(|c| &c.llm);
+
+    let base_url = cmd
+        .base_url
+        .or_else(|| llm_cfg.map(|c| c.base_url.clone()))
+        .unwrap_or_else(|| "http://localhost:11434/v1".to_string());
+
+    let api_key = cmd
+        .api_key
+        .or_else(|| llm_cfg.map(|c| c.api_key.clone()))
+        .unwrap_or_default();
+
+    let model = cmd
+        .model
+        .or_else(|| llm_cfg.map(|c| c.default_model.clone()))
+        .unwrap_or_else(|| "gpt-4o-mini".to_string());
+
+    let max_tokens = cmd
+        .max_tokens
+        .unwrap_or_else(|| llm_cfg.map(|c| c.max_tokens).unwrap_or(512));
+
+    let temperature = cmd
+        .temperature
+        .unwrap_or_else(|| llm_cfg.map(|c| c.temperature).unwrap_or(0.2));
+
+    let summarize_config = chizu_summarize::SummarizeConfig::new(base_url, api_key, model);
+    let summarize_config = chizu_summarize::SummarizeConfig {
+        max_tokens,
+        temperature,
+        ..summarize_config
     };
     let options = chizu_summarize::summarizer::SummarizeOptions {
         component: cmd.component,
@@ -399,7 +440,7 @@ fn cmd_summarize(store: &Store, cmd: SummarizeCmd, repo_path: &std::path::Path) 
     tracing::info!("starting summarization");
     let start = std::time::Instant::now();
 
-    match chizu_summarize::summarize_graph(store, &config, &options) {
+    match chizu_summarize::summarize_graph(store, &summarize_config, &options) {
         Ok(stats) => {
             let duration = start.elapsed().as_secs_f64();
             tracing::info!(
@@ -1065,16 +1106,18 @@ NOTE: Most commands require --repo <path> to specify the repository root.
 
   Key settings in .chizu.toml:
   ─────────────────────────────
+  [llm]
+  base_url = "http://localhost:11434/v1"
+  api_key = ""                  # empty for local Ollama
+  default_model = "llama3:8b"   # For summarize command
+
   [embedding]
-  provider = "ollama"           # or "openai"
+  enabled = true                # Auto-generate on index --embed
+  provider = "ollama"
   model = "nomic-embed-text-v2-moe"
 
   [query]
   default_limit = 20            # Default result count
-
-  [llm]
-  provider = "ollama"           # For summarize command
-  model = "llama3.2"
 
 ┌──────────────────────────────────────────────────────────────────────────────┐
 │  EMBEDDINGS: When you need them                                              │
@@ -1121,6 +1164,7 @@ NOTE: Most commands require --repo <path> to specify the repository root.
   chizu --repo <path> summarize            Generate summary
   chizu --repo <path> embed                Generate embeddings for existing index
   chizu --repo <path> watch                Auto-reindex on changes
+  chizu --repo <path> visualize            Generate SVG visualization of the graph
   chizu --repo <path> config init          Create config file
 
 ══════════════════════════════════════════════════════════════════════════════
@@ -1131,4 +1175,173 @@ semantic similarity. Start with plan, drill down with inspect.
 For more details: chizu --help
 "#
     );
+}
+
+#[tracing::instrument(skip(store))]
+fn cmd_visualize(store: &Store, cmd: VisualizeCmd) {
+    use chizu_core::model::edge::Edge;
+    use chizu_core::model::entity::Entity;
+    use chizu_visualize::{generate_svg, LayoutType, VisualizeConfig, VizEdge, VizNode};
+
+    tracing::info!(
+        entity_id = ?cmd.entity_id,
+        depth = cmd.depth,
+        layout = %cmd.layout,
+        "starting visualization"
+    );
+
+    // Load entities and edges
+    let entities: Vec<Entity> = match store.list_entities() {
+        Ok(e) => e,
+        Err(e) => {
+            tracing::error!(error = %e, "failed to list entities");
+            eprintln!("error: failed to list entities: {e}");
+            std::process::exit(1);
+        }
+    };
+
+    // Filter by kind if specified
+    let entities: Vec<Entity> = if cmd.kind.is_empty() {
+        entities
+    } else {
+        entities
+            .into_iter()
+            .filter(|e| {
+                cmd.kind
+                    .iter()
+                    .any(|k| format!("{:?}", e.kind).to_lowercase() == k.to_lowercase())
+            })
+            .collect()
+    };
+
+    // Limit to max_nodes
+    let entities: Vec<Entity> = if entities.len() > cmd.max_nodes {
+        entities.into_iter().take(cmd.max_nodes).collect()
+    } else {
+        entities
+    };
+
+    // If entity_id specified, do BFS traversal
+    let (entities, edges) = if let Some(ref root_id) = cmd.entity_id {
+        let mut visited: std::collections::HashSet<String> = std::collections::HashSet::new();
+        let mut result_entities: Vec<Entity> = Vec::new();
+        let mut result_edges: Vec<Edge> = Vec::new();
+        let mut queue: std::collections::VecDeque<(String, usize)> =
+            std::collections::VecDeque::new();
+
+        queue.push_back((root_id.clone(), 0));
+        visited.insert(root_id.clone());
+
+        while let Some((current_id, depth)) = queue.pop_front() {
+            if depth > cmd.depth {
+                continue;
+            }
+
+            // Find entity
+            if let Ok(entity) = store.get_entity(&current_id) {
+                result_entities.push(entity.clone());
+
+                // Get outgoing edges
+                if let Ok(outgoing) = store.edges_from(&current_id) {
+                    for edge in outgoing {
+                        if !visited.contains(&edge.dst_id) && result_entities.len() < cmd.max_nodes
+                        {
+                            visited.insert(edge.dst_id.clone());
+                            result_edges.push(edge.clone());
+                            queue.push_back((edge.dst_id.clone(), depth + 1));
+                        }
+                    }
+                }
+
+                // Get incoming edges
+                if let Ok(incoming) = store.edges_to(&current_id) {
+                    for edge in incoming {
+                        if !visited.contains(&edge.src_id) && result_entities.len() < cmd.max_nodes
+                        {
+                            visited.insert(edge.src_id.clone());
+                            result_edges.push(edge.clone());
+                            queue.push_back((edge.src_id.clone(), depth + 1));
+                        }
+                    }
+                }
+            }
+        }
+
+        (result_entities, result_edges)
+    } else {
+        // Get all edges for the filtered entities
+        let entity_ids: std::collections::HashSet<String> =
+            entities.iter().map(|e| e.id.clone()).collect();
+        let mut edges: Vec<Edge> = Vec::new();
+
+        for entity in &entities {
+            if let Ok(outgoing) = store.edges_from(&entity.id) {
+                for edge in outgoing {
+                    if entity_ids.contains(&edge.dst_id) {
+                        edges.push(edge);
+                    }
+                }
+            }
+        }
+
+        (entities, edges)
+    };
+
+    // Convert to visualization types
+    let viz_nodes: Vec<VizNode> = entities
+        .into_iter()
+        .map(|e| VizNode {
+            id: e.id,
+            name: e.name,
+            kind: e.kind,
+            component: e.component_id,
+        })
+        .collect();
+
+    let viz_edges: Vec<VizEdge> = edges
+        .into_iter()
+        .map(|e| VizEdge {
+            source: e.src_id,
+            target: e.dst_id,
+            kind: e.rel,
+        })
+        .collect();
+
+    // Build config
+    let layout = cmd
+        .layout
+        .parse::<LayoutType>()
+        .unwrap_or(LayoutType::Hierarchical);
+    let config = VisualizeConfig {
+        layout,
+        max_nodes: cmd.max_nodes,
+        include_legend: cmd.legend,
+        ..Default::default()
+    };
+
+    // Generate SVG
+    match generate_svg(viz_nodes, viz_edges, config) {
+        Ok(svg) => {
+            if let Some(output_path) = cmd.output {
+                match std::fs::write(&output_path, svg) {
+                    Ok(_) => {
+                        tracing::info!(path = %output_path, "SVG written to file");
+                        println!("visualization written to {}", output_path);
+                    }
+                    Err(e) => {
+                        tracing::error!(error = %e, "failed to write SVG");
+                        eprintln!("error: failed to write SVG: {e}");
+                        std::process::exit(1);
+                    }
+                }
+            } else {
+                println!("{}", svg);
+            }
+        }
+        Err(e) => {
+            tracing::error!(error = %e, "visualization generation failed");
+            eprintln!("error: failed to generate visualization: {e}");
+            std::process::exit(1);
+        }
+    }
 }

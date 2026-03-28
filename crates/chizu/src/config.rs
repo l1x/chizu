@@ -185,11 +185,17 @@ exported = 0.05        # Bonus for exported/public entities
 path_match = 0.05      # File path matching
 
 [llm]
-# Default model for summarization and embeddings
-default_model = "gpt-4o-mini"
+# Base URL for OpenAI-compatible API (e.g., Ollama, OpenAI)
+base_url = "http://localhost:11434/v1"
+
+# API key for authentication (empty for local endpoints like Ollama)
+api_key = ""
+
+# Default model for summarization
+default_model = "llama3:8b"
 
 # API timeout in seconds (1-300)
-timeout_secs = 60
+timeout_secs = 120
 
 # Number of retry attempts for failed requests (0-10)
 retry_attempts = 3
@@ -355,6 +361,14 @@ impl Default for RerankWeights {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct LlmConfig {
+    /// Base URL for the OpenAI-compatible API.
+    #[serde(default = "default_base_url")]
+    pub base_url: String,
+
+    /// API key for authentication (empty string for local endpoints).
+    #[serde(default = "default_api_key")]
+    pub api_key: String,
+
     /// Default model for LLM operations.
     #[serde(default = "default_model")]
     pub default_model: String,
@@ -376,6 +390,13 @@ pub struct LlmConfig {
     pub temperature: f32,
 }
 
+fn default_base_url() -> String {
+    "http://localhost:11434/v1".to_string()
+}
+fn default_api_key() -> String {
+    String::new()
+}
+
 fn default_model() -> String {
     "gpt-4o-mini".to_string()
 }
@@ -395,6 +416,8 @@ fn default_temperature() -> f32 {
 impl Default for LlmConfig {
     fn default() -> Self {
         Self {
+            base_url: default_base_url(),
+            api_key: default_api_key(),
             default_model: default_model(),
             timeout_secs: default_timeout(),
             retry_attempts: default_retry_attempts(),

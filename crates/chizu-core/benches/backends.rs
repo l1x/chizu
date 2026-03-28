@@ -1,6 +1,6 @@
-use criterion::{criterion_group, criterion_main, BatchSize, Criterion};
 use chizu_core::model::*;
 use chizu_core::store::Store;
+use criterion::{criterion_group, criterion_main, BatchSize, Criterion};
 
 // ---------------------------------------------------------------------------
 // Helpers

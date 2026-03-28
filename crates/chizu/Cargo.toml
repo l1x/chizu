@@ -1,6 +1,6 @@
 [package]
 name = "chizu"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 
 [features]
@@ -14,6 +14,7 @@ chizu-core = { path = "../chizu-core" }
 chizu-index = { path = "../chizu-index" }
 chizu-summarize = { path = "../chizu-summarize" }
 chizu-query = { path = "../chizu-query" }
+chizu-visualize = { path = "../chizu-visualize" }
 serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
