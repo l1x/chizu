@@ -279,7 +279,7 @@ pub struct ConfigValidateCmd {
 #[derive(FromArgs, Debug)]
 #[argh(subcommand, name = "visualize")]
 pub struct VisualizeCmd {
-    /// entity id to visualize as root (if not set, visualizes all)
+    /// entity id to visualize as root (if not set, visualizes symbols and source files)
     #[argh(option)]
     pub entity_id: Option<String>,
 
@@ -287,16 +287,20 @@ pub struct VisualizeCmd {
     #[argh(option, default = "2")]
     pub depth: usize,
 
-    /// filter by entity kind (can specify multiple)
+    /// include only these entity kinds (can specify multiple, default: symbol,source_unit,test)
     #[argh(option)]
     pub kind: Vec<String>,
 
-    /// layout algorithm: hierarchical, force-directed, radial (default: hierarchical)
+    /// exclude these entity kinds (can specify multiple, e.g., directory,repo)
+    #[argh(option)]
+    pub exclude: Vec<String>,
+
+    /// layout algorithm: hierarchical, radial (default: hierarchical)
     #[argh(option, default = "String::from(\"hierarchical\")")]
     pub layout: String,
 
-    /// maximum number of nodes to render (default: 100)
-    #[argh(option, default = "100")]
+    /// maximum number of nodes to render (default: 50)
+    #[argh(option, default = "50")]
     pub max_nodes: usize,
 
     /// output file path (default: stdout)

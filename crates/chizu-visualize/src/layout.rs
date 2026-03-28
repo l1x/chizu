@@ -68,13 +68,17 @@ pub fn hierarchical_layout<N, E>(
         level_groups[*level].push(*node);
     }
 
-    // Calculate positions
-    let margin = 80.0;
-    let available_width = config.width - 2.0 * margin;
+    // Calculate positions with better spacing
+    let margin_x = 100.0;
+    let margin_y = 80.0;
+    let node_width = 140.0;
+    let _node_height = 60.0;
+    
+    let available_width = config.width - 2.0 * margin_x;
     let available_height = if config.include_legend {
-        config.height - 100.0 - 2.0 * margin
+        config.height - 100.0 - 2.0 * margin_y
     } else {
-        config.height - 2.0 * margin
+        config.height - 2.0 * margin_y
     };
 
     let level_height = if max_level > 0 {
@@ -86,25 +90,27 @@ pub fn hierarchical_layout<N, E>(
     let mut positions: HashMap<NodeIndex, (f64, f64)> = HashMap::new();
 
     for (level, nodes) in level_groups.iter().enumerate() {
-        let y = margin + level as f64 * level_height;
+        let y = margin_y + level as f64 * level_height;
         let node_count = nodes.len();
 
         if node_count == 0 {
             continue;
         }
 
-        let spacing = if node_count > 1 {
-            available_width / (node_count - 1) as f64
+        // Calculate spacing to fit all nodes with minimum gap
+        let min_spacing = node_width + 40.0;
+        let total_width_needed = node_count as f64 * min_spacing;
+        
+        let spacing = if total_width_needed > available_width {
+            // Too many nodes - compress but keep minimum
+            (available_width - node_width) / (node_count - 1).max(1) as f64
         } else {
-            available_width / 2.0
+            // Center the group
+            min_spacing
         };
 
-        // Clamp spacing to prevent nodes from getting too close
-        let spacing = spacing.max(config.node_spacing);
-
-        // Recalculate with clamped spacing
-        let total_width = (node_count - 1) as f64 * spacing;
-        let start_x = (config.width - total_width) / 2.0;
+        let total_width = (node_count - 1) as f64 * spacing + node_width;
+        let start_x = margin_x + (available_width - total_width) / 2.0 + node_width / 2.0;
 
         for (i, node) in nodes.iter().enumerate() {
             let x = start_x + i as f64 * spacing;
@@ -115,153 +121,32 @@ pub fn hierarchical_layout<N, E>(
     Ok(positions)
 }
 
-/// Simple force-directed layout (simplified implementation)
-pub fn force_directed_layout<N, E>(
+/// Radial layout - places nodes in concentric circles
+pub fn radial_layout<N, E>(
     graph: &Graph<N, E>,
     config: &VisualizeConfig,
-    iterations: usize,
 ) -> Result<HashMap<NodeIndex, (f64, f64)>> {
-    let mut positions: HashMap<NodeIndex, (f64, f64)> = HashMap::new();
-    let mut velocities: HashMap<NodeIndex, (f64, f64)> = HashMap::new();
-
-    // Initialize with random positions
-    let mut rng = simple_rng(42);
-    for node in graph.node_indices() {
-        let x = rng.next_f64() * config.width * 0.8 + config.width * 0.1;
-        let y = rng.next_f64() * config.height * 0.8 + config.height * 0.1;
-        positions.insert(node, (x, y));
-        velocities.insert(node, (0.0, 0.0));
+    if graph.node_count() == 0 {
+        return Ok(HashMap::new());
     }
 
-    let repulsion_constant = 10000.0;
-    let attraction_constant = 0.01;
-    let damping = 0.9;
-    let center_force = 0.05;
+    let center_x = config.width / 2.0;
+    let center_y = config.height / 2.0;
+    let max_radius = (config.width.min(config.height) / 2.0) - 100.0;
 
-    for _ in 0..iterations {
-        // Calculate repulsive forces
-        let nodes: Vec<NodeIndex> = graph.node_indices().collect();
-        for i in 0..nodes.len() {
-            for j in (i + 1)..nodes.len() {
-                let node_a = nodes[i];
-                let node_b = nodes[j];
-
-                let (x1, y1) = positions[&node_a];
-                let (x2, y2) = positions[&node_b];
-
-                let dx = x1 - x2;
-                let dy = y1 - y2;
-                let dist_sq = dx * dx + dy * dy;
-                let dist = dist_sq.sqrt().max(1.0);
-
-                let force = repulsion_constant / dist_sq;
-                let fx = (dx / dist) * force;
-                let fy = (dy / dist) * force;
-
-                if let Some((vx, vy)) = velocities.get_mut(&node_a) {
-                    *vx += fx;
-                    *vy += fy;
-                }
-                if let Some((vx, vy)) = velocities.get_mut(&node_b) {
-                    *vx -= fx;
-                    *vy -= fy;
-                }
-            }
-        }
-
-        // Calculate attractive forces along edges
-        for edge in graph.edge_indices() {
-            let (source, target) = graph.edge_endpoints(edge).unwrap();
-            let (x1, y1) = positions[&source];
-            let (x2, y2) = positions[&target];
-
-            let dx = x2 - x1;
-            let dy = y2 - y1;
-            let dist = (dx * dx + dy * dy).sqrt().max(1.0);
-
-            let force = attraction_constant * dist;
-            let fx = (dx / dist) * force;
-            let fy = (dy / dist) * force;
-
-            if let Some((vx, vy)) = velocities.get_mut(&source) {
-                *vx += fx;
-                *vy += fy;
-            }
-            if let Some((vx, vy)) = velocities.get_mut(&target) {
-                *vx -= fx;
-                *vy -= fy;
-            }
-        }
-
-        // Apply centering force and update positions
-        let center_x = config.width / 2.0;
-        let center_y = config.height / 2.0;
-
-        for node in graph.node_indices() {
-            let (x, y) = positions[&node];
-            let (vx, vy) = velocities[&node];
-
-            // Centering force
-            let dx = center_x - x;
-            let dy = center_y - y;
-
-            let new_vx = (vx + dx * center_force) * damping;
-            let new_vy = (vy + dy * center_force) * damping;
-
-            let new_x = (x + new_vx).clamp(50.0, config.width - 50.0);
-            let new_y = (y + new_vy).clamp(50.0, config.height - 50.0);
-
-            positions.insert(node, (new_x, new_y));
-            velocities.insert(node, (new_vx, new_vy));
-        }
+    let mut positions: HashMap<NodeIndex, (f64, f64)> = HashMap::new();
+    let count = graph.node_count();
+    
+    // Simple radial layout - distribute evenly in a circle
+    for (i, node) in graph.node_indices().enumerate() {
+        let angle = 2.0 * std::f64::consts::PI * (i as f64) / (count as f64);
+        let radius = max_radius * (0.3 + 0.7 * ((i % 3) as f64) / 2.0);
+        
+        let x = center_x + radius * angle.cos();
+        let y = center_y + radius * angle.sin();
+        
+        positions.insert(node, (x, y));
     }
 
     Ok(positions)
-}
-
-/// Simple deterministic RNG for consistent layouts
-struct SimpleRng {
-    state: u64,
-}
-
-fn simple_rng(seed: u64) -> SimpleRng {
-    SimpleRng { state: seed }
-}
-
-impl SimpleRng {
-    fn next_u64(&mut self) -> u64 {
-        // xorshift64*
-        self.state ^= self.state >> 12;
-        self.state ^= self.state << 25;
-        self.state ^= self.state >> 27;
-        self.state.wrapping_mul(0x2545_f491_4f6c_dd1d)
-    }
-
-    fn next_f64(&mut self) -> f64 {
-        (self.next_u64() as f64) / (u64::MAX as f64)
-    }
-}
-
-/// Layout options for fine-tuning
-#[derive(Debug, Clone)]
-pub struct LayoutOptions {
-    /// Minimum node spacing
-    pub min_node_spacing: f64,
-    /// Minimum level spacing (for hierarchical)
-    pub min_level_spacing: f64,
-    /// Number of iterations for force-directed
-    pub iterations: usize,
-    /// Whether to center the layout
-    pub center: bool,
-}
-
-impl Default for LayoutOptions {
-    fn default() -> Self {
-        Self {
-            min_node_spacing: 100.0,
-            min_level_spacing: 80.0,
-            iterations: 100,
-            center: true,
-        }
-    }
 }

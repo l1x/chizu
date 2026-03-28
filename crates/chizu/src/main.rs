@@ -1200,14 +1200,35 @@ fn cmd_visualize(store: &Store, cmd: VisualizeCmd) {
         }
     };
 
-    // Filter by kind if specified
-    let entities: Vec<Entity> = if cmd.kind.is_empty() {
+    // Default to meaningful entity types if no --kind specified
+    let default_kinds: Vec<String> = vec!["symbol", "source_unit", "test", "doc"]
+        .into_iter()
+        .map(|s| s.to_string())
+        .collect();
+    let include_kinds = if cmd.kind.is_empty() {
+        &default_kinds
+    } else {
+        &cmd.kind
+    };
+
+    // Filter by include kinds
+    let entities: Vec<Entity> = entities
+        .into_iter()
+        .filter(|e| {
+            include_kinds
+                .iter()
+                .any(|k| format!("{:?}", e.kind).to_lowercase() == k.to_lowercase())
+        })
+        .collect();
+
+    // Filter by exclude kinds
+    let entities: Vec<Entity> = if cmd.exclude.is_empty() {
         entities
     } else {
         entities
             .into_iter()
             .filter(|e| {
-                cmd.kind
+                !cmd.exclude
                     .iter()
                     .any(|k| format!("{:?}", e.kind).to_lowercase() == k.to_lowercase())
             })

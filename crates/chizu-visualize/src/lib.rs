@@ -7,7 +7,7 @@ use std::collections::HashMap;
 pub mod layout;
 pub mod style;
 
-use layout::hierarchical_layout;
+use layout::{hierarchical_layout, radial_layout};
 use style::{EdgeStyle, ScandinavianTheme};
 
 #[derive(Debug, thiserror::Error)]
@@ -126,7 +126,8 @@ impl SvgGenerator {
         // Compute layout
         let positions = match self.config.layout {
             LayoutType::Hierarchical => hierarchical_layout(&graph, &self.config),
-            _ => hierarchical_layout(&graph, &self.config), // Fallback for now
+            LayoutType::Radial => radial_layout(&graph, &self.config),
+            _ => hierarchical_layout(&graph, &self.config),
         }?;
 
         // Generate SVG
@@ -207,48 +208,66 @@ impl SvgGenerator {
 
     fn render_node(&self, x: f64, y: f64, node: &VizNode) -> String {
         let style = self.theme.entity_style(&node.kind);
-        let node_width = 120.0;
-        let node_height = 50.0;
-        let rx = 4.0;
+        let node_width = 140.0;
+        let node_height = 55.0;
+        let rx = 6.0;
 
-        // Truncate name if too long
-        let display_name = if node.name.len() > 18 {
-            format!("{}...", &node.name[..15])
+        // Truncate name if too long - show more chars
+        let display_name = if node.name.len() > 22 {
+            format!("{}...", &node.name[..19])
         } else {
             node.name.clone()
         };
 
-        let label = format!("{:?}", node.kind).to_lowercase();
+        let kind_label = format!("{:?}", node.kind).to_lowercase();
         let hw = node_width / 2.0;
         let hh = node_height / 2.0;
         let fill = &style.fill;
         let stroke = &style.border;
+        
         format!(
             r##"  <g transform="translate({x}, {y})">
     <rect x="-{hw}" y="-{hh}" width="{node_width}" height="{node_height}" rx="{rx}" 
-          fill="{fill}" stroke="{stroke}" stroke-width="1"/>
-    <text y="-4" text-anchor="middle" font-family="monospace" font-size="11" font-weight="bold" fill="{stroke}">{label}</text>
-    <text y="12" text-anchor="middle" font-family="system-ui" font-size="9" fill="#64748b">{display_name}</text>
+          fill="{fill}" stroke="{stroke}" stroke-width="1.5"/>
+    <text y="-8" text-anchor="middle" font-family="system-ui" font-size="12" font-weight="600" fill="#1e293b">{display_name}</text>
+    <text y="14" text-anchor="middle" font-family="monospace" font-size="10" fill="{stroke}">{kind_label}</text>
   </g>
 "##
         )
     }
 
     fn render_edge(&self, x1: f64, y1: f64, x2: f64, y2: f64, style: &EdgeStyle) -> String {
-        // Simple straight line for now - could be improved with bezier curves
         let stroke_dasharray = match style.line_type {
             style::LineType::Solid => "none",
             style::LineType::Dashed => "5,5",
             style::LineType::Dotted => "2,2",
         };
 
+        // Use bezier curves for smoother edges
+        let _dx = (x2 - x1).abs();
+        let dy = (y2 - y1).abs();
+        
+        // Control points for bezier curve
+        let cp1x = x1;
+        let cp1y = y1 + dy * 0.5;
+        let cp2x = x2;
+        let cp2y = y2 - dy * 0.5;
+        
+        // If nodes are on same level, use horizontal curve
+        let (cp1x, cp1y, cp2x, cp2y) = if dy < 10.0 {
+            let mid_x = (x1 + x2) / 2.0;
+            (mid_x, y1 - 30.0, mid_x, y2 - 30.0)
+        } else {
+            (cp1x, cp1y, cp2x, cp2y)
+        };
+
         let color = &style.color;
         let width = style.width;
         let dash = stroke_dasharray;
         format!(
-            r##"  <line x1="{x1}" y1="{y1}" x2="{x2}" y2="{y2}" 
+            r##"  <path d="M {x1} {y1} C {cp1x} {cp1y}, {cp2x} {cp2y}, {x2} {y2}" 
         stroke="{color}" stroke-width="{width}" stroke-dasharray="{dash}" 
-        marker-end="url(#arrowhead)"/>
+        fill="none" marker-end="url(#arrowhead)"/>
 "##
         )
     }
