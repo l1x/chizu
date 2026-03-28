@@ -17,6 +17,7 @@ use crate::parser_ts::parse_ts_file;
 #[derive(Debug, Clone, Default)]
 pub struct IndexStats {
     pub crates_found: usize,
+    pub components_found: usize,
     pub files_indexed: usize,
     pub files_skipped: usize,
     pub files_removed: usize,
@@ -148,6 +149,7 @@ fn index_project_inner(store: &Store, path: &Path) -> Result<IndexStats, IndexEr
         path,
         path,
         &repo_entity_id,
+        None, // No component at root level
         &mut stats,
         &mut indexed_files,
         &mut image_refs,
@@ -194,6 +196,7 @@ fn index_generic_walk(
     dir: &Path,
     project_root: &Path,
     parent_entity_id: &str,
+    current_component_id: Option<String>,
     stats: &mut IndexStats,
     indexed_files: &mut HashSet<String>,
     image_refs: &mut Vec<ImageRef>,
@@ -205,6 +208,43 @@ fn index_generic_walk(
     let mut has_main_tf = false;
     let dir_rel_path = dir.strip_prefix(project_root).unwrap_or(dir);
     let dir_rel_str = dir_rel_path.display().to_string();
+    
+    // Check if this directory is a component (has Cargo.toml or package.json)
+    let mut component_id = current_component_id.clone();
+    let has_cargo_toml = entries.iter().any(|e| {
+        e.file_name().to_str() == Some("Cargo.toml")
+    });
+    let has_package_json = entries.iter().any(|e| {
+        e.file_name().to_str() == Some("package.json")
+    });
+    
+    if has_cargo_toml || has_package_json {
+        // This directory is a component - create/update component entity
+        let comp_name = dir.file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or(&dir_rel_str)
+            .to_string();
+        let comp_id = id::component_id(&comp_name);
+        
+        // Insert component entity if not already exists
+        if store.get_entity(&comp_id).is_err() {
+            store.insert_entity(&Entity {
+                id: comp_id.clone(),
+                kind: EntityKind::Component,
+                name: comp_name,
+                component_id: None,
+                path: Some(dir_rel_str.clone()),
+                language: None,
+                line_start: None,
+                line_end: None,
+                visibility: Some("pub".to_string()),
+                exported: true,
+            })?;
+            stats.components_found += 1;
+        }
+        
+        component_id = Some(comp_id);
+    }
 
     // Determine the current directory's entity ID.
     // For the project root, the Repo entity serves as the container (no Directory entity).
@@ -280,6 +320,7 @@ fn index_generic_walk(
                 &path,
                 project_root,
                 &current_entity_id,
+                component_id.clone(),
                 stats,
                 indexed_files,
                 image_refs,
@@ -308,6 +349,7 @@ fn index_generic_walk(
                         &path,
                         project_root,
                         "rust",
+                        component_id.clone(),
                         stats,
                         indexed_files,
                     )?;
@@ -319,6 +361,7 @@ fn index_generic_walk(
                         &path,
                         project_root,
                         "typescript",
+                        component_id.clone(),
                         stats,
                         indexed_files,
                     )?;
@@ -330,6 +373,7 @@ fn index_generic_walk(
                         &path,
                         project_root,
                         "astro",
+                        component_id.clone(),
                         stats,
                         indexed_files,
                     )?;
@@ -457,6 +501,7 @@ fn index_generic_source_file(
     path: &Path,
     project_root: &Path,
     language: &str,
+    component_id: Option<String>,
     stats: &mut IndexStats,
     indexed_files: &mut HashSet<String>,
 ) -> Result<(), IndexError> {
@@ -483,7 +528,7 @@ fn index_generic_source_file(
     // Insert/update FileRecord
     store.insert_file(&FileRecord {
         path: rel_path_str.clone(),
-        component_id: None,
+        component_id: component_id.clone(),
         kind: language.to_string(),
         hash,
         indexed: true,
@@ -500,7 +545,7 @@ fn index_generic_source_file(
             .and_then(|n| n.to_str())
             .unwrap_or(&rel_path_str)
             .to_string(),
-        component_id: None,
+        component_id: component_id.clone(),
         path: Some(rel_path_str.clone()),
         language: Some(language.to_string()),
         line_start: None,
@@ -531,7 +576,7 @@ fn index_generic_source_file(
                         id: entity_id.clone(),
                         kind: entity_kind,
                         name: sym.name.clone(),
-                        component_id: None,
+                        component_id: component_id.clone(),
                         path: Some(rel_path_str.clone()),
                         language: Some(language.to_string()),
                         line_start: Some(sym.line_start as i64),

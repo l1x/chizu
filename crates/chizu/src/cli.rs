@@ -66,6 +66,7 @@ pub enum QuerySub {
     Entity(QueryEntityCmd),
     Entities(QueryEntitiesCmd),
     Routes(QueryRoutesCmd),
+    Edges(QueryEdgesCmd),
 }
 
 /// look up a single entity by id
@@ -97,6 +98,23 @@ pub struct QueryRoutesCmd {
     /// routes for an entity id
     #[argh(option)]
     pub entity: Option<String>,
+}
+
+/// list edges (relationships) between entities
+#[derive(FromArgs, Debug)]
+#[argh(subcommand, name = "edges")]
+pub struct QueryEdgesCmd {
+    /// show outgoing edges from this entity
+    #[argh(option)]
+    pub from: Option<String>,
+
+    /// show incoming edges to this entity
+    #[argh(option)]
+    pub to: Option<String>,
+
+    /// filter by edge type (e.g., defines, uses, tested_by)
+    #[argh(option)]
+    pub rel: Option<String>,
 }
 
 /// inspect the graph

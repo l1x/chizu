@@ -114,6 +114,9 @@ fn main() {
             QuerySub::Routes(cmd) => {
                 cmd_query_routes(&store, cmd.task.as_deref(), cmd.entity.as_deref())
             }
+            QuerySub::Edges(cmd) => {
+                cmd_query_edges(&store, cmd.from.as_deref(), cmd.to.as_deref(), cmd.rel.as_deref())
+            }
         },
         Command::Inspect(cmd) => match cmd.entity_id {
             Some(ref id) => cmd_inspect_entity(&store, id),
@@ -541,6 +544,57 @@ fn cmd_query_routes(store: &Store, task: Option<&str>, entity: Option<&str>) {
             std::process::exit(1);
         }
     }
+}
+
+fn cmd_query_edges(store: &Store, from: Option<&str>, to: Option<&str>, rel: Option<&str>) {
+    
+    if from.is_none() && to.is_none() {
+        eprintln!("error: provide --from or --to");
+        std::process::exit(1);
+    }
+    
+    let edges = match (from, to) {
+        (Some(entity_id), _) => {
+            // Outgoing edges
+            match store.edges_from(entity_id) {
+                Ok(edges) => edges,
+                Err(e) => {
+                    eprintln!("error: {e}");
+                    std::process::exit(1);
+                }
+            }
+        }
+        (_, Some(entity_id)) => {
+            // Incoming edges
+            match store.edges_to(entity_id) {
+                Ok(edges) => edges,
+                Err(e) => {
+                    eprintln!("error: {e}");
+                    std::process::exit(1);
+                }
+            }
+        }
+        _ => unreachable!(),
+    };
+    
+    // Filter by relation type if specified
+    let edges: Vec<_> = if let Some(rel_filter) = rel {
+        edges.into_iter()
+            .filter(|e| e.rel.as_str().to_lowercase() == rel_filter.to_lowercase())
+            .collect()
+    } else {
+        edges
+    };
+    
+    if edges.is_empty() {
+        println!("no edges found");
+        return;
+    }
+    
+    for edge in &edges {
+        println!("{} --[{}]--> {}", edge.src_id, edge.rel, edge.dst_id);
+    }
+    println!("\n{} edges", edges.len());
 }
 
 fn cmd_inspect_overview(store: &Store) {
