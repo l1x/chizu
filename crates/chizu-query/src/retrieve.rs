@@ -11,6 +11,8 @@ pub enum RetrievalSource {
     NameMatch,
     PathMatch,
     VectorSearch { distance: f32 },
+    /// Found via graph expansion (neighbor of a direct match)
+    Context { via_entity_id: String },
 }
 
 /// A retrieval candidate with its provenance.

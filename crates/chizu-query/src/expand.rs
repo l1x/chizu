@@ -54,7 +54,7 @@ pub fn expand(
                 let (short_summary, keywords) = load_summary(store, &entity.id);
                 let candidate = Candidate {
                     entity,
-                    sources: vec![RetrievalSource::NameMatch], // placeholder; scoring handles context
+                    sources: vec![RetrievalSource::Context { via_entity_id: seed_id.clone() }],
                     short_summary,
                     keywords,
                 };
@@ -79,7 +79,7 @@ pub fn expand(
                 let (short_summary, keywords) = load_summary(store, &entity.id);
                 let candidate = Candidate {
                     entity,
-                    sources: vec![RetrievalSource::NameMatch],
+                    sources: vec![RetrievalSource::Context { via_entity_id: seed_id.clone() }],
                     short_summary,
                     keywords,
                 };
