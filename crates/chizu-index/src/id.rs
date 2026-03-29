@@ -2,8 +2,30 @@ pub fn repo_id(name: &str) -> String {
     format!("repo::{name}")
 }
 
+/// Legacy component ID (deprecated): based on manifest display name.
+/// Use `component_id_from_path` for canonical IDs instead.
 pub fn component_id(crate_name: &str) -> String {
     format!("component::{crate_name}")
+}
+
+/// Canonical component ID based on repo-relative root path + ecosystem.
+/// Format: `component::{ecosystem}::{root_path}`
+/// Examples:
+///   - `component::cargo::crates/chizu-core`
+///   - `component::npm::packages/web`
+///   - `component::npm::.` (root package)
+pub fn component_id_from_path(ecosystem: &str, root_path: &str) -> String {
+    // Normalize root_path: remove leading ./ and ensure consistent slashes
+    let normalized = root_path
+        .trim_start_matches("./")
+        .trim_start_matches('.')
+        .trim_start_matches('/');
+    
+    if normalized.is_empty() {
+        format!("component::{ecosystem}::.")
+    } else {
+        format!("component::{ecosystem}::{normalized}")
+    }
 }
 
 pub fn source_unit_id(crate_name: &str, path: &str) -> String {
@@ -97,6 +119,28 @@ mod tests {
     fn id_formats() {
         assert_eq!(repo_id("chizu"), "repo::chizu");
         assert_eq!(component_id("chizu-core"), "component::chizu-core");
+        
+        // Canonical component IDs based on path + ecosystem
+        assert_eq!(
+            component_id_from_path("cargo", "crates/chizu-core"),
+            "component::cargo::crates/chizu-core"
+        );
+        assert_eq!(
+            component_id_from_path("npm", "packages/web"),
+            "component::npm::packages/web"
+        );
+        assert_eq!(
+            component_id_from_path("npm", "."),
+            "component::npm::."
+        );
+        assert_eq!(
+            component_id_from_path("npm", "./"),
+            "component::npm::."
+        );
+        assert_eq!(
+            component_id_from_path("cargo", ""),
+            "component::cargo::."
+        );
         assert_eq!(
             source_unit_id("chizu-core", "crates/chizu-core/src/lib.rs"),
             "source_unit::chizu-core::crates/chizu-core/src/lib.rs"

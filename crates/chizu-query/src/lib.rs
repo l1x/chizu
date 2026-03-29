@@ -8,3 +8,4 @@ pub mod retrieve;
 pub use classify::TaskCategory;
 pub use pipeline::{PipelineConfig, QueryPipeline};
 pub use plan::{ReadingPlan, ReadingPlanItem};
+pub use rerank::RerankWeights;

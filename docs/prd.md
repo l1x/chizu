@@ -50,6 +50,23 @@ the model itself.
 - Requiring embeddings for the system to be useful
 - Full whole-program call graph precision in v1
 
+## Product Invariants
+
+These rules define correctness at the product level. The exact encoding and
+storage details belong in the graph-model spec.
+
+- Chizu must assign exactly one canonical component identity to each discovered
+  component root.
+- Manifest names and package names are labels and lookup aliases, not alternate
+  component identities.
+- Files and file-backed entities inside a component must inherit the canonical
+  `component_id` of their enclosing component root.
+- Incremental re-indexing must converge. Renames, moves, and deletions must not
+  leave stale ownership, stale graph edges, or stale summaries/embeddings behind.
+- Query and rerank signals must be backed by data actually produced during
+  indexing. Chizu should not rely on theoretical signals that are defined in the
+  model but not materialized in the graph.
+
 ## Architecture
 
 ```text
@@ -76,6 +93,10 @@ Both backends expose the same `Store` API. The choice is a compile-time feature
 flag (`grafeo` or `usearch`).
 
 ## Core Model
+
+Ownership correctness matters more than representational breadth in v1. If the
+system has to choose, it should prefer a smaller model with stable component
+identity over a broader model with ambiguous ownership.
 
 ### Entity Kinds
 

@@ -126,7 +126,7 @@ fn main() {
         Command::Embed(cmd) => cmd_embed(&store, cmd),
         Command::Search(cmd) => cmd_search(&store, cmd, _config.as_ref()),
         Command::Watch(cmd) => cmd_watch(&store, &repo_path, cmd.debounce_ms),
-        Command::Plan(cmd) => cmd_plan(&store, cmd),
+        Command::Plan(cmd) => cmd_plan(&store, cmd, _config.as_ref()),
         Command::Config(_) => {
             // Already handled above
         }
@@ -827,7 +827,7 @@ fn cmd_watch(store: &Store, repo_path: &std::path::Path, debounce_ms: u64) {
 }
 
 #[tracing::instrument(skip(store), fields(query = %cmd.query))]
-fn cmd_plan(store: &Store, cmd: PlanCmd) {
+fn cmd_plan(store: &Store, cmd: PlanCmd, app_config: Option<&config::Config>) {
     let category_override = cmd.category.as_ref().map(|c| {
         c.parse::<chizu_query::TaskCategory>().unwrap_or_else(|e| {
             eprintln!("error: {e}");
@@ -835,9 +835,23 @@ fn cmd_plan(store: &Store, cmd: PlanCmd) {
         })
     });
 
+    // Load rerank weights from config if available
+    let weights = app_config.map(|cfg| {
+        chizu_query::RerankWeights {
+            task_route: cfg.query.rerank_weights.task_route,
+            keyword: cfg.query.rerank_weights.keyword,
+            name_match: cfg.query.rerank_weights.name_match,
+            vector: cfg.query.rerank_weights.vector,
+            kind_preference: cfg.query.rerank_weights.kind_preference,
+            exported: cfg.query.rerank_weights.exported,
+            path_match: cfg.query.rerank_weights.path_match,
+        }
+    }).unwrap_or_default();
+
     let config = chizu_query::PipelineConfig {
         limit: cmd.limit,
         category_override,
+        weights,
         ..Default::default()
     };
 
@@ -1164,6 +1178,26 @@ NOTE: Most commands require --repo <path> to specify the repository root.
   • Uses 500ms debounce by default (configurable)
   • Only re-indexes changed files, not full rebuild
   • Press Ctrl+C to stop
+
+┌──────────────────────────────────────────────────────────────────────────────┐
+│  VISUALIZATION: See your codebase structure                                  │
+└──────────────────────────────────────────────────────────────────────────────┘
+
+  Generate an interactive SVG graph of your knowledge graph:
+
+    $ chizu --repo . visualize > graph.svg        # Full graph
+    $ chizu --repo . visualize --legend > graph.svg  # With legend
+    $ open graph.svg                              # View in browser
+
+  Focus on a specific component:
+
+    $ chizu --repo . visualize --entity-id component::cargo::crates/core > core.svg
+
+  Options:
+    --depth 3              # Increase traversal depth (default: 2)
+    --max-nodes 100        # Show more nodes (default: 50)
+    --layout radial        # Use radial layout (default: hierarchical)
+    --kind symbol,test     # Include only specific entity kinds
 
 ┌──────────────────────────────────────────────────────────────────────────────┐
 │  CONFIGURATION                                                               │

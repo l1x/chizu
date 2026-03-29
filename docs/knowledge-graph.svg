@@ -36,7 +36,7 @@
     <rect width="1120" height="580" fill="#ffffff" stroke="#e2e8f0" stroke-width="1" rx="8"/>
     <rect width="1120" height="4" fill="#1e293b" y="0" rx="2"/>
     <text x="20" y="28" font-family="monospace" font-size="13" font-weight="bold" fill="#1e293b">The Graph Structure</text>
-    <text x="20" y="44" font-size="10" fill="#94a3b8">Every Rust workspace maps to a hierarchical graph of entities connected by typed edges</text>
+    <text x="20" y="44" font-size="10" fill="#94a3b8">Each repo maps to canonical components, source units, and symbols connected by typed edges</text>
 
     <!-- Row labels (left side) -->
     <text x="12" y="98" font-size="9" font-weight="bold" fill="#94a3b8" transform="rotate(-90, 12, 98)" text-anchor="end">REPO</text>
@@ -50,7 +50,7 @@
       <rect width="280" height="4" fill="#d97706" y="0" rx="2"/>
       <circle cx="20" cy="28" r="6" fill="#fef3c7" stroke="#d97706" stroke-width="1"/>
       <text x="34" y="24" font-family="monospace" font-size="11" font-weight="bold" fill="#d97706">repo::acme-app</text>
-      <text x="34" y="38" font-size="9" fill="#94a3b8">Rust workspace root</text>
+      <text x="34" y="38" font-size="9" fill="#94a3b8">Local codebase root</text>
     </g>
 
     <!-- Repo → Component edges (contains) -->
@@ -63,31 +63,31 @@
     <text x="560" y="153" text-anchor="middle" font-family="monospace" font-size="9" fill="#3b82f6">contains</text>
 
     <!-- ── Component nodes ── -->
-    <!-- acme-api -->
+    <!-- services/api -->
     <g transform="translate(70, 184)">
       <rect width="260" height="48" fill="#ffffff" stroke="#3b82f6" stroke-width="1.5" rx="6"/>
       <rect width="260" height="4" fill="#3b82f6" y="0" rx="2"/>
       <circle cx="20" cy="28" r="6" fill="#dbeafe" stroke="#3b82f6" stroke-width="1"/>
-      <text x="34" y="24" font-family="monospace" font-size="11" font-weight="bold" fill="#3b82f6">component::acme-api</text>
-      <text x="34" y="38" font-size="9" fill="#94a3b8">HTTP API server</text>
+      <text x="34" y="24" font-family="monospace" font-size="10" font-weight="bold" fill="#3b82f6">component::cargo::services/api</text>
+      <text x="34" y="38" font-size="9" fill="#94a3b8">HTTP API  ·  alias: acme-api</text>
     </g>
 
-    <!-- acme-core -->
+    <!-- crates/core -->
     <g transform="translate(430, 184)">
       <rect width="260" height="48" fill="#ffffff" stroke="#3b82f6" stroke-width="1.5" rx="6"/>
       <rect width="260" height="4" fill="#3b82f6" y="0" rx="2"/>
       <circle cx="20" cy="28" r="6" fill="#dbeafe" stroke="#3b82f6" stroke-width="1"/>
-      <text x="34" y="24" font-family="monospace" font-size="11" font-weight="bold" fill="#3b82f6">component::acme-core</text>
-      <text x="34" y="38" font-size="9" fill="#94a3b8">shared business logic</text>
+      <text x="34" y="24" font-family="monospace" font-size="10" font-weight="bold" fill="#3b82f6">component::cargo::crates/core</text>
+      <text x="34" y="38" font-size="9" fill="#94a3b8">shared logic  ·  alias: acme-core</text>
     </g>
 
-    <!-- acme-web -->
+    <!-- sites/web -->
     <g transform="translate(790, 184)">
       <rect width="260" height="48" fill="#ffffff" stroke="#3b82f6" stroke-width="1.5" rx="6"/>
       <rect width="260" height="4" fill="#3b82f6" y="0" rx="2"/>
       <circle cx="20" cy="28" r="6" fill="#dbeafe" stroke="#3b82f6" stroke-width="1"/>
-      <text x="34" y="24" font-family="monospace" font-size="11" font-weight="bold" fill="#3b82f6">component::acme-web</text>
-      <text x="34" y="38" font-size="9" fill="#94a3b8">web frontend</text>
+      <text x="34" y="24" font-family="monospace" font-size="10" font-weight="bold" fill="#3b82f6">component::npm::sites/web</text>
+      <text x="34" y="38" font-size="9" fill="#94a3b8">frontend  ·  alias: @acme/web</text>
     </g>
 
     <!-- DependsOn edges (dashed orange) -->
@@ -110,53 +110,53 @@
     <line x1="960" y1="232" x2="1030" y2="310" stroke="#3b82f6" stroke-width="1" marker-end="url(#arr-blue)"/>
 
     <!-- ── Source Unit nodes ── -->
-    <!-- api/routes.rs -->
+    <!-- services/api/routes.rs -->
     <g transform="translate(30, 314)">
       <rect width="170" height="40" fill="#ffffff" stroke="#059669" stroke-width="1.5" rx="5"/>
       <rect width="170" height="3" fill="#059669" y="0" rx="2"/>
       <circle cx="14" cy="24" r="5" fill="#d1fae5" stroke="#059669" stroke-width="1"/>
       <text x="26" y="21" font-family="monospace" font-size="10" font-weight="bold" fill="#059669">routes.rs</text>
-      <text x="26" y="33" font-size="8" fill="#94a3b8">api/src/routes.rs</text>
+      <text x="26" y="33" font-size="8" fill="#94a3b8">services/api/src/routes.rs</text>
     </g>
-    <!-- api/middleware.rs -->
+    <!-- services/api/middleware.rs -->
     <g transform="translate(220, 314)">
       <rect width="170" height="40" fill="#ffffff" stroke="#059669" stroke-width="1" rx="5"/>
       <rect width="170" height="3" fill="#059669" y="0" rx="2"/>
       <circle cx="14" cy="24" r="5" fill="#d1fae5" stroke="#059669" stroke-width="1"/>
       <text x="26" y="21" font-family="monospace" font-size="10" font-weight="bold" fill="#059669">middleware.rs</text>
-      <text x="26" y="33" font-size="8" fill="#94a3b8">api/src/middleware.rs</text>
+      <text x="26" y="33" font-size="8" fill="#94a3b8">services/api/src/middleware.rs</text>
     </g>
-    <!-- core/engine.rs -->
+    <!-- crates/core/engine.rs -->
     <g transform="translate(400, 314)">
       <rect width="170" height="40" fill="#ffffff" stroke="#059669" stroke-width="1" rx="5"/>
       <rect width="170" height="3" fill="#059669" y="0" rx="2"/>
       <circle cx="14" cy="24" r="5" fill="#d1fae5" stroke="#059669" stroke-width="1"/>
       <text x="26" y="21" font-family="monospace" font-size="10" font-weight="bold" fill="#059669">engine.rs</text>
-      <text x="26" y="33" font-size="8" fill="#94a3b8">core/src/engine.rs</text>
+      <text x="26" y="33" font-size="8" fill="#94a3b8">crates/core/src/engine.rs</text>
     </g>
-    <!-- core/types.rs -->
+    <!-- crates/core/types.rs -->
     <g transform="translate(590, 314)">
       <rect width="170" height="40" fill="#ffffff" stroke="#059669" stroke-width="1" rx="5"/>
       <rect width="170" height="3" fill="#059669" y="0" rx="2"/>
       <circle cx="14" cy="24" r="5" fill="#d1fae5" stroke="#059669" stroke-width="1"/>
       <text x="26" y="21" font-family="monospace" font-size="10" font-weight="bold" fill="#059669">types.rs</text>
-      <text x="26" y="33" font-size="8" fill="#94a3b8">core/src/types.rs</text>
+      <text x="26" y="33" font-size="8" fill="#94a3b8">crates/core/src/types.rs</text>
     </g>
-    <!-- web/app.rs -->
+    <!-- web/app.ts -->
     <g transform="translate(780, 314)">
       <rect width="170" height="40" fill="#ffffff" stroke="#059669" stroke-width="1" rx="5"/>
       <rect width="170" height="3" fill="#059669" y="0" rx="2"/>
       <circle cx="14" cy="24" r="5" fill="#d1fae5" stroke="#059669" stroke-width="1"/>
-      <text x="26" y="21" font-family="monospace" font-size="10" font-weight="bold" fill="#059669">app.rs</text>
-      <text x="26" y="33" font-size="8" fill="#94a3b8">web/src/app.rs</text>
+      <text x="26" y="21" font-family="monospace" font-size="10" font-weight="bold" fill="#059669">app.ts</text>
+      <text x="26" y="33" font-size="8" fill="#94a3b8">sites/web/src/app.ts</text>
     </g>
-    <!-- web/handlers.rs -->
+    <!-- web/ui.ts -->
     <g transform="translate(970, 314)">
       <rect width="130" height="40" fill="#ffffff" stroke="#059669" stroke-width="1" rx="5"/>
       <rect width="130" height="3" fill="#059669" y="0" rx="2"/>
       <circle cx="14" cy="24" r="5" fill="#d1fae5" stroke="#059669" stroke-width="1"/>
-      <text x="26" y="21" font-family="monospace" font-size="10" font-weight="bold" fill="#059669">handlers.rs</text>
-      <text x="26" y="33" font-size="8" fill="#94a3b8">web/src/</text>
+      <text x="26" y="21" font-family="monospace" font-size="10" font-weight="bold" fill="#059669">ui.ts</text>
+      <text x="26" y="33" font-size="8" fill="#94a3b8">sites/web/src/ui.ts</text>
     </g>
 
     <!-- "contains" label for this tier -->
@@ -270,7 +270,7 @@
     <g transform="translate(20, 60)">
       <rect width="250" height="68" fill="#fafafa" stroke="#e2e8f0" stroke-width="1" rx="4"/>
       <text x="12" y="20" font-family="monospace" font-size="11" font-weight="bold" fill="#1e293b">FileRecord</text>
-      <text x="12" y="36" font-size="9" fill="#64748b">sha256 content hash per file</text>
+      <text x="12" y="36" font-size="9" fill="#64748b">BLAKE3 content hash per file</text>
       <text x="12" y="52" font-size="9" fill="#94a3b8">enables incremental re-indexing —</text>
       <text x="12" y="62" font-size="9" fill="#94a3b8">skip unchanged files on re-run</text>
     </g>
@@ -297,8 +297,8 @@
     <g transform="translate(830, 60)">
       <rect width="270" height="68" fill="#fafafa" stroke="#e2e8f0" stroke-width="1" rx="4"/>
       <text x="12" y="20" font-family="monospace" font-size="11" font-weight="bold" fill="#1e293b">TaskRoute</text>
-      <text x="12" y="36" font-size="9" fill="#64748b">maps task types → relevant entities</text>
-      <text x="12" y="52" font-size="9" fill="#94a3b8">"fix auth bug" → component::api</text>
+      <text x="12" y="36" font-size="9" fill="#64748b">maps task routes → relevant entities</text>
+      <text x="12" y="52" font-size="9" fill="#94a3b8">"build" → component::cargo::services/api</text>
       <text x="12" y="62" font-size="9" fill="#94a3b8">with priority scores for ranking</text>
     </g>
   </g>
@@ -332,15 +332,15 @@
       <text x="104" y="28" font-size="10" fill="#64748b">find the relevant part of the codebase</text>
 
       <text x="20" y="54" font-family="monospace" font-size="10" fill="#64748b">query entities where kind = Component</text>
-      <text x="20" y="70" font-family="monospace" font-size="10" fill="#64748b">→ task_routes("api") → priority: component::acme-api</text>
+      <text x="20" y="70" font-family="monospace" font-size="10" fill="#64748b">→ task_routes("build") → priority: component::cargo::services/api</text>
       <text x="20" y="86" font-family="monospace" font-size="10" fill="#64748b">→ semantic search("rate limiting API")</text>
 
       <!-- Mini result -->
       <g transform="translate(20, 100)">
         <rect width="490" height="44" fill="#ffffff" stroke="#3b82f6" stroke-width="0.5" rx="3"/>
         <text x="10" y="16" font-size="9" font-weight="bold" fill="#3b82f6">RESULT</text>
-        <text x="10" y="32" font-family="monospace" font-size="10" fill="#1e293b">component::acme-api</text>
-        <text x="220" y="32" font-size="9" fill="#94a3b8">→ HTTP API server, crates/acme-api</text>
+        <text x="10" y="32" font-family="monospace" font-size="9" fill="#1e293b">component::cargo::services/api</text>
+        <text x="245" y="32" font-size="9" fill="#94a3b8">→ HTTP API server, services/api</text>
       </g>
     </g>
 
@@ -353,9 +353,9 @@
       <text x="44" y="28" font-family="monospace" font-size="12" font-weight="bold" fill="#059669">Traverse</text>
       <text x="110" y="28" font-size="10" fill="#64748b">follow edges to discover structure</text>
 
-      <text x="20" y="54" font-family="monospace" font-size="10" fill="#64748b">edges_from(component::acme-api)</text>
+      <text x="20" y="54" font-family="monospace" font-size="10" fill="#64748b">edges_from(component::cargo::services/api)</text>
       <text x="20" y="70" font-family="monospace" font-size="10" fill="#64748b">→ contains → routes.rs, middleware.rs</text>
-      <text x="20" y="86" font-family="monospace" font-size="10" fill="#64748b">→ depends_on → component::acme-core</text>
+      <text x="20" y="86" font-family="monospace" font-size="10" fill="#64748b">→ depends_on → component::cargo::crates/core</text>
 
       <!-- Mini graph showing traversal -->
       <g transform="translate(20, 100)">
@@ -377,11 +377,11 @@
       <text x="44" y="28" font-family="monospace" font-size="12" font-weight="bold" fill="#7c3aed">Understand</text>
       <text x="126" y="28" font-size="10" fill="#64748b">read summaries and metadata</text>
 
-      <text x="20" y="54" font-family="monospace" font-size="10" fill="#64748b">get_summary("symbol::acme-api::handle_request")</text>
+      <text x="20" y="54" font-family="monospace" font-size="10" fill="#64748b">get_summary(handle_request)</text>
       <text x="20" y="70" font-family="monospace" font-size="10" fill="#64748b">→ "Handles incoming HTTP requests, dispatches to"</text>
       <text x="20" y="82" font-family="monospace" font-size="10" fill="#64748b">   "handlers based on method and path"</text>
 
-      <text x="20" y="104" font-family="monospace" font-size="10" fill="#64748b">get_summary("symbol::acme-api::authenticate")</text>
+      <text x="20" y="104" font-family="monospace" font-size="10" fill="#64748b">get_summary(authenticate)</text>
       <text x="20" y="120" font-family="monospace" font-size="10" fill="#64748b">→ "Validates JWT tokens, extracts user claims"</text>
 
       <!-- Decision -->
@@ -401,8 +401,8 @@
       <text x="44" y="28" font-family="monospace" font-size="12" font-weight="bold" fill="#ea580c">Act</text>
       <text x="72" y="28" font-size="10" fill="#64748b">read files, write code, re-index</text>
 
-      <text x="20" y="54" font-family="monospace" font-size="10" fill="#64748b">read api/src/middleware.rs        ← actual file</text>
-      <text x="20" y="70" font-family="monospace" font-size="10" fill="#64748b">read api/src/routes.rs            ← actual file</text>
+      <text x="20" y="54" font-family="monospace" font-size="10" fill="#64748b">read services/api/src/middleware.rs  ← actual file</text>
+      <text x="20" y="70" font-family="monospace" font-size="10" fill="#64748b">read services/api/src/routes.rs      ← actual file</text>
       <text x="20" y="86" font-family="monospace" font-size="10" fill="#64748b">write RateLimiter struct + middleware fn</text>
       <text x="20" y="102" font-family="monospace" font-size="10" fill="#64748b">wire into request pipeline</text>
 
@@ -411,7 +411,7 @@
         <rect width="490" height="50" fill="#ffffff" stroke="#ea580c" stroke-width="0.5" rx="3"/>
         <text x="10" y="16" font-size="9" font-weight="bold" fill="#ea580c">RE-INDEX</text>
         <text x="10" y="32" font-size="9" fill="#1e293b">chizu index . → graph updated with new RateLimiter symbol</text>
-        <text x="10" y="44" font-size="9" fill="#94a3b8">sha256 detects changed files, only re-parses what changed</text>
+        <text x="10" y="44" font-size="9" fill="#94a3b8">BLAKE3 detects changed files, only re-parses what changed</text>
       </g>
     </g>
 
@@ -437,8 +437,8 @@
         <text x="12" y="64" font-size="10" fill="#64748b">at a component, follow edges to find</text>
         <text x="12" y="80" font-size="10" fill="#64748b">source units and symbols. The graph</text>
         <text x="12" y="96" font-size="10" fill="#64748b">encodes how code is organized.</text>
-        <text x="12" y="124" font-family="monospace" font-size="9" fill="#94a3b8">component::api</text>
-        <line x1="120" y1="120" x2="150" y2="120" stroke="#3b82f6" stroke-width="1" marker-end="url(#arr-blue)"/>
+        <text x="12" y="124" font-family="monospace" font-size="8" fill="#94a3b8">services/api</text>
+        <line x1="110" y1="120" x2="140" y2="120" stroke="#3b82f6" stroke-width="1" marker-end="url(#arr-blue)"/>
         <text x="160" y="124" font-family="monospace" font-size="9" fill="#94a3b8">routes.rs</text>
         <line x1="222" y1="120" x2="252" y2="120" stroke="#059669" stroke-width="1" marker-end="url(#arr-green)"/>
         <text x="262" y="124" font-family="monospace" font-size="9" fill="#94a3b8">auth()</text>
@@ -456,11 +456,11 @@
         <text x="12" y="64" font-size="10" fill="#64748b">other code might be affected by a</text>
         <text x="12" y="80" font-size="10" fill="#64748b">change. Before modifying the API,</text>
         <text x="12" y="96" font-size="10" fill="#64748b">the agent checks what depends on it.</text>
-        <text x="12" y="124" font-family="monospace" font-size="9" fill="#94a3b8">acme-web</text>
+        <text x="12" y="124" font-family="monospace" font-size="8" fill="#94a3b8">sites/web</text>
         <line x1="80" y1="120" x2="120" y2="120" stroke="#ea580c" stroke-width="1" stroke-dasharray="4,2" marker-end="url(#arr-orange)"/>
-        <text x="130" y="124" font-family="monospace" font-size="9" fill="#94a3b8">acme-core</text>
-        <line x1="210" y1="120" x2="250" y2="120" stroke="#ea580c" stroke-width="1" stroke-dasharray="4,2" marker-end="url(#arr-orange)"/>
-        <text x="260" y="124" font-family="monospace" font-size="9" fill="#94a3b8">acme-api</text>
+        <text x="130" y="124" font-family="monospace" font-size="8" fill="#94a3b8">crates/core</text>
+        <line x1="210" y1="120" x2="245" y2="120" stroke="#ea580c" stroke-width="1" stroke-dasharray="4,2" marker-end="url(#arr-orange)"/>
+        <text x="255" y="124" font-family="monospace" font-size="8" fill="#94a3b8">services/api</text>
         <text x="12" y="148" font-size="10" fill="#64748b">Change propagation is explicit, not</text>
         <text x="12" y="164" font-size="10" fill="#64748b">guessed. Agents know the blast radius.</text>
         <text x="12" y="192" font-size="9" fill="#ea580c">impact analysis before code changes</text>
@@ -486,5 +486,5 @@
   <!-- ================================================================ -->
   <!-- FOOTER                                                           -->
   <!-- ================================================================ -->
-  <text x="600" y="1700" text-anchor="middle" font-size="10" fill="#94a3b8">chizu  ·  Rust workspace → knowledge graph → agent-navigable codebase map</text>
+  <text x="600" y="1700" text-anchor="middle" font-size="10" fill="#94a3b8">chizu  ·  local repo → component graph → agent-navigable codebase map</text>
 </svg>

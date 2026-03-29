@@ -1,4 +1,4 @@
-# Graph Model
+# Graph Model Spec
 
 **Status:** Draft
 **Date:** 2026-03-21
@@ -184,6 +184,64 @@ without rereading the whole repo:
 
 ASTs, manifests, docs, and task metadata are inputs. Agent navigation needs are
 the design driver.
+
+## Component Identity And Ownership
+
+The graph needs a strict ownership model. Component identity is not a display
+concern. It is the key used by indexing, summarization, retrieval, and cleanup.
+
+### Canonical Component Identity
+
+- Every discovered component root gets exactly one canonical `component_id`.
+- The canonical id is derived from the repo-relative component root path, not
+  from the manifest display name.
+- The id should be namespaced by discovery source when needed, for example:
+  - `component::cargo::crates/chizu-core`
+  - `component::npm::packages/web`
+- Directory basename and manifest `name` are not safe identifiers on their own.
+  They are too easy to collide and too easy to change independently of the root.
+
+### Names, Aliases, And Lookup
+
+- The component entity should still keep a human-facing `name`.
+- If a manifest provides a package name, that value should be stored as metadata
+  and treated as an alias for local dependency resolution.
+- Local dependency resolution should map manifest aliases back to the canonical
+  path-rooted `component_id`.
+- External dependencies should not be silently collapsed into local component
+  ids just because a name matches.
+
+### Ownership Propagation
+
+- Component discovery should happen before file/entity extraction.
+- After roots are discovered, every file under a component root inherits that
+  component's canonical `component_id`.
+- Every file-backed entity derived from that file inherits the same
+  `component_id`.
+- A file or entity should never be indexed under both a directory-derived
+  component id and a manifest-derived component id.
+
+### Incremental Convergence
+
+- Re-indexing must converge to the same graph as a fresh index.
+- If a file is changed, renamed, moved, or deleted, cleanup must remove:
+  - file records
+  - file-backed entities
+  - incoming and outgoing edges for those entities
+  - summaries
+  - embeddings
+  - task routes
+- Cleanup must also remove orphaned directory and component nodes that no longer
+  correspond to discovered roots or retained files.
+
+### Query Signal Discipline
+
+- Query and rerank logic may only depend on signals that indexing actually
+  materializes.
+- If task routes are a first-class ranking signal, they must be generated
+  deterministically during indexing.
+- If a signal is defined in the conceptual model but not emitted, it should not
+  affect ranking.
 
 ## Initial Indexing Flow
 

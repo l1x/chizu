@@ -4,7 +4,7 @@ use tracing::{debug, info, instrument};
 use crate::classify::TaskCategory;
 use crate::expand::expand;
 use crate::plan::{ReadingPlan, ReadingPlanItem};
-use crate::rerank::rerank;
+use crate::rerank::{rerank, RerankWeights};
 use crate::retrieve::{retrieve, tokenize_query};
 
 /// Configuration for the query pipeline.
@@ -18,6 +18,8 @@ pub struct PipelineConfig {
     pub max_neighbors_per_seed: usize,
     /// Override the heuristic query classification.
     pub category_override: Option<TaskCategory>,
+    /// Weights for reranking signals.
+    pub weights: RerankWeights,
 }
 
 impl Default for PipelineConfig {
@@ -27,6 +29,7 @@ impl Default for PipelineConfig {
             vector_k: 20,
             max_neighbors_per_seed: 5,
             category_override: None,
+            weights: RerankWeights::default(),
         }
     }
 }
@@ -84,7 +87,7 @@ impl QueryPipeline {
         // 5. Rerank
         let seeds: Vec<_> = candidates.into_values().collect();
         let neighbor_list: Vec<_> = neighbors.into_values().collect();
-        let scored = Self::rerank(seeds, neighbor_list, &category, &query_tokens, config.limit);
+        let scored = Self::rerank(seeds, neighbor_list, &category, &query_tokens, config.limit, &config.weights);
         debug!(result_count = scored.len(), "reranking complete");
 
         // 6. Build reading plan
@@ -158,8 +161,9 @@ impl QueryPipeline {
         category: &TaskCategory,
         query_tokens: &[String],
         limit: usize,
+        weights: &RerankWeights,
     ) -> Vec<crate::rerank::ScoredEntry> {
-        rerank(seeds, neighbors, category, query_tokens, limit)
+        rerank(seeds, neighbors, category, query_tokens, limit, weights)
     }
 }
 

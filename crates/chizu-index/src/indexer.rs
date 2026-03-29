@@ -1,4 +1,4 @@
-use std::collections::HashSet;
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::fmt;
 use std::path::{Path, PathBuf};
 
@@ -76,6 +76,87 @@ struct ImageRef {
     line: i64,
 }
 
+/// Discovered component root information.
+/// Used in two-phase indexing: first discover all roots, then assign component IDs.
+#[derive(Debug, Clone)]
+struct ComponentRoot {
+    /// Canonical component ID: component::{ecosystem}::{root_path}
+    id: String,
+    /// Ecosystem: "cargo", "npm", etc.
+    ecosystem: String,
+    /// Repo-relative path to component root (e.g., "crates/chizu-core")
+    root_path: String,
+    /// Display name from manifest (Cargo.toml package.name or package.json name)
+    display_name: String,
+    /// For npm: workspace globs; for cargo: could be workspace members
+    #[allow(dead_code)]
+    workspace_globs: Option<Vec<String>>,
+}
+
+/// Registry of all component roots in the repo.
+/// Maps root_path -> ComponentRoot for lookup by path.
+/// Also maps (ecosystem, display_name) -> id for ecosystem-scoped dependency resolution.
+#[derive(Debug, Default)]
+struct ComponentRegistry {
+    /// Sorted by root_path length (descending) for efficient nearest-match lookup
+    by_path: BTreeMap<String, ComponentRoot>,
+    /// Maps (ecosystem, manifest_display_name) -> canonical_component_id
+    /// This is nested to avoid collisions between ecosystems (e.g., npm "utils" vs cargo "utils")
+    by_display_name: HashMap<String, HashMap<String, String>>,
+}
+
+impl ComponentRegistry {
+    /// Find the nearest enclosing component for a file path.
+    /// Returns the ComponentRoot if the file is inside a component.
+    #[allow(dead_code)]
+    fn find_for_file(&self, file_path: &str) -> Option<&ComponentRoot> {
+        // Find the longest root_path that is a prefix of file_path
+        // Since BTreeMap is sorted, we can use range to find candidates
+        let candidates: Vec<_> = self
+            .by_path
+            .range(..file_path.to_string())
+            .filter(|(root_path, _)| {
+                // Check if file_path starts with root_path
+                file_path.starts_with(*root_path)
+                    || (root_path.as_str() == "." && !file_path.starts_with("component::"))
+            })
+            .map(|(_, comp)| comp)
+            .collect();
+        
+        // Return the one with longest path (most specific match)
+        candidates.last().copied()
+    }
+    
+    /// Resolve a manifest display name to a canonical component ID within an ecosystem.
+    /// Returns None if the name refers to an external dependency.
+    /// 
+    /// # Arguments
+    /// * `name` - The display name from the manifest (e.g., package.json "name" field)
+    /// * `ecosystem` - The ecosystem to resolve within ("npm", "cargo", etc.)
+    fn resolve_name(&self, name: &str, ecosystem: &str) -> Option<&String> {
+        self.by_display_name
+            .get(ecosystem)
+            .and_then(|eco_map| eco_map.get(name))
+    }
+    
+    /// Insert a component root into the registry.
+    fn insert(&mut self, root: ComponentRoot) {
+        // Insert into ecosystem-scoped alias map
+        self.by_display_name
+            .entry(root.ecosystem.clone())
+            .or_default()
+            .insert(root.display_name.clone(), root.id.clone());
+        
+        self.by_path.insert(root.root_path.clone(), root);
+    }
+    
+    /// Get all component IDs.
+    #[allow(dead_code)]
+    fn all_ids(&self) -> Vec<&String> {
+        self.by_path.values().map(|r| &r.id).collect()
+    }
+}
+
 /// Index a project by walking the directory and parsing supported files.
 /// No assumptions about project structure - works with any codebase.
 #[tracing::instrument(skip(store), fields(path = %path.display()))]
@@ -120,10 +201,154 @@ pub fn index_project(store: &Store, path: &Path) -> Result<IndexStats, IndexErro
     Ok(stats)
 }
 
+/// Phase 1: Discover all component roots in the project.
+/// Walks the directory tree and identifies all Cargo.toml and package.json roots.
+fn discover_component_roots(project_root: &Path) -> Result<ComponentRegistry, IndexError> {
+    let mut registry = ComponentRegistry::default();
+    discover_component_roots_recursive(project_root, project_root, &mut registry)?;
+    Ok(registry)
+}
+
+fn discover_component_roots_recursive(
+    dir: &Path,
+    project_root: &Path,
+    registry: &mut ComponentRegistry,
+) -> Result<(), IndexError> {
+    let entries: Vec<_> = std::fs::read_dir(dir)?.filter_map(|e| e.ok()).collect();
+    
+    // Check for manifest files to identify component roots
+    let has_cargo_toml = entries.iter().any(|e| {
+        e.file_name().to_str() == Some("Cargo.toml")
+    });
+    let has_package_json = entries.iter().any(|e| {
+        e.file_name().to_str() == Some("package.json")
+    });
+    
+    let dir_rel_path = dir.strip_prefix(project_root).unwrap_or(dir);
+    let dir_rel_str = if dir_rel_path.as_os_str().is_empty() {
+        ".".to_string()
+    } else {
+        dir_rel_path.display().to_string()
+    };
+    
+    if has_cargo_toml {
+        // Parse Cargo.toml to get package name and workspace members
+        let cargo_path = dir.join("Cargo.toml");
+        if let Ok(content) = std::fs::read_to_string(&cargo_path) {
+            if let Ok(manifest) = content.parse::<toml::Table>() {
+                let package_name = manifest
+                    .get("package")
+                    .and_then(|p| p.as_table())
+                    .and_then(|p| p.get("name"))
+                    .and_then(|n| n.as_str())
+                    .unwrap_or("unknown")
+                    .to_string();
+                
+                let canonical_id = id::component_id_from_path("cargo", &dir_rel_str);
+                
+                // Check if this is a workspace root
+                let _is_workspace_root = manifest.get("workspace").is_some();
+                
+                let workspace_globs = manifest
+                    .get("workspace")
+                    .and_then(|w| w.as_table())
+                    .and_then(|w| w.get("members"))
+                    .and_then(|m| m.as_array())
+                    .map(|arr| {
+                        arr.iter()
+                            .filter_map(|v| v.as_str().map(|s| s.to_string()))
+                            .collect::<Vec<_>>()
+                    });
+                
+                registry.insert(ComponentRoot {
+                    id: canonical_id,
+                    ecosystem: "cargo".to_string(),
+                    root_path: dir_rel_str.clone(),
+                    display_name: package_name,
+                    workspace_globs,
+                });
+                
+                // NOTE: We do NOT skip recursion for Cargo workspace roots.
+                // Unlike npm workspaces where members have their own package.json,
+                // Cargo workspace members are discovered by recursing into their directories.
+                // The early return here was causing all workspace members to be missed.
+            }
+        }
+    }
+    
+    if has_package_json {
+        // Parse package.json to get name and workspaces
+        let pkg_path = dir.join("package.json");
+        if let Ok(content) = std::fs::read_to_string(&pkg_path) {
+            if let Ok(pkg) = parse_package_json(&content) {
+                let package_name = pkg.name.clone().unwrap_or_else(|| {
+                    dir.file_name()
+                        .and_then(|n| n.to_str())
+                        .unwrap_or("unknown")
+                        .to_string()
+                });
+                
+                let canonical_id = id::component_id_from_path("npm", &dir_rel_str);
+                
+                // Convert WorkspacesConfig to Vec<String>
+                let workspace_globs = pkg.workspaces.as_ref().map(|ws| match ws {
+                    crate::parser_package_json::WorkspacesConfig::Array(arr) => arr.clone(),
+                    crate::parser_package_json::WorkspacesConfig::Object { packages } => packages.clone(),
+                });
+                
+                registry.insert(ComponentRoot {
+                    id: canonical_id,
+                    ecosystem: "npm".to_string(),
+                    root_path: dir_rel_str.clone(),
+                    display_name: package_name,
+                    workspace_globs,
+                });
+                
+                // For workspace roots, workspace members will be discovered separately
+                // as their own component roots when we encounter their package.json files
+            }
+        }
+    }
+    
+    // Recurse into subdirectories
+    for entry in &entries {
+        let path = entry.path();
+        if path.is_dir() {
+            // Skip common non-source directories
+            let dir_name_owned = entry.file_name().to_string_lossy().into_owned();
+            if should_skip_dir(&dir_name_owned) {
+                continue;
+            }
+            discover_component_roots_recursive(&path, project_root, registry)?;
+        }
+    }
+    
+    Ok(())
+}
+
+/// Check if a directory should be skipped during traversal.
+fn should_skip_dir(name: &str) -> bool {
+    matches!(name,
+        ".git" | ".chizu" | "target" | "node_modules" | "dist" | "build" |
+        ".venv" | "venv" | "__pycache__" | ".pytest_cache" | ".mypy_cache" |
+        ".idea" | ".vscode" | ".github" | ".ci" | "coverage" | ".next"
+    )
+}
+
 fn index_project_inner(store: &Store, path: &Path) -> Result<IndexStats, IndexError> {
     let mut stats = IndexStats::default();
     let mut indexed_files = HashSet::new();
     let mut image_refs: Vec<ImageRef> = Vec::new();
+
+    // Phase 1: Discover all component roots
+    let component_registry = discover_component_roots(path)?;
+    tracing::info!(
+        components_found = component_registry.by_path.len(),
+        "discovered component roots"
+    );
+    
+    // Update stats
+    stats.components_found = component_registry.by_path.len();
 
     // Create the Repo entity (serves as the root of the containment hierarchy)
     let project_name = path
@@ -144,12 +369,14 @@ fn index_project_inner(store: &Store, path: &Path) -> Result<IndexStats, IndexEr
         exported: true,
     })?;
 
+    // Phase 2: Index all files, using the component registry for ID assignment
     index_generic_walk(
         store,
         path,
         path,
         &repo_entity_id,
         None, // No component at root level
+        &component_registry,
         &mut stats,
         &mut indexed_files,
         &mut image_refs,
@@ -187,6 +414,7 @@ fn index_project_inner(store: &Store, path: &Path) -> Result<IndexStats, IndexEr
 
     create_deploys_edges(store, &image_refs, path, &mut stats)?;
     cleanup_generic_deleted_files(store, &indexed_files, &mut stats)?;
+    cleanup_orphaned_structural_entities(store, &component_registry, path, &mut stats)?;
 
     Ok(stats)
 }
@@ -197,6 +425,7 @@ fn index_generic_walk(
     project_root: &Path,
     parent_entity_id: &str,
     current_component_id: Option<String>,
+    component_registry: &ComponentRegistry,
     stats: &mut IndexStats,
     indexed_files: &mut HashSet<String>,
     image_refs: &mut Vec<ImageRef>,
@@ -207,10 +436,14 @@ fn index_generic_walk(
     // Track if this directory has terraform files for InfraRoot creation
     let mut has_main_tf = false;
     let dir_rel_path = dir.strip_prefix(project_root).unwrap_or(dir);
-    let dir_rel_str = dir_rel_path.display().to_string();
+    let dir_rel_str = if dir_rel_path.as_os_str().is_empty() {
+        ".".to_string()
+    } else {
+        dir_rel_path.display().to_string()
+    };
     
-    // Check if this directory is a component (has Cargo.toml or package.json)
-    let mut component_id = current_component_id.clone();
+    // Check if this directory is a component root (has Cargo.toml or package.json)
+    // Use the component registry for consistent ID assignment
     let has_cargo_toml = entries.iter().any(|e| {
         e.file_name().to_str() == Some("Cargo.toml")
     });
@@ -218,33 +451,34 @@ fn index_generic_walk(
         e.file_name().to_str() == Some("package.json")
     });
     
-    if has_cargo_toml || has_package_json {
-        // This directory is a component - create/update component entity
-        let comp_name = dir.file_name()
-            .and_then(|n| n.to_str())
-            .unwrap_or(&dir_rel_str)
-            .to_string();
-        let comp_id = id::component_id(&comp_name);
-        
-        // Insert component entity if not already exists
-        if store.get_entity(&comp_id).is_err() {
+    // Determine component ID: either this dir is a component root, or use parent's
+    let component_id = if has_cargo_toml || has_package_json {
+        // This directory is a component root - look it up in the registry
+        if let Some(comp_root) = component_registry.by_path.get(&dir_rel_str) {
+            // Always insert/overwrite the component entity to reflect manifest renames
+            // The ID is canonical (path-based), but the display name comes from the manifest
             store.insert_entity(&Entity {
-                id: comp_id.clone(),
+                id: comp_root.id.clone(),
                 kind: EntityKind::Component,
-                name: comp_name,
+                name: comp_root.display_name.clone(),
                 component_id: None,
                 path: Some(dir_rel_str.clone()),
-                language: None,
+                language: Some(comp_root.ecosystem.clone()),
                 line_start: None,
                 line_end: None,
                 visibility: Some("pub".to_string()),
                 exported: true,
             })?;
-            stats.components_found += 1;
+            Some(comp_root.id.clone())
+        } else {
+            // Fallback: shouldn't happen if discovery is correct
+            tracing::warn!(path = %dir_rel_str, "component root not found in registry");
+            current_component_id.clone()
         }
-        
-        component_id = Some(comp_id);
-    }
+    } else {
+        // Not a component root - propagate parent's component ID
+        current_component_id.clone()
+    };
 
     // Determine the current directory's entity ID.
     // For the project root, the Repo entity serves as the container (no Directory entity).
@@ -321,6 +555,7 @@ fn index_generic_walk(
                 project_root,
                 &current_entity_id,
                 component_id.clone(),
+                component_registry,
                 stats,
                 indexed_files,
                 image_refs,
@@ -332,7 +567,7 @@ fn index_generic_walk(
 
             // Detect package.json by filename before extension matching
             if file_name == "package.json" {
-                index_package_json_file(store, &path, project_root, stats, indexed_files)?;
+                index_package_json_file(store, &path, project_root, component_registry, stats, indexed_files)?;
                 continue;
             }
 
@@ -380,7 +615,7 @@ fn index_generic_walk(
                     file_entity_id = Some(id::file_entity_id(&rel_path_str));
                 }
                 Some("md") => {
-                    index_generic_doc_file(store, &path, project_root, stats, indexed_files)?;
+                    index_generic_doc_file(store, &path, project_root, component_id.clone(), stats, indexed_files)?;
                     file_entity_id = Some(id::doc_id("generic", &rel_path_str));
                 }
                 Some("tf") | Some("hcl") => {
@@ -388,6 +623,7 @@ fn index_generic_walk(
                         store,
                         &path,
                         project_root,
+                        component_id.clone(),
                         stats,
                         indexed_files,
                         image_refs,
@@ -401,7 +637,7 @@ fn index_generic_walk(
                         || (file_name.starts_with("docker-compose")
                             && (file_name.ends_with(".yml") || file_name.ends_with(".yaml")))
                     {
-                        index_containerized_file(store, &path, project_root, stats, indexed_files)?;
+                        index_containerized_file(store, &path, project_root, component_id.clone(), stats, indexed_files)?;
                         file_entity_id = Some(id::containerized_id(&rel_path_str));
                     } else {
                         file_entity_id = None;
@@ -425,7 +661,7 @@ fn index_generic_walk(
 
     // Create InfraRoot entity if directory has main.tf
     if has_main_tf {
-        create_infra_root(store, dir, project_root, stats)?;
+        create_infra_root(store, dir, project_root, component_id.clone(), stats)?;
     }
 
     Ok(())
@@ -514,14 +750,39 @@ fn index_generic_source_file(
     let hash = format!("blake3:{}", blake3::hash(source.as_bytes()).to_hex());
 
     // Check if unchanged
-    if let Ok(existing) = store.get_file(&rel_path_str) {
-        if existing.hash == hash {
-            stats.files_skipped += 1;
-            return Ok(());
+    // NOTE: We must also verify component_id hasn't changed, which can happen
+    // when a manifest is added/removed in a parent directory without modifying
+    // the source file itself.
+    let needs_reindex = if let Ok(existing) = store.get_file(&rel_path_str) {
+        if existing.hash != hash {
+            // Content changed - definitely need to reindex
+            true
+        } else if existing.component_id != component_id {
+            // Content same but component assignment changed (e.g., new parent manifest)
+            tracing::info!(
+                path = %rel_path_str,
+                old_component = ?existing.component_id,
+                new_component = ?component_id,
+                "component assignment changed, reindexing"
+            );
+            true
+        } else {
+            // Truly unchanged
+            false
         }
-        // File changed - clean up old entities
-        cleanup_generic_file_entities(store, &rel_path_str)?;
+    } else {
+        // No existing record - need to index
+        true
+    };
+    
+    if !needs_reindex {
+        stats.files_skipped += 1;
+        return Ok(());
     }
+    
+    // Clean up old entities before reindexing
+    // This handles both content changes and component reassignment
+    cleanup_generic_file_entities(store, &rel_path_str)?;
 
     // Insert/update FileRecord
     store.insert_file(&FileRecord {
@@ -667,7 +928,7 @@ fn index_generic_source_file(
                         id: entity_id.clone(),
                         kind: EntityKind::Symbol,
                         name: sym.name.clone(),
-                        component_id: None,
+                        component_id: component_id.clone(),
                         path: Some(rel_path_str.clone()),
                         language: Some(language.to_string()),
                         line_start: Some(sym.line_start as i64),
@@ -739,7 +1000,7 @@ fn index_generic_source_file(
                     id: entity_id.clone(),
                     kind: EntityKind::Template,
                     name: comp_name.to_string(),
-                    component_id: None,
+                    component_id: component_id.clone(),
                     path: Some(rel_path_str.clone()),
                     language: Some("astro".to_string()),
                     line_start: None,
@@ -769,6 +1030,7 @@ fn index_generic_doc_file(
     store: &Store,
     path: &Path,
     project_root: &Path,
+    component_id: Option<String>,
     stats: &mut IndexStats,
     indexed_files: &mut HashSet<String>,
 ) -> Result<(), IndexError> {
@@ -780,17 +1042,35 @@ fn index_generic_doc_file(
 
     let hash = format!("blake3:{}", blake3::hash(content.as_bytes()).to_hex());
 
-    if let Ok(existing) = store.get_file(&rel_path_str) {
-        if existing.hash == hash {
-            stats.files_skipped += 1;
-            return Ok(());
+    // Check if unchanged (including component_id)
+    let needs_reindex = if let Ok(existing) = store.get_file(&rel_path_str) {
+        if existing.hash != hash {
+            true
+        } else if existing.component_id != component_id {
+            tracing::info!(
+                path = %rel_path_str,
+                old_component = ?existing.component_id,
+                new_component = ?component_id,
+                "component assignment changed, reindexing"
+            );
+            true
+        } else {
+            false
         }
-        cleanup_generic_file_entities(store, &rel_path_str)?;
+    } else {
+        true
+    };
+    
+    if !needs_reindex {
+        stats.files_skipped += 1;
+        return Ok(());
     }
+    
+    cleanup_generic_file_entities(store, &rel_path_str)?;
 
     store.insert_file(&FileRecord {
         path: rel_path_str.clone(),
-        component_id: None,
+        component_id: component_id.clone(),
         kind: "markdown".to_string(),
         hash,
         indexed: true,
@@ -811,7 +1091,7 @@ fn index_generic_doc_file(
         id: doc_id.clone(),
         kind: EntityKind::Doc,
         name: title,
-        component_id: None,
+        component_id: component_id.clone(),
         path: Some(rel_path_str.clone()),
         language: Some("markdown".to_string()),
         line_start: None,
@@ -844,6 +1124,7 @@ fn index_terraform_file(
     store: &Store,
     path: &Path,
     project_root: &Path,
+    component_id: Option<String>,
     stats: &mut IndexStats,
     indexed_files: &mut HashSet<String>,
     image_refs: &mut Vec<ImageRef>,
@@ -857,17 +1138,35 @@ fn index_terraform_file(
 
     let hash = format!("blake3:{}", blake3::hash(content.as_bytes()).to_hex());
 
-    if let Ok(existing) = store.get_file(&rel_path_str) {
-        if existing.hash == hash {
-            stats.files_skipped += 1;
-            return Ok(());
+    // Check if unchanged (including component_id)
+    let needs_reindex = if let Ok(existing) = store.get_file(&rel_path_str) {
+        if existing.hash != hash {
+            true
+        } else if existing.component_id != component_id {
+            tracing::info!(
+                path = %rel_path_str,
+                old_component = ?existing.component_id,
+                new_component = ?component_id,
+                "component assignment changed, reindexing"
+            );
+            true
+        } else {
+            false
         }
-        cleanup_generic_file_entities(store, &rel_path_str)?;
+    } else {
+        true
+    };
+    
+    if !needs_reindex {
+        stats.files_skipped += 1;
+        return Ok(());
     }
+    
+    cleanup_generic_file_entities(store, &rel_path_str)?;
 
     store.insert_file(&FileRecord {
         path: rel_path_str.clone(),
-        component_id: None,
+        component_id: component_id.clone(),
         kind: "terraform".to_string(),
         hash,
         indexed: true,
@@ -884,7 +1183,7 @@ fn index_terraform_file(
             .and_then(|n| n.to_str())
             .unwrap_or(&rel_path_str)
             .to_string(),
-        component_id: None,
+        component_id: component_id.clone(),
         path: Some(rel_path_str.clone()),
         language: Some("hcl".to_string()),
         line_start: None,
@@ -925,7 +1224,7 @@ fn index_terraform_file(
                                 id: symbol_id.clone(),
                                 kind: EntityKind::Symbol,
                                 name: format!("{resource_type}.{resource_name}"),
-                                component_id: None,
+                                component_id: component_id.clone(),
                                 path: Some(rel_path_str.clone()),
                                 language: Some("hcl".to_string()),
                                 line_start: None,
@@ -987,12 +1286,33 @@ fn extract_image_from_line(line: &str) -> Option<String> {
 }
 
 /// Create Deploys edges from InfraRoot to Containerized based on image references.
+/// Create Deploys edges from InfraRoot to Containerized entities based on image references.
+/// 
+/// NOTE: This function clears all existing Deploys edges before creating new ones
+/// to ensure the graph stays consistent when Terraform image references change.
 fn create_deploys_edges(
     store: &Store,
     image_refs: &[ImageRef],
     _project_root: &Path,
     stats: &mut IndexStats,
 ) -> Result<(), IndexError> {
+    // First, clear all existing Deploys edges to ensure consistency on re-index
+    // This prevents stale edges when image references change
+    // We find all InfraRoot entities and delete Deploys edges from them
+    if let Ok(entities) = store.list_entities() {
+        for entity in entities {
+            if entity.kind == EntityKind::InfraRoot {
+                if let Ok(edges) = store.edges_from(&entity.id) {
+                    for edge in edges {
+                        if edge.rel == EdgeKind::Deploys {
+                            let _ = store.delete_edge(&edge.src_id, edge.rel, &edge.dst_id);
+                        }
+                    }
+                }
+            }
+        }
+    }
+    
     // Get all containerized entities
     let containerized: Vec<_> = store
         .list_entities()?
@@ -1075,6 +1395,7 @@ fn index_containerized_file(
     store: &Store,
     path: &Path,
     project_root: &Path,
+    component_id: Option<String>,
     stats: &mut IndexStats,
     indexed_files: &mut HashSet<String>,
 ) -> Result<(), IndexError> {
@@ -1086,17 +1407,35 @@ fn index_containerized_file(
 
     let hash = format!("blake3:{}", blake3::hash(content.as_bytes()).to_hex());
 
-    if let Ok(existing) = store.get_file(&rel_path_str) {
-        if existing.hash == hash {
-            stats.files_skipped += 1;
-            return Ok(());
+    // Check if unchanged (including component_id)
+    let needs_reindex = if let Ok(existing) = store.get_file(&rel_path_str) {
+        if existing.hash != hash {
+            true
+        } else if existing.component_id != component_id {
+            tracing::info!(
+                path = %rel_path_str,
+                old_component = ?existing.component_id,
+                new_component = ?component_id,
+                "component assignment changed, reindexing"
+            );
+            true
+        } else {
+            false
         }
-        cleanup_generic_file_entities(store, &rel_path_str)?;
+    } else {
+        true
+    };
+    
+    if !needs_reindex {
+        stats.files_skipped += 1;
+        return Ok(());
     }
+    
+    cleanup_generic_file_entities(store, &rel_path_str)?;
 
     store.insert_file(&FileRecord {
         path: rel_path_str.clone(),
-        component_id: None,
+        component_id: component_id.clone(),
         kind: "docker".to_string(),
         hash,
         indexed: true,
@@ -1115,7 +1454,7 @@ fn index_containerized_file(
         id: containerized_id.clone(),
         kind: EntityKind::Containerized,
         name,
-        component_id: None,
+        component_id: component_id.clone(),
         path: Some(rel_path_str.clone()),
         language: Some("dockerfile".to_string()),
         line_start: None,
@@ -1132,28 +1471,39 @@ fn create_infra_root(
     store: &Store,
     dir: &Path,
     project_root: &Path,
+    component_id: Option<String>,
     stats: &mut IndexStats,
 ) -> Result<(), IndexError> {
     let rel_dir = dir.strip_prefix(project_root).unwrap_or(dir);
     let rel_dir_str = rel_dir.display().to_string();
     let infra_id = id::infra_root_id(&rel_dir_str);
 
-    // Check if already exists
-    if store.get_entity(&infra_id).is_ok() {
-        return Ok(());
-    }
-
     let name = if rel_dir_str.is_empty() {
         "root".to_string()
     } else {
         rel_dir_str.clone()
     };
+    
+    // Check if exists with same component_id - skip if unchanged
+    if let Ok(existing) = store.get_entity(&infra_id) {
+        if existing.component_id == component_id {
+            return Ok(());
+        }
+        // Component assignment changed - will update below
+        tracing::info!(
+            infra_id = %infra_id,
+            old_component = ?existing.component_id,
+            new_component = ?component_id,
+            "infra_root component assignment changed, updating"
+        );
+    }
 
+    // Insert or update the InfraRoot entity
     store.insert_entity(&Entity {
         id: infra_id.clone(),
         kind: EntityKind::InfraRoot,
         name,
-        component_id: None,
+        component_id: component_id.clone(),
         path: Some(rel_dir_str.clone()),
         language: Some("terraform".to_string()),
         line_start: None,
@@ -1170,10 +1520,14 @@ fn create_infra_root(
     Ok(())
 }
 
+/// Index a package.json file.
+/// Note: The component entity is created during phase 1 (discovery), not here.
+/// This function only creates the file record and dependency edges.
 fn index_package_json_file(
     store: &Store,
     path: &Path,
     project_root: &Path,
+    component_registry: &ComponentRegistry,
     stats: &mut IndexStats,
     indexed_files: &mut HashSet<String>,
 ) -> Result<(), IndexError> {
@@ -1185,17 +1539,51 @@ fn index_package_json_file(
 
     let hash = format!("blake3:{}", blake3::hash(content.as_bytes()).to_hex());
 
-    if let Ok(existing) = store.get_file(&rel_path_str) {
-        if existing.hash == hash {
-            stats.files_skipped += 1;
-            return Ok(());
+    // Get the directory path for looking up the component
+    let pkg_dir_rel = path
+        .parent()
+        .map(|p| p.strip_prefix(project_root).unwrap_or(p))
+        .map(|p| {
+            let s = p.display().to_string();
+            if s.is_empty() { ".".to_string() } else { s }
+        })
+        .unwrap_or_else(|| ".".to_string());
+    
+    // Look up the component in the registry
+    let comp_id = component_registry
+        .by_path
+        .get(&pkg_dir_rel)
+        .map(|c| c.id.clone());
+    
+    // Check if unchanged (including component_id)
+    let needs_reindex = if let Ok(existing) = store.get_file(&rel_path_str) {
+        if existing.hash != hash {
+            true
+        } else if existing.component_id != comp_id {
+            tracing::info!(
+                path = %rel_path_str,
+                old_component = ?existing.component_id,
+                new_component = ?comp_id,
+                "component assignment changed, reindexing"
+            );
+            true
+        } else {
+            false
         }
-        cleanup_generic_file_entities(store, &rel_path_str)?;
+    } else {
+        true
+    };
+    
+    if !needs_reindex {
+        stats.files_skipped += 1;
+        return Ok(());
     }
-
+    
+    cleanup_generic_file_entities(store, &rel_path_str)?;
+    
     store.insert_file(&FileRecord {
         path: rel_path_str.clone(),
-        component_id: None,
+        component_id: comp_id.clone(),
         kind: "package_json".to_string(),
         hash,
         indexed: true,
@@ -1212,35 +1600,8 @@ fn index_package_json_file(
         }
     };
 
-    // Determine component name: use `name` field, or fall back to directory name
-    let component_name = pkg
-        .name
-        .clone()
-        .or_else(|| {
-            path.parent()
-                .and_then(|p| p.file_name())
-                .and_then(|n| n.to_str())
-                .map(|s| s.to_string())
-        })
-        .unwrap_or_else(|| "unknown-package".to_string());
-
-    let comp_id = id::component_id(&component_name);
-
-    store.insert_entity(&Entity {
-        id: comp_id.clone(),
-        kind: EntityKind::Component,
-        name: component_name,
-        component_id: None,
-        path: Some(rel_path_str.clone()),
-        language: Some("javascript".to_string()),
-        line_start: None,
-        line_end: None,
-        visibility: Some("pub".to_string()),
-        exported: true,
-    })?;
-    stats.packages_indexed += 1;
-
     // Emit DependsOn edges for all dependency types
+    // Use the registry to resolve local dependencies to canonical IDs
     let all_deps = pkg
         .dependencies
         .keys()
@@ -1248,15 +1609,26 @@ fn index_package_json_file(
         .chain(pkg.peer_dependencies.keys());
 
     for dep_name in all_deps {
-        let dep_comp_id = id::component_id(dep_name);
-        store.insert_edge(&Edge {
-            src_id: comp_id.clone(),
-            rel: EdgeKind::DependsOn,
-            dst_id: dep_comp_id,
-            provenance_path: Some(rel_path_str.clone()),
-            provenance_line: None,
-        })?;
-        stats.edges_created += 1;
+        // Try to resolve as a local workspace package first (within npm ecosystem)
+        let dep_comp_id = if let Some(canonical_id) = component_registry.resolve_name(dep_name, "npm") {
+            // Local workspace dependency - use canonical ID
+            canonical_id.clone()
+        } else {
+            // External dependency - create a placeholder external component ID
+            // These are kept separate from local components
+            format!("external::npm::{}", dep_name)
+        };
+        
+        if let Some(ref src_id) = comp_id {
+            store.insert_edge(&Edge {
+                src_id: src_id.clone(),
+                rel: EdgeKind::DependsOn,
+                dst_id: dep_comp_id,
+                provenance_path: Some(rel_path_str.clone()),
+                provenance_line: None,
+            })?;
+            stats.edges_created += 1;
+        }
     }
 
     // Handle workspaces: resolve globs and emit Contains edges
@@ -1265,24 +1637,19 @@ fn index_package_json_file(
         let workspace_dirs = resolve_workspaces(parent_dir, ws_config);
 
         for ws_dir in &workspace_dirs {
-            let ws_pkg_path = ws_dir.join("package.json");
-            if let Ok(ws_content) = std::fs::read_to_string(&ws_pkg_path) {
-                if let Ok(ws_pkg) = parse_package_json(&ws_content) {
-                    let ws_name = ws_pkg
-                        .name
-                        .or_else(|| {
-                            ws_dir
-                                .file_name()
-                                .and_then(|n| n.to_str())
-                                .map(|s| s.to_string())
-                        })
-                        .unwrap_or_else(|| "unknown-workspace".to_string());
-                    let ws_comp_id = id::component_id(&ws_name);
-
+            // Get the workspace directory relative to project root
+            let ws_dir_rel = ws_dir
+                .strip_prefix(project_root)
+                .map(|p| p.display().to_string())
+                .unwrap_or_else(|_| ".".to_string());
+            
+            // Look up the workspace component in the registry
+            if let Some(ws_comp) = component_registry.by_path.get(&ws_dir_rel) {
+                if let Some(ref parent_id) = comp_id {
                     store.insert_edge(&Edge {
-                        src_id: comp_id.clone(),
+                        src_id: parent_id.clone(),
                         rel: EdgeKind::Contains,
-                        dst_id: ws_comp_id,
+                        dst_id: ws_comp.id.clone(),
                         provenance_path: Some(rel_path_str.clone()),
                         provenance_line: None,
                     })?;
@@ -1365,6 +1732,97 @@ fn cleanup_generic_deleted_files(
             stats.files_removed += 1;
         }
     }
+    Ok(())
+}
+
+/// Clean up orphaned structural entities (Components and Directories) after indexing.
+/// 
+/// This function removes Component and Directory entities that no longer correspond to
+/// existing filesystem paths. This happens when:
+/// - An entire component directory is deleted
+/// - A directory is renamed or moved
+/// 
+/// The function preserves structural entities that still exist on disk.
+fn cleanup_orphaned_structural_entities(
+    store: &Store,
+    component_registry: &ComponentRegistry,
+    project_root: &Path,
+    stats: &mut IndexStats,
+) -> Result<(), IndexError> {
+    // Get all component and directory entities from the store
+    let all_entities = store.list_entities().unwrap_or_default();
+    
+    // Build set of valid component IDs from the registry
+    let valid_component_ids: HashSet<&str> = component_registry
+        .by_path
+        .values()
+        .map(|c| c.id.as_str())
+        .collect();
+    
+    for entity in &all_entities {
+        match entity.kind {
+            EntityKind::Component => {
+                // Check if this component ID is in the registry
+                if !valid_component_ids.contains(entity.id.as_str()) {
+                    tracing::debug!(component_id = %entity.id, "removing orphaned component");
+                    
+                    // Remove all edges connected to this component
+                    if let Ok(edges) = store.edges_from(&entity.id) {
+                        for edge in edges {
+                            let _ = store.delete_edge(&edge.src_id, edge.rel, &edge.dst_id);
+                        }
+                    }
+                    if let Ok(edges) = store.edges_to(&entity.id) {
+                        for edge in edges {
+                            let _ = store.delete_edge(&edge.src_id, edge.rel, &edge.dst_id);
+                        }
+                    }
+                    
+                    // Remove per-entity metadata (same as file cleanup)
+                    // These may not exist for all components, but we clean them up just in case
+                    // Delete task routes for this component
+                    if let Ok(routes) = store.routes_for_entity(&entity.id) {
+                        for route in routes {
+                            let _ = store.delete_task_route(&route.task_name, &route.entity_id);
+                        }
+                    }
+                    let _ = store.delete_summary(&entity.id);
+                    let _ = store.delete_embedding(&entity.id);
+                    
+                    // Remove the component entity
+                    let _ = store.delete_entity(&entity.id);
+                    stats.components_found = stats.components_found.saturating_sub(1);
+                }
+            }
+            EntityKind::Directory | EntityKind::InfraRoot => {
+                // Check if the directory still exists on disk
+                // Directory and InfraRoot entities store their path in the `path` field
+                if let Some(ref dir_path) = entity.path {
+                    let full_path = project_root.join(dir_path);
+                    if !full_path.exists() {
+                        tracing::debug!(entity_id = %entity.id, path = %dir_path, "removing orphaned directory/infra_root");
+                        
+                        // Remove all edges connected to this entity
+                        if let Ok(edges) = store.edges_from(&entity.id) {
+                            for edge in edges {
+                                let _ = store.delete_edge(&edge.src_id, edge.rel, &edge.dst_id);
+                            }
+                        }
+                        if let Ok(edges) = store.edges_to(&entity.id) {
+                            for edge in edges {
+                                let _ = store.delete_edge(&edge.src_id, edge.rel, &edge.dst_id);
+                            }
+                        }
+                        
+                        // Remove the entity
+                        let _ = store.delete_entity(&entity.id);
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+    
     Ok(())
 }
 
@@ -2076,48 +2534,57 @@ mod tests {
         let store = Store::open_in_memory().unwrap();
         let stats = index_project(&store, tmp.path()).unwrap();
 
-        assert_eq!(stats.packages_indexed, 1, "should index one package");
+        // packages_indexed is no longer tracked separately; components_found is the new metric
+        assert_eq!(stats.components_found, 1, "should discover one component");
 
-        let comp = store.get_entity("component::my-web-app");
-        assert!(comp.is_ok(), "component entity should exist");
+        // Canonical component ID uses ecosystem::path format
+        let comp = store.get_entity("component::npm::.");
+        assert!(comp.is_ok(), "component entity should exist with canonical ID");
         let comp = comp.unwrap();
         assert_eq!(comp.kind, EntityKind::Component);
-        assert_eq!(comp.language.as_deref(), Some("javascript"));
+        assert_eq!(comp.language.as_deref(), Some("npm"));
+        // Display name comes from package.json
+        assert_eq!(comp.name, "my-web-app");
 
-        let edges = store.edges_from("component::my-web-app").unwrap();
+        let edges = store.edges_from("component::npm::.").unwrap();
         let depends_on: Vec<_> = edges
             .iter()
             .filter(|e| e.rel == EdgeKind::DependsOn)
             .collect();
         assert_eq!(depends_on.len(), 3, "should have 3 DependsOn edges");
 
+        // External dependencies use external::npm:: prefix
         let dep_targets: HashSet<_> = depends_on.iter().map(|e| e.dst_id.as_str()).collect();
-        assert!(dep_targets.contains("component::express"));
-        assert!(dep_targets.contains("component::lodash"));
-        assert!(dep_targets.contains("component::typescript"));
+        assert!(dep_targets.contains("external::npm::express"));
+        assert!(dep_targets.contains("external::npm::lodash"));
+        assert!(dep_targets.contains("external::npm::typescript"));
     }
 
     #[test]
-    fn index_package_json_falls_back_to_dir_name() {
+    fn index_package_json_uses_canonical_path_id() {
         let tmp = tempfile::tempdir().unwrap();
 
         std::fs::write(
             tmp.path().join("package.json"),
-            r#"{ "dependencies": { "foo": "1.0" } }"#,
+            r#"{ "name": "my-pkg", "dependencies": { "foo": "1.0" } }"#,
         )
         .unwrap();
 
         let store = Store::open_in_memory().unwrap();
         let stats = index_project(&store, tmp.path()).unwrap();
 
-        assert_eq!(stats.packages_indexed, 1);
+        assert_eq!(stats.components_found, 1);
 
-        let dir_name = tmp.path().file_name().unwrap().to_str().unwrap();
-        let comp = store.get_entity(&format!("component::{dir_name}"));
+        // Canonical ID uses path-based format, not display name
+        // Root package gets "component::npm::."
+        let comp = store.get_entity("component::npm::.");
         assert!(
             comp.is_ok(),
-            "component should use directory name as fallback"
+            "component should use canonical path-based ID"
         );
+        let comp = comp.unwrap();
+        // Display name still comes from package.json
+        assert_eq!(comp.name, "my-pkg");
     }
 
     // =========================================================================
@@ -2153,20 +2620,23 @@ pub struct MyStruct;"#,
         let store = Store::open_in_memory().unwrap();
         let _stats = index_project(&store, tmp.path()).unwrap();
 
-        // Check component exists
-        let comp = store.get_entity("component::my-crate").unwrap();
+        // Check component exists with canonical ID (ecosystem::path format)
+        let canonical_id = "component::cargo::my-crate";
+        let comp = store.get_entity(canonical_id).unwrap();
         assert_eq!(comp.kind, EntityKind::Component);
+        // Display name comes from Cargo.toml
+        assert_eq!(comp.name, "my-crate");
 
         // Check source file has component_id (entity ID uses "file::" prefix)
         let source_unit = store.get_entity("file::my-crate/src/lib.rs").unwrap();
-        assert_eq!(source_unit.component_id, Some("component::my-crate".to_string()));
+        assert_eq!(source_unit.component_id, Some(canonical_id.to_string()));
 
         // Check symbols have component_id
         let symbol = store.get_entity("symbol::my-crate/src/lib.rs::hello").unwrap();
-        assert_eq!(symbol.component_id, Some("component::my-crate".to_string()));
+        assert_eq!(symbol.component_id, Some(canonical_id.to_string()));
         
         let struct_symbol = store.get_entity("symbol::my-crate/src/lib.rs::MyStruct").unwrap();
-        assert_eq!(struct_symbol.component_id, Some("component::my-crate".to_string()));
+        assert_eq!(struct_symbol.component_id, Some(canonical_id.to_string()));
     }
 
     /// Test that cleanup removes all related data (edges, summaries, embeddings)
@@ -2306,15 +2776,122 @@ pub struct MyStruct;"#,
         let store = Store::open_in_memory().unwrap();
         let _ = index_project(&store, tmp.path()).unwrap();
 
-        // Check both components exist
-        let comp_a = store.get_entity("component::pkg-a").unwrap();
-        assert_eq!(comp_a.kind, EntityKind::Component);
+        // Check all components exist with canonical path-based IDs
+        // Root component
+        let comp_root = store.get_entity("component::npm::.").unwrap();
+        assert_eq!(comp_root.kind, EntityKind::Component);
+        assert_eq!(comp_root.name, "root");
         
-        let comp_b = store.get_entity("component::pkg-b").unwrap();
+        // Workspace package components use path-based IDs
+        let comp_a = store.get_entity("component::npm::packages/pkg-a").unwrap();
+        assert_eq!(comp_a.kind, EntityKind::Component);
+        assert_eq!(comp_a.name, "pkg-a");  // Display name from package.json
+        
+        let comp_b = store.get_entity("component::npm::packages/pkg-b").unwrap();
         assert_eq!(comp_b.kind, EntityKind::Component);
+        assert_eq!(comp_b.name, "pkg-b");
 
         // Check source file in pkg-a has correct component_id (entity ID uses "file::" prefix)
         let source_unit = store.get_entity("file::packages/pkg-a/src/index.ts").unwrap();
-        assert_eq!(source_unit.component_id, Some("component::pkg-a".to_string()));
+        assert_eq!(source_unit.component_id, Some("component::npm::packages/pkg-a".to_string()));
+        
+        // Verify workspace Contains edge exists from root to pkg-a
+        let root_edges = store.edges_from("component::npm::.").unwrap();
+        let contains_pkg_a = root_edges.iter().any(|e| {
+            e.rel == EdgeKind::Contains && e.dst_id == "component::npm::packages/pkg-a"
+        });
+        assert!(contains_pkg_a, "root should contain pkg-a via Contains edge");
+    }
+    
+    /// Test that Cargo workspace members are correctly discovered as separate components
+    #[test]
+    fn cargo_workspace_members_get_component_ids() {
+        let tmp = tempfile::tempdir().unwrap();
+        
+        // Root Cargo.toml with workspace definition
+        std::fs::write(
+            tmp.path().join("Cargo.toml"),
+            r#"[package]
+name = "root-crate"
+version = "0.1.0"
+
+[workspace]
+members = ["crates/*"]
+"#,
+        ).unwrap();
+        
+        // Create a source file in root crate
+        std::fs::create_dir(tmp.path().join("src")).unwrap();
+        std::fs::write(
+            tmp.path().join("src/main.rs"),
+            r#"fn main() { println!("root"); }"#,
+        ).unwrap();
+        
+        // Create workspace member crates
+        let crates_dir = tmp.path().join("crates");
+        std::fs::create_dir(&crates_dir).unwrap();
+        
+        let crate_a_dir = crates_dir.join("crate-a");
+        std::fs::create_dir(&crate_a_dir).unwrap();
+        std::fs::write(
+            crate_a_dir.join("Cargo.toml"),
+            r#"[package]
+name = "crate-a"
+version = "0.1.0"
+"#,
+        ).unwrap();
+        std::fs::create_dir(crate_a_dir.join("src")).unwrap();
+        std::fs::write(
+            crate_a_dir.join("src/lib.rs"),
+            r#"pub fn func_a() {}"#,
+        ).unwrap();
+        
+        let crate_b_dir = crates_dir.join("crate-b");
+        std::fs::create_dir(&crate_b_dir).unwrap();
+        std::fs::write(
+            crate_b_dir.join("Cargo.toml"),
+            r#"[package]
+name = "crate-b"
+version = "0.1.0"
+"#,
+        ).unwrap();
+        std::fs::create_dir(crate_b_dir.join("src")).unwrap();
+        std::fs::write(
+            crate_b_dir.join("src/lib.rs"),
+            r#"pub fn func_b() {}"#,
+        ).unwrap();
+
+        let store = Store::open_in_memory().unwrap();
+        let stats = index_project(&store, tmp.path()).unwrap();
+
+        // Should discover 3 components: root-crate, crate-a, crate-b
+        assert_eq!(stats.components_found, 3, "should discover all workspace members");
+
+        // Check all components exist with canonical path-based IDs
+        // Root crate component
+        let comp_root = store.get_entity("component::cargo::.").unwrap();
+        assert_eq!(comp_root.kind, EntityKind::Component);
+        assert_eq!(comp_root.name, "root-crate");
+        
+        // Workspace member components use path-based IDs
+        let comp_a = store.get_entity("component::cargo::crates/crate-a").unwrap();
+        assert_eq!(comp_a.kind, EntityKind::Component);
+        assert_eq!(comp_a.name, "crate-a");
+        
+        let comp_b = store.get_entity("component::cargo::crates/crate-b").unwrap();
+        assert_eq!(comp_b.kind, EntityKind::Component);
+        assert_eq!(comp_b.name, "crate-b");
+
+        // Check source file in crate-a has correct component_id
+        let source_unit_a = store.get_entity("file::crates/crate-a/src/lib.rs").unwrap();
+        assert_eq!(source_unit_a.component_id, Some("component::cargo::crates/crate-a".to_string()));
+        
+        // Check source file in crate-b has correct component_id
+        let source_unit_b = store.get_entity("file::crates/crate-b/src/lib.rs").unwrap();
+        assert_eq!(source_unit_b.component_id, Some("component::cargo::crates/crate-b".to_string()));
+        
+        // Check root crate source file has correct component_id
+        let source_unit_root = store.get_entity("file::src/main.rs").unwrap();
+        assert_eq!(source_unit_root.component_id, Some("component::cargo::.".to_string()));
     }
 }

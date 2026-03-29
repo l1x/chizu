@@ -1,15 +1,52 @@
 use crate::classify::TaskCategory;
 use crate::retrieve::{Candidate, RetrievalSource};
 
-const W_TASK_ROUTE: f64 = 0.30;
-const W_KEYWORD: f64 = 0.20;
-const W_NAME_MATCH: f64 = 0.15;
-const W_VECTOR: f64 = 0.20;
-const W_KIND_PREF: f64 = 0.05;
-const W_EXPORTED: f64 = 0.05;
-const W_PATH_MATCH: f64 = 0.05;
-
 const CONTEXT_DISCOUNT: f64 = 0.50;
+
+/// Weights for reranking signals.
+/// These determine how much each signal contributes to the final score.
+#[derive(Debug, Clone, Copy)]
+pub struct RerankWeights {
+    pub task_route: f64,
+    pub keyword: f64,
+    pub name_match: f64,
+    pub vector: f64,
+    pub kind_preference: f64,
+    pub exported: f64,
+    pub path_match: f64,
+}
+
+impl Default for RerankWeights {
+    fn default() -> Self {
+        Self {
+            // Task route weight set to 0 until task routes are fully implemented.
+            // Currently no runtime producer generates TaskRoute records.
+            // TODO: Re-enable (suggest 0.30) when task route generation is implemented.
+            task_route: 0.0,
+            // Redistribute the 0.30 from task route evenly across active signals
+            keyword: 0.25,
+            name_match: 0.20,
+            vector: 0.25,
+            kind_preference: 0.10,
+            exported: 0.10,
+            path_match: 0.10,
+        }
+    }
+}
+
+impl RerankWeights {
+    /// Verify that weights sum to approximately 1.0
+    pub fn is_valid(&self) -> bool {
+        let sum = self.task_route
+            + self.keyword
+            + self.name_match
+            + self.vector
+            + self.kind_preference
+            + self.exported
+            + self.path_match;
+        (sum - 1.0).abs() < 0.001
+    }
+}
 
 /// A scored entry ready for ranking.
 #[derive(Debug, Clone)]
@@ -26,6 +63,7 @@ fn score_candidate(
     candidate: &Candidate,
     category: &TaskCategory,
     query_tokens: &[String],
+    weights: &RerankWeights,
 ) -> (f64, Vec<String>) {
     let mut score = 0.0;
     let mut reasons = Vec::new();
@@ -35,7 +73,7 @@ fn score_candidate(
         if let RetrievalSource::TaskRoute { priority } = src {
             // Normalize priority: higher priority = higher score. Cap at 100.
             let norm = (*priority as f64).min(100.0) / 100.0;
-            score += W_TASK_ROUTE * norm;
+            score += weights.task_route * norm;
             reasons.push(format!("task_route(priority={})", priority));
         }
     }
@@ -46,7 +84,7 @@ fn score_candidate(
         .iter()
         .any(|s| matches!(s, RetrievalSource::KeywordMatch))
     {
-        score += W_KEYWORD;
+        score += weights.keyword;
         reasons.push("keyword_match".to_string());
     } else if !candidate.keywords.is_empty() && !query_tokens.is_empty() {
         // Check keyword overlap even if not the original retrieval source
@@ -61,7 +99,7 @@ fn score_candidate(
             .count();
         if overlap > 0 {
             let frac = overlap as f64 / query_tokens.len().max(1) as f64;
-            score += W_KEYWORD * frac;
+            score += weights.keyword * frac;
             reasons.push(format!(
                 "keyword_overlap({}/{})",
                 overlap,
@@ -76,12 +114,12 @@ fn score_candidate(
         .iter()
         .any(|s| matches!(s, RetrievalSource::NameMatch))
     {
-        score += W_NAME_MATCH;
+        score += weights.name_match;
         reasons.push("name_match".to_string());
     } else {
         let name_lower = candidate.entity.name.to_lowercase();
         if query_tokens.iter().any(|t| name_lower.contains(t.as_str())) {
-            score += W_NAME_MATCH;
+            score += weights.name_match;
             reasons.push("name_contains_term".to_string());
         }
     }
@@ -90,7 +128,7 @@ fn score_candidate(
     for src in &candidate.sources {
         if let RetrievalSource::VectorSearch { distance } = src {
             let sim = 1.0 - (*distance as f64) / 2.0;
-            score += W_VECTOR * sim.max(0.0);
+            score += weights.vector * sim.max(0.0);
             reasons.push(format!("vector(dist={:.3})", distance));
         }
     }
@@ -98,13 +136,13 @@ fn score_candidate(
     // Kind preference signal
     let preferred = category.preferred_kinds();
     if preferred.contains(&candidate.entity.kind) {
-        score += W_KIND_PREF;
+        score += weights.kind_preference;
         reasons.push("kind_preferred".to_string());
     }
 
     // Exported bonus
     if candidate.entity.exported {
-        score += W_EXPORTED;
+        score += weights.exported;
         reasons.push("exported".to_string());
     }
 
@@ -114,7 +152,7 @@ fn score_candidate(
         .iter()
         .any(|s| matches!(s, RetrievalSource::PathMatch))
     {
-        score += W_PATH_MATCH;
+        score += weights.path_match;
         reasons.push("path_match".to_string());
     } else {
         let path_lower = candidate
@@ -124,7 +162,7 @@ fn score_candidate(
             .unwrap_or("")
             .to_lowercase();
         if !path_lower.is_empty() && query_tokens.iter().any(|t| path_lower.contains(t.as_str())) {
-            score += W_PATH_MATCH;
+            score += weights.path_match;
             reasons.push("path_contains_term".to_string());
         }
     }
@@ -139,12 +177,13 @@ pub fn rerank(
     category: &TaskCategory,
     query_tokens: &[String],
     limit: usize,
+    weights: &RerankWeights,
 ) -> Vec<ScoredEntry> {
     let mut entries: Vec<ScoredEntry> = Vec::new();
 
     // Score seeds
     for candidate in seeds {
-        let (score, reasons) = score_candidate(&candidate, category, query_tokens);
+        let (score, reasons) = score_candidate(&candidate, category, query_tokens, weights);
         entries.push(ScoredEntry {
             candidate,
             score,
@@ -156,7 +195,7 @@ pub fn rerank(
 
     // Score neighbors with context discount
     for (candidate, via) in neighbors {
-        let (raw_score, reasons) = score_candidate(&candidate, category, query_tokens);
+        let (raw_score, reasons) = score_candidate(&candidate, category, query_tokens, weights);
         entries.push(ScoredEntry {
             candidate,
             score: raw_score * CONTEXT_DISCOUNT,
