@@ -30,6 +30,11 @@ impl Default for Config {
 }
 
 impl Config {
+    /// Serialize configuration to a TOML string.
+    pub fn to_toml(&self) -> Result<String, ConfigError> {
+        toml::to_string_pretty(self).map_err(ConfigError::Serialize)
+    }
+
     /// Load configuration from a TOML string.
     pub fn from_toml(s: &str) -> Result<Self, ConfigError> {
         let mut config: Config = toml::from_str(s)?;
@@ -252,6 +257,8 @@ impl Default for EmbeddingConfig {
 pub enum ConfigError {
     #[error("TOML parse error: {0}")]
     Parse(#[from] toml::de::Error),
+    #[error("TOML serialize error: {0}")]
+    Serialize(toml::ser::Error),
     #[error("rerank weights must sum to 1.0, got {sum}")]
     InvalidWeights { sum: f64 },
     #[error("missing provider: {0}")]
@@ -326,6 +333,31 @@ parallel_workers = 8
         assert_eq!(config.index.parallel_workers, Some(8));
         // Defaults preserved
         assert_eq!(config.search.default_limit, 15);
+    }
+
+    #[test]
+    fn test_to_toml_roundtrip() {
+        let original = Config::default();
+        let toml_str = original.to_toml().unwrap();
+
+        // The serialized TOML must parse back into a valid config
+        let parsed = Config::from_toml(&toml_str).unwrap();
+        assert_eq!(parsed.search.default_limit, original.search.default_limit);
+        assert_eq!(
+            parsed.search.rerank_weights.keyword,
+            original.search.rerank_weights.keyword
+        );
+        assert!(parsed.providers.contains_key("ollama"));
+        assert_eq!(parsed.embedding.dimensions, original.embedding.dimensions);
+    }
+
+    #[test]
+    fn test_to_toml_produces_valid_toml() {
+        let config = Config::default();
+        let toml_str = config.to_toml().unwrap();
+
+        // Must be parseable as raw TOML
+        let _: toml::Value = toml::from_str(&toml_str).unwrap();
     }
 
     #[test]

@@ -93,6 +93,11 @@ impl UsearchIndex {
 
     /// Add a vector to the index.
     ///
+    /// Keys are 64-bit blake3 hash truncations. Birthday collision probability:
+    /// ~n²/2^65 — at 1M entities ≈ 5.4×10⁻⁸ (negligible). Collision detection
+    /// is handled at the [`ChizuStore`] level by cross-referencing the
+    /// embeddings table before insert.
+    ///
     /// # Arguments
     /// * `key` - The usearch key (blake3 hash of entity_id as i64)
     /// * `vector` - The embedding vector

@@ -189,7 +189,7 @@ impl Summary {
             short_summary: short_summary.into(),
             detailed_summary: None,
             keywords_json: None,
-            updated_at: chrono::Utc::now().to_rfc3339(),
+            updated_at: now_rfc3339(),
             source_hash: None,
         }
     }
@@ -257,7 +257,7 @@ impl EmbeddingMeta {
             entity_id: entity_id.into(),
             model: model.into(),
             dimensions,
-            updated_at: chrono::Utc::now().to_rfc3339(),
+            updated_at: now_rfc3339(),
             usearch_key: None,
         }
     }
@@ -269,18 +269,11 @@ impl EmbeddingMeta {
     }
 }
 
-// Need chrono for timestamps - using a simple fallback for now
-mod chrono {
-    pub struct Utc;
-    impl Utc {
-        pub fn now() -> Self {
-            Self
-        }
-        pub fn to_rfc3339(&self) -> String {
-            // Simple RFC3339 format - in production use actual chrono crate
-            "2024-01-01T00:00:00Z".to_string()
-        }
-    }
+fn now_rfc3339() -> String {
+    use time::format_description::well_known::Rfc3339;
+    time::OffsetDateTime::now_utc()
+        .format(&Rfc3339)
+        .unwrap_or_else(|_| String::from("1970-01-01T00:00:00Z"))
 }
 
 #[cfg(test)]

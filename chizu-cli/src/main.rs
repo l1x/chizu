@@ -2,6 +2,9 @@
 //!
 //! Usage: chizu [--repo <path>] <command>
 
+// Fields are parsed by argh but unread until commands are implemented.
+#![allow(dead_code)]
+
 use argh::FromArgs;
 use std::path::{Path, PathBuf};
 
@@ -135,14 +138,6 @@ struct VisualizeArgs {
     #[argh(option, default = "2")]
     depth: u32,
 
-    /// filter by entity kind
-    #[argh(option)]
-    _kind: Option<String>,
-
-    /// exclude patterns (comma-separated)
-    #[argh(option)]
-    _exclude: Option<String>,
-
     /// layout algorithm (dot, neato, fdp)
     #[argh(option, default = "String::from(\"dot\")")]
     layout: String,
@@ -154,10 +149,6 @@ struct VisualizeArgs {
     /// output file path
     #[argh(option, short = 'o')]
     output: Option<PathBuf>,
-
-    /// include legend
-    #[argh(switch)]
-    legend: bool,
 }
 
 /// Configuration management
@@ -216,129 +207,20 @@ fn run(cli: Cli) -> Result<(), Box<dyn std::error::Error>> {
     tracing::debug!("Running command: {:?}", cli.command);
 
     match cli.command {
-        Command::Index(args) => cmd_index(&cli.repo, args),
-        Command::Search(args) => cmd_search(&cli.repo, args),
-        Command::Entity(args) => cmd_entity(&cli.repo, args),
-        Command::Entities(args) => cmd_entities(&cli.repo, args),
-        Command::Routes(args) => cmd_routes(&cli.repo, args),
-        Command::Edges(args) => cmd_edges(&cli.repo, args),
-        Command::Visualize(args) => cmd_visualize(&cli.repo, args),
+        Command::Index(_args) => not_yet_implemented("index"),
+        Command::Search(_args) => not_yet_implemented("search"),
+        Command::Entity(_args) => not_yet_implemented("entity"),
+        Command::Entities(_args) => not_yet_implemented("entities"),
+        Command::Routes(_args) => not_yet_implemented("routes"),
+        Command::Edges(_args) => not_yet_implemented("edges"),
+        Command::Visualize(_args) => not_yet_implemented("visualize"),
         Command::Config(args) => cmd_config(&cli.repo, args),
         Command::Guide(_) => cmd_guide(),
     }
 }
 
-fn cmd_index(repo: &Path, args: IndexArgs) -> Result<(), Box<dyn std::error::Error>> {
-    println!("Indexing repository: {}", repo.display());
-    if args.force {
-        println!("Force re-index enabled");
-    }
-
-    // TODO: Implement indexing pipeline
-    // 1. Load config
-    // 2. Discover components
-    // 3. Extract entities and edges
-    // 4. Generate summaries
-    // 5. Generate embeddings
-
-    println!("Index complete!");
-    Ok(())
-}
-
-fn cmd_search(repo: &Path, args: SearchArgs) -> Result<(), Box<dyn std::error::Error>> {
-    println!("Searching in {}: {}", repo.display(), args.query);
-    println!("Limit: {}, Format: {}", args.limit, args.format);
-
-    if let Some(category) = args.category {
-        println!("Category: {}", category);
-    }
-
-    // TODO: Implement search pipeline
-    // 1. Classify query
-    // 2. Retrieve candidates
-    // 3. Expand graph
-    // 4. Rerank
-    // 5. Output reading plan
-
-    Ok(())
-}
-
-fn cmd_entity(repo: &Path, args: EntityArgs) -> Result<(), Box<dyn std::error::Error>> {
-    println!("Looking up entity in {}: {}", repo.display(), args.id);
-
-    // TODO: Query entity by ID and display details
-
-    Ok(())
-}
-
-fn cmd_entities(repo: &Path, args: EntitiesArgs) -> Result<(), Box<dyn std::error::Error>> {
-    println!("Listing entities in {}", repo.display());
-
-    if let Some(component) = args.component {
-        println!("Component filter: {}", component);
-    }
-    if let Some(kind) = args.kind {
-        println!("Kind filter: {}", kind);
-    }
-
-    // TODO: Query and list entities
-
-    Ok(())
-}
-
-fn cmd_routes(repo: &Path, args: RoutesArgs) -> Result<(), Box<dyn std::error::Error>> {
-    println!("Listing task routes in {}", repo.display());
-
-    if let Some(task) = args.task {
-        println!("Task filter: {}", task);
-    }
-    if let Some(entity) = args.entity {
-        println!("Entity filter: {}", entity);
-    }
-
-    // TODO: Query and list task routes
-
-    Ok(())
-}
-
-fn cmd_edges(repo: &Path, args: EdgesArgs) -> Result<(), Box<dyn std::error::Error>> {
-    println!("Listing edges in {}", repo.display());
-
-    if let Some(from) = args.from {
-        println!("From filter: {}", from);
-    }
-    if let Some(to) = args.to {
-        println!("To filter: {}", to);
-    }
-    if let Some(rel) = args.rel {
-        println!("Relationship filter: {}", rel);
-    }
-
-    // TODO: Query and list edges
-
-    Ok(())
-}
-
-fn cmd_visualize(repo: &Path, args: VisualizeArgs) -> Result<(), Box<dyn std::error::Error>> {
-    println!("Generating visualization for {}", repo.display());
-    println!(
-        "Depth: {}, Layout: {}, Max nodes: {}",
-        args.depth, args.layout, args.max_nodes
-    );
-
-    if let Some(entity_id) = args.entity_id {
-        println!("Starting from: {}", entity_id);
-    }
-    if let Some(output) = args.output {
-        println!("Output to: {}", output.display());
-    }
-    if args.legend {
-        println!("Including legend");
-    }
-
-    // TODO: Generate SVG visualization
-
-    Ok(())
+fn not_yet_implemented(command: &str) -> Result<(), Box<dyn std::error::Error>> {
+    Err(format!("'chizu {command}' is not yet implemented").into())
 }
 
 fn cmd_config(repo: &Path, args: ConfigArgs) -> Result<(), Box<dyn std::error::Error>> {
@@ -354,47 +236,11 @@ fn cmd_config(repo: &Path, args: ConfigArgs) -> Result<(), Box<dyn std::error::E
                 .into());
             }
 
-            let default_config = r#"[index]
-exclude_patterns = [
-    "**/target/**",
-    "**/.git/**",
-    "**/node_modules/**",
-    "**/.venv/**",
-    "**/fuzz/**",
-    "**/*.lock",
-]
+            let default_config = chizu_core::Config::default()
+                .to_toml()
+                .map_err(|e| format!("failed to serialize default config: {}", e))?;
 
-[search]
-default_limit = 15
-
-[search.rerank_weights]
-task_route = 0.00
-keyword = 0.25
-name_match = 0.20
-vector = 0.25
-kind_preference = 0.10
-exported = 0.10
-path_match = 0.10
-
-[providers.ollama]
-base_url = "http://localhost:11434/v1"
-timeout_secs = 120
-retry_attempts = 3
-
-[summary]
-provider = "ollama"
-model = "llama3:8b"
-max_tokens = 512
-temperature = 0.2
-
-[embedding]
-provider = "ollama"
-model = "nomic-embed-text-v2-moe:latest"
-dimensions = 768
-batch_size = 32
-"#;
-
-            std::fs::write(&config_path, default_config)?;
+            std::fs::write(&config_path, &default_config)?;
             println!("Created config at {}", config_path.display());
             Ok(())
         }

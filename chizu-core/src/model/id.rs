@@ -32,8 +32,14 @@ impl ComponentId {
     }
 
     /// Get the path part of the ID.
+    ///
+    /// For `component::cargo::crates/core` returns `Some("crates/core")`.
+    /// Handles paths containing `::` (e.g. `component::terraform::modules::vpc`
+    /// returns `Some("modules::vpc")`).
     pub fn path(&self) -> Option<&str> {
-        self.0.strip_prefix("component::")?.split("::").nth(1)
+        let rest = self.0.strip_prefix("component::")?;
+        let (_ecosystem, path) = rest.split_once("::")?;
+        Some(path)
     }
 }
 
@@ -43,9 +49,15 @@ impl fmt::Display for ComponentId {
     }
 }
 
-impl From<String> for ComponentId {
-    fn from(s: String) -> Self {
-        Self(s)
+impl TryFrom<String> for ComponentId {
+    type Error = String;
+
+    fn try_from(s: String) -> std::result::Result<Self, Self::Error> {
+        if s.starts_with("component::") {
+            Ok(Self(s))
+        } else {
+            Err(format!("invalid component ID: must start with 'component::' but got '{}'", s))
+        }
     }
 }
 
@@ -122,6 +134,32 @@ mod tests {
     fn test_component_id_path() {
         let id = ComponentId::new("cargo", "crates/core");
         assert_eq!(id.path(), Some("crates/core"));
+    }
+
+    #[test]
+    fn test_component_id_path_with_double_colon() {
+        // Paths that themselves contain :: must be preserved fully
+        let id = ComponentId(String::from("component::terraform::modules::vpc"));
+        assert_eq!(id.path(), Some("modules::vpc"));
+    }
+
+    #[test]
+    fn test_component_id_path_root() {
+        let id = ComponentId::new("npm", ".");
+        assert_eq!(id.path(), Some("."));
+    }
+
+    #[test]
+    fn test_component_id_try_from_valid() {
+        let id = ComponentId::try_from("component::cargo::core".to_string());
+        assert!(id.is_ok());
+        assert_eq!(id.unwrap().0, "component::cargo::core");
+    }
+
+    #[test]
+    fn test_component_id_try_from_invalid() {
+        let id = ComponentId::try_from("garbage".to_string());
+        assert!(id.is_err());
     }
 
     #[test]

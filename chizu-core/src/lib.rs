@@ -21,4 +21,4 @@ pub use model::{
 pub use model::{
     component_id, doc_id, entity_id_to_usearch_key, source_unit_id, symbol_id, test_id,
 };
-pub use store::{ChizuStore, SqliteStore, Store, StoreError, UsearchIndex};
+pub use store::{ChizuStore, Store, StoreError};
