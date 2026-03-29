@@ -16,5 +16,7 @@ tracing = { workspace = true }
 usearch = { workspace = true }
 
 [dev-dependencies]
+bolero = { workspace = true }
+bolero-generator = { workspace = true }
 mockito = "1"
-tempfile = "3"
+tempfile = { workspace = true }
