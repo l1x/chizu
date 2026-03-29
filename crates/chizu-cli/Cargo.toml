@@ -1,0 +1,14 @@
+[package]
+name = "chizu-cli"
+version = "0.1.0"
+edition = "2024"
+
+[[bin]]
+name = "chizu"
+path = "src/main.rs"
+
+[dependencies]
+chizu-core = { path = "../chizu-core" }
+argh = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = "0.3"

@@ -1,424 +1,246 @@
-#[cfg(feature = "sqlite_usearch")]
-pub mod schema;
-#[cfg(feature = "sqlite_usearch")]
-mod sqlite;
-pub mod stats;
+use crate::config::Config;
+use crate::model::{
+    ComponentId, Edge, EdgeKind, EmbeddingMeta, Entity, EntityKind, FileRecord, Summary, TaskRoute,
+};
+use std::path::Path;
 
-#[cfg(feature = "grafeo")]
-mod grafeo;
+pub mod sqlite;
+pub mod usearch;
 
-#[cfg(feature = "sqlite_usearch")]
 pub use sqlite::SqliteStore;
+pub use usearch::UsearchIndex;
 
-#[cfg(feature = "grafeo")]
-pub use grafeo::GrafeoStore;
-
-#[cfg(not(any(feature = "sqlite_usearch", feature = "grafeo")))]
-compile_error!("at least one backend feature must be enabled: sqlite_usearch or grafeo");
-
-use crate::error::Result;
-use crate::model::*;
-use stats::GraphStats;
-
-pub enum Store {
-    #[cfg(feature = "sqlite_usearch")]
-    Sqlite(SqliteStore),
-    #[cfg(feature = "grafeo")]
-    Grafeo(GrafeoStore),
+/// Store error types
+#[derive(Debug, thiserror::Error)]
+pub enum StoreError {
+    #[error("SQLite error: {0}")]
+    Sqlite(#[from] rusqlite::Error),
+    #[error("usearch error: {0}")]
+    Usearch(String),
+    #[error("IO error: {0}")]
+    Io(#[from] std::io::Error),
+    #[error("serialization error: {0}")]
+    Serialization(#[from] serde_json::Error),
+    #[error("{0}")]
+    Other(String),
 }
 
-impl Store {
-    #[cfg(feature = "sqlite_usearch")]
-    pub fn open(path: &str) -> Result<Self> {
-        Ok(Self::Sqlite(SqliteStore::open(path)?))
+/// Result type for store operations
+pub type Result<T> = std::result::Result<T, StoreError>;
+
+/// The main store trait abstracting over storage backends.
+pub trait Store {
+    /// Insert or replace an entity.
+    fn insert_entity(&self, entity: &Entity) -> Result<()>;
+
+    /// Get an entity by ID.
+    fn get_entity(&self, id: &str) -> Result<Option<Entity>>;
+
+    /// Query entities by kind.
+    fn get_entities_by_kind(&self, kind: EntityKind) -> Result<Vec<Entity>>;
+
+    /// Query entities by component ID.
+    fn get_entities_by_component(&self, component_id: &ComponentId) -> Result<Vec<Entity>>;
+
+    /// Delete an entity by ID.
+    fn delete_entity(&self, id: &str) -> Result<()>;
+
+    /// Delete all entities for a component.
+    fn delete_entities_by_component(&self, component_id: &ComponentId) -> Result<usize>;
+
+    /// Insert or replace an edge.
+    fn insert_edge(&self, edge: &Edge) -> Result<()>;
+
+    /// Get edges by source ID.
+    fn get_edges_from(&self, src_id: &str) -> Result<Vec<Edge>>;
+
+    /// Get edges by destination ID.
+    fn get_edges_to(&self, dst_id: &str) -> Result<Vec<Edge>>;
+
+    /// Get edges by relationship kind.
+    fn get_edges_by_rel(&self, rel: EdgeKind) -> Result<Vec<Edge>>;
+
+    /// Delete an edge.
+    fn delete_edge(&self, src_id: &str, rel: EdgeKind, dst_id: &str) -> Result<()>;
+
+    /// Delete all edges for a component.
+    fn delete_edges_by_component(&self, component_id: &ComponentId) -> Result<usize>;
+
+    /// Insert or replace a file record.
+    fn insert_file(&self, file: &FileRecord) -> Result<()>;
+
+    /// Get a file record by path.
+    fn get_file(&self, path: &str) -> Result<Option<FileRecord>>;
+
+    /// Get all indexed files.
+    fn get_all_files(&self) -> Result<Vec<FileRecord>>;
+
+    /// Delete a file record.
+    fn delete_file(&self, path: &str) -> Result<()>;
+
+    /// Insert or replace a summary.
+    fn insert_summary(&self, summary: &Summary) -> Result<()>;
+
+    /// Get a summary by entity ID.
+    fn get_summary(&self, entity_id: &str) -> Result<Option<Summary>>;
+
+    /// Delete a summary.
+    fn delete_summary(&self, entity_id: &str) -> Result<()>;
+
+    /// Insert or replace a task route.
+    fn insert_task_route(&self, route: &TaskRoute) -> Result<()>;
+
+    /// Get task routes by task name.
+    fn get_task_routes(&self, task_name: &str) -> Result<Vec<TaskRoute>>;
+
+    /// Get task routes by entity ID.
+    fn get_entity_task_routes(&self, entity_id: &str) -> Result<Vec<TaskRoute>>;
+
+    /// Delete task routes for an entity.
+    fn delete_entity_task_routes(&self, entity_id: &str) -> Result<()>;
+
+    /// Insert or replace embedding metadata.
+    fn insert_embedding_meta(&self, meta: &EmbeddingMeta) -> Result<()>;
+
+    /// Get embedding metadata by entity ID.
+    fn get_embedding_meta(&self, entity_id: &str) -> Result<Option<EmbeddingMeta>>;
+
+    /// Delete embedding metadata.
+    fn delete_embedding_meta(&self, entity_id: &str) -> Result<()>;
+}
+
+/// A combined store that manages both SQLite and usearch.
+pub struct ChizuStore {
+    pub sqlite: SqliteStore,
+    pub usearch: UsearchIndex,
+}
+
+impl ChizuStore {
+    /// Open or create a store at the given directory.
+    pub fn open(dir: &Path, config: &Config) -> Result<Self> {
+        std::fs::create_dir_all(dir)?;
+
+        let sqlite_path = dir.join("graph.db");
+        let usearch_path = dir.join("graph.db.usearch");
+
+        let sqlite = SqliteStore::open(&sqlite_path)?;
+
+        let dimensions = config.embedding.dimensions.unwrap_or(768) as usize;
+        let usearch = UsearchIndex::open_or_create(&usearch_path, dimensions)?;
+
+        Ok(Self { sqlite, usearch })
     }
 
-    #[cfg(feature = "sqlite_usearch")]
-    pub fn open_in_memory() -> Result<Self> {
-        Ok(Self::Sqlite(SqliteStore::open_in_memory()?))
-    }
-
-    #[cfg(feature = "grafeo")]
-    pub fn open_grafeo(path: &str) -> Result<Self> {
-        Ok(Self::Grafeo(GrafeoStore::open(path)?))
-    }
-
-    #[cfg(feature = "grafeo")]
-    pub fn open_grafeo_in_memory() -> Result<Self> {
-        Ok(Self::Grafeo(GrafeoStore::open_in_memory()?))
-    }
-
-    pub fn schema_version(&self) -> Result<Option<i64>> {
-        match self {
-            #[cfg(feature = "sqlite_usearch")]
-            Self::Sqlite(s) => s.schema_version().map(Some),
-            #[cfg(feature = "grafeo")]
-            Self::Grafeo(_) => Ok(None),
-        }
-    }
-
-    // --- Transactions ---
-
-    pub fn begin_transaction(&self) -> Result<()> {
-        match self {
-            #[cfg(feature = "sqlite_usearch")]
-            Self::Sqlite(s) => s.begin_transaction(),
-            #[cfg(feature = "grafeo")]
-            Self::Grafeo(g) => g.begin_transaction(),
-        }
-    }
-
-    pub fn commit_transaction(&self) -> Result<()> {
-        match self {
-            #[cfg(feature = "sqlite_usearch")]
-            Self::Sqlite(s) => s.commit_transaction(),
-            #[cfg(feature = "grafeo")]
-            Self::Grafeo(g) => g.commit_transaction(),
-        }
-    }
-
-    pub fn rollback_transaction(&self) -> Result<()> {
-        match self {
-            #[cfg(feature = "sqlite_usearch")]
-            Self::Sqlite(s) => s.rollback_transaction(),
-            #[cfg(feature = "grafeo")]
-            Self::Grafeo(g) => g.rollback_transaction(),
-        }
-    }
-
-    // --- Entities ---
-
-    pub fn insert_entity(&self, entity: &Entity) -> Result<()> {
-        match self {
-            #[cfg(feature = "sqlite_usearch")]
-            Self::Sqlite(s) => s.insert_entity(entity),
-            #[cfg(feature = "grafeo")]
-            Self::Grafeo(g) => g.insert_entity(entity),
-        }
-    }
-
-    pub fn get_entity(&self, id: &str) -> Result<Entity> {
-        match self {
-            #[cfg(feature = "sqlite_usearch")]
-            Self::Sqlite(s) => s.get_entity(id),
-            #[cfg(feature = "grafeo")]
-            Self::Grafeo(g) => g.get_entity(id),
-        }
-    }
-
-    pub fn list_entities(&self) -> Result<Vec<Entity>> {
-        match self {
-            #[cfg(feature = "sqlite_usearch")]
-            Self::Sqlite(s) => s.list_entities(),
-            #[cfg(feature = "grafeo")]
-            Self::Grafeo(g) => g.list_entities(),
-        }
-    }
-
-    pub fn list_entities_by_component(&self, component_id: &str) -> Result<Vec<Entity>> {
-        match self {
-            #[cfg(feature = "sqlite_usearch")]
-            Self::Sqlite(s) => s.list_entities_by_component(component_id),
-            #[cfg(feature = "grafeo")]
-            Self::Grafeo(g) => g.list_entities_by_component(component_id),
-        }
-    }
-
-    pub fn list_entities_by_path(&self, path: &str) -> Result<Vec<Entity>> {
-        match self {
-            #[cfg(feature = "sqlite_usearch")]
-            Self::Sqlite(s) => s.list_entities_by_path(path),
-            #[cfg(feature = "grafeo")]
-            Self::Grafeo(g) => g.list_entities_by_path(path),
-        }
-    }
-
-    pub fn delete_entity(&self, id: &str) -> Result<bool> {
-        match self {
-            #[cfg(feature = "sqlite_usearch")]
-            Self::Sqlite(s) => s.delete_entity(id),
-            #[cfg(feature = "grafeo")]
-            Self::Grafeo(g) => g.delete_entity(id),
-        }
-    }
-
-    // --- Edges ---
-
-    pub fn insert_edge(&self, edge: &Edge) -> Result<()> {
-        match self {
-            #[cfg(feature = "sqlite_usearch")]
-            Self::Sqlite(s) => s.insert_edge(edge),
-            #[cfg(feature = "grafeo")]
-            Self::Grafeo(g) => g.insert_edge(edge),
-        }
-    }
-
-    pub fn edges_from(&self, src_id: &str) -> Result<Vec<Edge>> {
-        match self {
-            #[cfg(feature = "sqlite_usearch")]
-            Self::Sqlite(s) => s.edges_from(src_id),
-            #[cfg(feature = "grafeo")]
-            Self::Grafeo(g) => g.edges_from(src_id),
-        }
-    }
-
-    pub fn edges_to(&self, dst_id: &str) -> Result<Vec<Edge>> {
-        match self {
-            #[cfg(feature = "sqlite_usearch")]
-            Self::Sqlite(s) => s.edges_to(dst_id),
-            #[cfg(feature = "grafeo")]
-            Self::Grafeo(g) => g.edges_to(dst_id),
-        }
-    }
-
-    pub fn delete_edges_from(&self, src_id: &str) -> Result<usize> {
-        match self {
-            #[cfg(feature = "sqlite_usearch")]
-            Self::Sqlite(s) => s.delete_edges_from(src_id),
-            #[cfg(feature = "grafeo")]
-            Self::Grafeo(g) => g.delete_edges_from(src_id),
-        }
-    }
-
-    pub fn delete_edges_to(&self, dst_id: &str) -> Result<usize> {
-        match self {
-            #[cfg(feature = "sqlite_usearch")]
-            Self::Sqlite(s) => s.delete_edges_to(dst_id),
-            #[cfg(feature = "grafeo")]
-            Self::Grafeo(g) => g.delete_edges_to(dst_id),
-        }
-    }
-
-    pub fn delete_edge(&self, src_id: &str, rel: EdgeKind, dst_id: &str) -> Result<bool> {
-        match self {
-            #[cfg(feature = "sqlite_usearch")]
-            Self::Sqlite(s) => s.delete_edge(src_id, rel, dst_id),
-            #[cfg(feature = "grafeo")]
-            Self::Grafeo(g) => g.delete_edge(src_id, rel, dst_id),
-        }
-    }
-
-    // --- Traversal ---
-
-    /// Walk forward from `start` following edges of kind `rel` up to `max_depth` hops.
-    pub fn walk_forward(
-        &self,
-        start: &str,
-        rel: EdgeKind,
-        max_depth: usize,
-    ) -> Result<Vec<String>> {
-        match self {
-            #[cfg(feature = "sqlite_usearch")]
-            Self::Sqlite(s) => s.walk_forward(start, rel, max_depth),
-            #[cfg(feature = "grafeo")]
-            Self::Grafeo(g) => g.walk_forward(start, rel, max_depth),
-        }
-    }
-
-    /// Walk backward from `start` following edges of kind `rel` up to `max_depth` hops.
-    pub fn walk_backward(
-        &self,
-        start: &str,
-        rel: EdgeKind,
-        max_depth: usize,
-    ) -> Result<Vec<String>> {
-        match self {
-            #[cfg(feature = "sqlite_usearch")]
-            Self::Sqlite(s) => s.walk_backward(start, rel, max_depth),
-            #[cfg(feature = "grafeo")]
-            Self::Grafeo(g) => g.walk_backward(start, rel, max_depth),
-        }
-    }
-
-    /// Find all entities reachable from `start` within `max_depth` hops (any edge kind).
-    pub fn reachable_entities(&self, start: &str, max_depth: usize) -> Result<Vec<String>> {
-        match self {
-            #[cfg(feature = "sqlite_usearch")]
-            Self::Sqlite(s) => s.reachable_entities(start, max_depth),
-            #[cfg(feature = "grafeo")]
-            Self::Grafeo(g) => g.reachable_entities(start, max_depth),
-        }
-    }
-
-    // --- Files ---
-
-    pub fn insert_file(&self, file: &FileRecord) -> Result<()> {
-        match self {
-            #[cfg(feature = "sqlite_usearch")]
-            Self::Sqlite(s) => s.insert_file(file),
-            #[cfg(feature = "grafeo")]
-            Self::Grafeo(g) => g.insert_file(file),
-        }
-    }
-
-    pub fn get_file(&self, path: &str) -> Result<FileRecord> {
-        match self {
-            #[cfg(feature = "sqlite_usearch")]
-            Self::Sqlite(s) => s.get_file(path),
-            #[cfg(feature = "grafeo")]
-            Self::Grafeo(g) => g.get_file(path),
-        }
-    }
-
-    pub fn list_files(&self, component_id: Option<&str>) -> Result<Vec<FileRecord>> {
-        match self {
-            #[cfg(feature = "sqlite_usearch")]
-            Self::Sqlite(s) => s.list_files(component_id),
-            #[cfg(feature = "grafeo")]
-            Self::Grafeo(g) => g.list_files(component_id),
-        }
-    }
-
-    pub fn delete_file(&self, path: &str) -> Result<bool> {
-        match self {
-            #[cfg(feature = "sqlite_usearch")]
-            Self::Sqlite(s) => s.delete_file(path),
-            #[cfg(feature = "grafeo")]
-            Self::Grafeo(g) => g.delete_file(path),
-        }
-    }
-
-    // --- Summaries ---
-
-    pub fn upsert_summary(&self, summary: &Summary) -> Result<()> {
-        match self {
-            #[cfg(feature = "sqlite_usearch")]
-            Self::Sqlite(s) => s.upsert_summary(summary),
-            #[cfg(feature = "grafeo")]
-            Self::Grafeo(g) => g.upsert_summary(summary),
-        }
-    }
-
-    pub fn get_summary(&self, entity_id: &str) -> Result<Summary> {
-        match self {
-            #[cfg(feature = "sqlite_usearch")]
-            Self::Sqlite(s) => s.get_summary(entity_id),
-            #[cfg(feature = "grafeo")]
-            Self::Grafeo(g) => g.get_summary(entity_id),
-        }
-    }
-
-    pub fn delete_summary(&self, entity_id: &str) -> Result<bool> {
-        match self {
-            #[cfg(feature = "sqlite_usearch")]
-            Self::Sqlite(s) => s.delete_summary(entity_id),
-            #[cfg(feature = "grafeo")]
-            Self::Grafeo(g) => g.delete_summary(entity_id),
-        }
-    }
-
-    // --- Embeddings ---
-
-    pub fn upsert_embedding(&self, emb: &EmbeddingRecord) -> Result<()> {
-        match self {
-            #[cfg(feature = "sqlite_usearch")]
-            Self::Sqlite(s) => s.upsert_embedding(emb),
-            #[cfg(feature = "grafeo")]
-            Self::Grafeo(g) => g.upsert_embedding(emb),
-        }
-    }
-
-    pub fn get_embedding(&self, entity_id: &str) -> Result<EmbeddingRecord> {
-        match self {
-            #[cfg(feature = "sqlite_usearch")]
-            Self::Sqlite(s) => s.get_embedding(entity_id),
-            #[cfg(feature = "grafeo")]
-            Self::Grafeo(g) => g.get_embedding(entity_id),
-        }
-    }
-
-    pub fn delete_embedding(&self, entity_id: &str) -> Result<bool> {
-        match self {
-            #[cfg(feature = "sqlite_usearch")]
-            Self::Sqlite(s) => s.delete_embedding(entity_id),
-            #[cfg(feature = "grafeo")]
-            Self::Grafeo(g) => g.delete_embedding(entity_id),
-        }
-    }
-
-    pub fn list_embeddings(&self) -> Result<Vec<EmbeddingRecord>> {
-        match self {
-            #[cfg(feature = "sqlite_usearch")]
-            Self::Sqlite(s) => s.list_embeddings(),
-            #[cfg(feature = "grafeo")]
-            Self::Grafeo(g) => g.list_embeddings(),
-        }
-    }
-
-    pub fn vector_search(&self, query: &[f32], k: usize) -> Result<Vec<VectorSearchResult>> {
-        match self {
-            #[cfg(feature = "sqlite_usearch")]
-            Self::Sqlite(s) => s.vector_search(query, k),
-            #[cfg(feature = "grafeo")]
-            Self::Grafeo(g) => g.vector_search(query, k),
-        }
-    }
-
-    // --- Task Routes ---
-
-    pub fn insert_task_route(&self, route: &TaskRoute) -> Result<()> {
-        match self {
-            #[cfg(feature = "sqlite_usearch")]
-            Self::Sqlite(s) => s.insert_task_route(route),
-            #[cfg(feature = "grafeo")]
-            Self::Grafeo(g) => g.insert_task_route(route),
-        }
-    }
-
-    pub fn routes_for_task(&self, task_name: &str) -> Result<Vec<TaskRoute>> {
-        match self {
-            #[cfg(feature = "sqlite_usearch")]
-            Self::Sqlite(s) => s.routes_for_task(task_name),
-            #[cfg(feature = "grafeo")]
-            Self::Grafeo(g) => g.routes_for_task(task_name),
-        }
-    }
-
-    pub fn routes_for_entity(&self, entity_id: &str) -> Result<Vec<TaskRoute>> {
-        match self {
-            #[cfg(feature = "sqlite_usearch")]
-            Self::Sqlite(s) => s.routes_for_entity(entity_id),
-            #[cfg(feature = "grafeo")]
-            Self::Grafeo(g) => g.routes_for_entity(entity_id),
-        }
-    }
-
-    pub fn delete_task_route(&self, task_name: &str, entity_id: &str) -> Result<bool> {
-        match self {
-            #[cfg(feature = "sqlite_usearch")]
-            Self::Sqlite(s) => s.delete_task_route(task_name, entity_id),
-            #[cfg(feature = "grafeo")]
-            Self::Grafeo(g) => g.delete_task_route(task_name, entity_id),
-        }
-    }
-
-    // --- Stats ---
-
-    pub fn stats(&self) -> Result<GraphStats> {
-        match self {
-            #[cfg(feature = "sqlite_usearch")]
-            Self::Sqlite(s) => s.stats(),
-            #[cfg(feature = "grafeo")]
-            Self::Grafeo(g) => g.stats(),
-        }
+    /// Close the store and flush any pending writes.
+    pub fn close(self) -> Result<()> {
+        self.usearch.close()?;
+        // SQLite connection is closed when dropped
+        Ok(())
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[cfg(feature = "sqlite_usearch")]
-    #[test]
-    fn store_open_in_memory() {
-        let store = Store::open_in_memory().unwrap();
-        assert_eq!(store.schema_version().unwrap(), Some(4));
+impl Store for ChizuStore {
+    fn insert_entity(&self, entity: &Entity) -> Result<()> {
+        self.sqlite.insert_entity(entity)
     }
 
-    #[cfg(feature = "grafeo")]
-    #[test]
-    fn store_open_grafeo_in_memory() {
-        let store = Store::open_grafeo_in_memory().unwrap();
-        assert_eq!(store.schema_version().unwrap(), None);
+    fn get_entity(&self, id: &str) -> Result<Option<Entity>> {
+        self.sqlite.get_entity(id)
+    }
+
+    fn get_entities_by_kind(&self, kind: EntityKind) -> Result<Vec<Entity>> {
+        self.sqlite.get_entities_by_kind(kind)
+    }
+
+    fn get_entities_by_component(&self, component_id: &ComponentId) -> Result<Vec<Entity>> {
+        self.sqlite.get_entities_by_component(component_id)
+    }
+
+    fn delete_entity(&self, id: &str) -> Result<()> {
+        self.sqlite.delete_entity(id)
+    }
+
+    fn delete_entities_by_component(&self, component_id: &ComponentId) -> Result<usize> {
+        self.sqlite.delete_entities_by_component(component_id)
+    }
+
+    fn insert_edge(&self, edge: &Edge) -> Result<()> {
+        self.sqlite.insert_edge(edge)
+    }
+
+    fn get_edges_from(&self, src_id: &str) -> Result<Vec<Edge>> {
+        self.sqlite.get_edges_from(src_id)
+    }
+
+    fn get_edges_to(&self, dst_id: &str) -> Result<Vec<Edge>> {
+        self.sqlite.get_edges_to(dst_id)
+    }
+
+    fn get_edges_by_rel(&self, rel: EdgeKind) -> Result<Vec<Edge>> {
+        self.sqlite.get_edges_by_rel(rel)
+    }
+
+    fn delete_edge(&self, src_id: &str, rel: EdgeKind, dst_id: &str) -> Result<()> {
+        self.sqlite.delete_edge(src_id, rel, dst_id)
+    }
+
+    fn delete_edges_by_component(&self, component_id: &ComponentId) -> Result<usize> {
+        self.sqlite.delete_edges_by_component(component_id)
+    }
+
+    fn insert_file(&self, file: &FileRecord) -> Result<()> {
+        self.sqlite.insert_file(file)
+    }
+
+    fn get_file(&self, path: &str) -> Result<Option<FileRecord>> {
+        self.sqlite.get_file(path)
+    }
+
+    fn get_all_files(&self) -> Result<Vec<FileRecord>> {
+        self.sqlite.get_all_files()
+    }
+
+    fn delete_file(&self, path: &str) -> Result<()> {
+        self.sqlite.delete_file(path)
+    }
+
+    fn insert_summary(&self, summary: &Summary) -> Result<()> {
+        self.sqlite.insert_summary(summary)
+    }
+
+    fn get_summary(&self, entity_id: &str) -> Result<Option<Summary>> {
+        self.sqlite.get_summary(entity_id)
+    }
+
+    fn delete_summary(&self, entity_id: &str) -> Result<()> {
+        self.sqlite.delete_summary(entity_id)
+    }
+
+    fn insert_task_route(&self, route: &TaskRoute) -> Result<()> {
+        self.sqlite.insert_task_route(route)
+    }
+
+    fn get_task_routes(&self, task_name: &str) -> Result<Vec<TaskRoute>> {
+        self.sqlite.get_task_routes(task_name)
+    }
+
+    fn get_entity_task_routes(&self, entity_id: &str) -> Result<Vec<TaskRoute>> {
+        self.sqlite.get_entity_task_routes(entity_id)
+    }
+
+    fn delete_entity_task_routes(&self, entity_id: &str) -> Result<()> {
+        self.sqlite.delete_entity_task_routes(entity_id)
+    }
+
+    fn insert_embedding_meta(&self, meta: &EmbeddingMeta) -> Result<()> {
+        self.sqlite.insert_embedding_meta(meta)
+    }
+
+    fn get_embedding_meta(&self, entity_id: &str) -> Result<Option<EmbeddingMeta>> {
+        self.sqlite.get_embedding_meta(entity_id)
+    }
+
+    fn delete_embedding_meta(&self, entity_id: &str) -> Result<()> {
+        self.sqlite.delete_embedding_meta(entity_id)
     }
 }
