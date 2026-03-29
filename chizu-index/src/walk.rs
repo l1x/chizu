@@ -51,6 +51,7 @@ impl FileWalker {
             .git_global(true)
             .git_exclude(true)
             .require_git(false)
+            .follow_links(false)
             .build();
 
         for entry in walker {

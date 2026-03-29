@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
-use chizu_core::{ComponentId, Edge, EdgeKind, Entity, EntityKind, component_id};
+use chizu_core::{ComponentId, Edge, EdgeKind, Entity, EntityKind};
 
 use crate::error::{IndexError, Result};
 use crate::registry::ComponentRegistry;
@@ -42,7 +42,8 @@ pub fn index_cargo_workspace(repo_root: &Path, registry: &ComponentRegistry) -> 
             None => continue,
         };
 
-        let comp_id_str = component_id("cargo", &normalize_component_path(rel_path));
+        let comp_path = normalize_component_path(rel_path);
+        let comp_id_str = ComponentId::new("cargo", &comp_path).to_string();
 
         facts.entities.push(
             Entity::new(&comp_id_str, EntityKind::Component, &package.name)
@@ -69,7 +70,6 @@ pub fn index_cargo_workspace(repo_root: &Path, registry: &ComponentRegistry) -> 
 
         if let Some(features) = &manifest.features {
             for (feature_name, enables) in features {
-                let comp_path = normalize_component_path(rel_path);
                 let feat_id = feature_id(&comp_path, feature_name);
                 facts.entities.push(
                     Entity::new(&feat_id, EntityKind::Feature, feature_name)
@@ -83,6 +83,9 @@ pub fn index_cargo_workspace(repo_root: &Path, registry: &ComponentRegistry) -> 
                 ));
 
                 for enabled in enables {
+                    // Skip dependency features (dep:crate) and cross-crate
+                    // feature enables (dep-name/feature-name). The '/' syntax
+                    // is used by Cargo for external feature references.
                     if enabled.starts_with("dep:") || enabled.contains('/') {
                         continue;
                     }
@@ -115,11 +118,10 @@ fn feature_id(component_path: &str, feature_name: &str) -> String {
 fn merge_deps<'a>(
     deps: &'a Option<HashMap<String, CargoDependency>>,
     dev_deps: &'a Option<HashMap<String, CargoDependency>>,
-) -> Vec<(&'a String, &'a CargoDependency)> {
+) -> impl Iterator<Item = (&'a String, &'a CargoDependency)> {
     deps.iter()
         .flat_map(|d| d.iter())
         .chain(dev_deps.iter().flat_map(|d| d.iter()))
-        .collect()
 }
 
 fn resolve_local_dependency(
@@ -131,6 +133,8 @@ fn resolve_local_dependency(
 ) -> Option<ComponentId> {
     if let Some(path_str) = dep.path() {
         let resolved = normalize_path(&repo_root.join(source_path).join(path_str));
+        // strip_prefix fails if the normalized path escapes repo_root
+        // (e.g., via ../../). In that case we treat it as unresolvable.
         let rel = resolved.strip_prefix(repo_root).ok()?;
         return registry.component_for_path(rel).cloned();
     }

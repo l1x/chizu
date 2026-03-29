@@ -205,8 +205,6 @@ impl ChizuStore {
 }
 
 impl Store for ChizuStore {
-    // ── Entity (delegate to sqlite) ─────────────────────────────────────
-
     fn insert_entity(&self, entity: &Entity) -> Result<()> {
         self.sqlite.insert_entity(entity)
     }
@@ -230,8 +228,6 @@ impl Store for ChizuStore {
     fn delete_entities_by_component(&self, component_id: &ComponentId) -> Result<usize> {
         self.sqlite.delete_entities_by_component(component_id)
     }
-
-    // ── Edge (delegate to sqlite) ───────────────────────────────────────
 
     fn insert_edge(&self, edge: &Edge) -> Result<()> {
         self.sqlite.insert_edge(edge)
@@ -257,8 +253,6 @@ impl Store for ChizuStore {
         self.sqlite.delete_edges_by_component(component_id)
     }
 
-    // ── File (delegate to sqlite) ───────────────────────────────────────
-
     fn insert_file(&self, file: &FileRecord) -> Result<()> {
         self.sqlite.insert_file(file)
     }
@@ -275,8 +269,6 @@ impl Store for ChizuStore {
         self.sqlite.delete_file(path)
     }
 
-    // ── Summary (delegate to sqlite) ────────────────────────────────────
-
     fn insert_summary(&self, summary: &Summary) -> Result<()> {
         self.sqlite.insert_summary(summary)
     }
@@ -288,8 +280,6 @@ impl Store for ChizuStore {
     fn delete_summary(&self, entity_id: &str) -> Result<()> {
         self.sqlite.delete_summary(entity_id)
     }
-
-    // ── Task route (delegate to sqlite) ─────────────────────────────────
 
     fn insert_task_route(&self, route: &TaskRoute) -> Result<()> {
         self.sqlite.insert_task_route(route)
@@ -307,8 +297,6 @@ impl Store for ChizuStore {
         self.sqlite.delete_entity_task_routes(entity_id)
     }
 
-    // ── Embedding metadata (delegate to sqlite) ─────────────────────────
-
     fn insert_embedding_meta(&self, meta: &EmbeddingMeta) -> Result<()> {
         self.sqlite.insert_embedding_meta(meta)
     }
@@ -320,8 +308,6 @@ impl Store for ChizuStore {
     fn delete_embedding_meta(&self, entity_id: &str) -> Result<()> {
         self.sqlite.delete_embedding_meta(entity_id)
     }
-
-    // ── Vector operations (delegate to usearch with collision check) ────
 
     fn add_vector(&self, entity_id: &str, key: i64, vector: &[f32]) -> Result<()> {
         // Collision check via the embeddings metadata table. If a different

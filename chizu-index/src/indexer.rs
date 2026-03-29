@@ -37,12 +37,14 @@ impl IndexPipeline {
 
         // Wrap all store mutations in a single transaction for atomicity and
         // performance (avoids per-statement fsync in WAL mode).
-        store.in_transaction(|store| {
-            let current_paths: HashSet<String> = files
-                .iter()
-                .map(|f| f.path.to_string_lossy().to_string())
-                .collect();
+        // Pre-compute path strings once (avoids double to_string_lossy conversion).
+        let file_paths: Vec<String> = files
+            .iter()
+            .map(|f| f.path.to_string_lossy().into_owned())
+            .collect();
+        let current_paths: HashSet<&str> = file_paths.iter().map(|s| s.as_str()).collect();
 
+        store.in_transaction(|store| {
             for existing in store.get_all_files()? {
                 if !current_paths.contains(existing.path.as_str()) {
                     store.delete_file(&existing.path)?;
@@ -61,13 +63,9 @@ impl IndexPipeline {
                 stats.edges_inserted += 1;
             }
 
-            for file in &files {
+            for (file, path_str) in files.iter().zip(file_paths.iter()) {
                 let kind = classify_file(&file.path);
-                let mut record = FileRecord::new(
-                    file.path.to_string_lossy().to_string(),
-                    kind,
-                    &file.hash,
-                );
+                let mut record = FileRecord::new(path_str.clone(), kind, &file.hash);
                 if let Some(ref comp_id) = file.component_id {
                     record = record.with_component(comp_id.clone());
                 }

@@ -19,7 +19,5 @@ pub use model::{
     ComponentId, Edge, EdgeKind, EmbeddingMeta, Entity, EntityKind, FileKind, FileRecord, Summary,
     TaskRoute, Visibility,
 };
-pub use model::{
-    component_id, doc_id, entity_id_to_usearch_key, source_unit_id, symbol_id, test_id,
-};
+pub use model::{doc_id, entity_id_to_usearch_key, source_unit_id, symbol_id, test_id};
 pub use store::{ChizuStore, Store, StoreError};

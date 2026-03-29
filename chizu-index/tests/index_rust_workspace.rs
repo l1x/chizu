@@ -1,8 +1,12 @@
 use std::fs;
 
-use chizu_core::{Config, EdgeKind, EntityKind, Store, component_id};
+use chizu_core::{ComponentId, Config, EdgeKind, EntityKind, Store};
 use chizu_index::IndexPipeline;
 use tempfile::TempDir;
+
+fn comp_id(ecosystem: &str, path: &str) -> String {
+    ComponentId::new(ecosystem, path).to_string()
+}
 
 #[test]
 fn index_rust_workspace_end_to_end() {
@@ -83,14 +87,14 @@ foo = { path = "../foo" }
 
     // Verify component entities with canonical path-based IDs
     let foo_comp = store
-        .get_entity(&component_id("cargo", "crates/foo"))
+        .get_entity(&comp_id("cargo", "crates/foo"))
         .unwrap()
         .expect("foo component should exist");
     assert_eq!(foo_comp.kind, EntityKind::Component);
     assert_eq!(foo_comp.name, "foo");
 
     let bar_comp = store
-        .get_entity(&component_id("cargo", "crates/bar"))
+        .get_entity(&comp_id("cargo", "crates/bar"))
         .unwrap()
         .expect("bar component should exist");
     assert_eq!(bar_comp.kind, EntityKind::Component);
@@ -100,20 +104,20 @@ foo = { path = "../foo" }
     let contains_edges = store.get_edges_from("repo::.").unwrap();
     let contains_foo = contains_edges
         .iter()
-        .any(|e| e.rel == EdgeKind::Contains && e.dst_id == component_id("cargo", "crates/foo"));
+        .any(|e| e.rel == EdgeKind::Contains && e.dst_id == comp_id("cargo", "crates/foo"));
     let contains_bar = contains_edges
         .iter()
-        .any(|e| e.rel == EdgeKind::Contains && e.dst_id == component_id("cargo", "crates/bar"));
+        .any(|e| e.rel == EdgeKind::Contains && e.dst_id == comp_id("cargo", "crates/bar"));
     assert!(contains_foo, "repo should contain foo");
     assert!(contains_bar, "repo should contain bar");
 
     // Verify depends_on edge from bar to foo
     let bar_edges = store
-        .get_edges_from(&component_id("cargo", "crates/bar"))
+        .get_edges_from(&comp_id("cargo", "crates/bar"))
         .unwrap();
     let depends_on_foo = bar_edges
         .iter()
-        .any(|e| e.rel == EdgeKind::DependsOn && e.dst_id == component_id("cargo", "crates/foo"));
+        .any(|e| e.rel == EdgeKind::DependsOn && e.dst_id == comp_id("cargo", "crates/foo"));
     assert!(depends_on_foo, "bar should depend_on foo");
 
     // Verify file records have correct component_id
@@ -141,7 +145,7 @@ foo = { path = "../foo" }
     assert_eq!(std_feature.unwrap().kind, EntityKind::Feature);
 
     let declares = store
-        .get_edges_from(&component_id("cargo", "crates/foo"))
+        .get_edges_from(&comp_id("cargo", "crates/foo"))
         .unwrap();
     let declares_default = declares
         .iter()

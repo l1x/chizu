@@ -91,7 +91,6 @@ struct Cli {
     #[argh(option, short = 'r', default = "PathBuf::from(\".\")")]
     repo: PathBuf,
 
-    /// subcommand to run
     #[argh(subcommand)]
     command: Command,
 }
@@ -121,7 +120,6 @@ enum Command {
 }
 
 /// Index the repository (parse + summarize + embed)
-#[allow(dead_code)]
 #[derive(FromArgs, Debug)]
 #[argh(subcommand, name = "index")]
 struct IndexArgs {
@@ -173,7 +171,7 @@ struct EntitiesArgs {
 
     /// filter by entity kind
     #[argh(option)]
-    kind: Option<String>,
+    kind: Option<chizu_core::EntityKind>,
 }
 
 /// List task routes
@@ -205,7 +203,7 @@ struct EdgesArgs {
 
     /// filter by relationship kind
     #[argh(option)]
-    rel: Option<String>,
+    rel: Option<chizu_core::EdgeKind>,
 }
 
 /// Generate graph visualization (SVG)
@@ -290,7 +288,7 @@ fn run(cli: Cli) -> Result<(), Box<dyn std::error::Error>> {
     tracing::debug!("Running command: {:?}", cli.command);
 
     match cli.command {
-        Command::Index(_args) => not_yet_implemented("index"),
+        Command::Index(args) => cmd_index(&cli.repo, args),
         Command::Search(_args) => not_yet_implemented("search"),
         Command::Entity(_args) => not_yet_implemented("entity"),
         Command::Entities(_args) => not_yet_implemented("entities"),
@@ -304,6 +302,39 @@ fn run(cli: Cli) -> Result<(), Box<dyn std::error::Error>> {
 
 fn not_yet_implemented(command: &str) -> Result<(), Box<dyn std::error::Error>> {
     Err(format!("'chizu {command}' is not yet implemented").into())
+}
+
+fn cmd_index(repo: &Path, args: IndexArgs) -> Result<(), Box<dyn std::error::Error>> {
+    if args.force {
+        let chizu_dir = repo.join(".chizu");
+        if chizu_dir.exists() {
+            std::fs::remove_dir_all(&chizu_dir)?;
+        }
+    }
+
+    let config = load_config(repo)?;
+    let store = chizu_core::ChizuStore::open(&repo.join(".chizu"), &config)?;
+    let stats = chizu_index::IndexPipeline::run(repo, &store, &config)?;
+
+    println!("Indexed {} files ({} walked)", stats.files_indexed, stats.files_walked);
+    println!("Discovered {} components", stats.components_discovered);
+    println!(
+        "Inserted {} entities and {} edges",
+        stats.entities_inserted, stats.edges_inserted
+    );
+
+    store.close()?;
+    Ok(())
+}
+
+fn load_config(repo: &Path) -> Result<chizu_core::Config, Box<dyn std::error::Error>> {
+    let config_path = repo.join(".chizu.toml");
+    if config_path.exists() {
+        let config_str = std::fs::read_to_string(&config_path)?;
+        Ok(chizu_core::Config::from_toml(&config_str)?)
+    } else {
+        Ok(chizu_core::Config::default())
+    }
 }
 
 fn cmd_config(repo: &Path, args: ConfigArgs) -> Result<(), Box<dyn std::error::Error>> {

@@ -76,10 +76,6 @@ pub fn source_unit_id(path: &str) -> String {
     format!("source_unit::{}", path)
 }
 
-pub fn component_id(ecosystem: &str, path: &str) -> String {
-    ComponentId::new(ecosystem, path).into()
-}
-
 pub fn test_id(file_path: &str, name: &str) -> String {
     format!("test::{}::{}", file_path, name)
 }
@@ -185,9 +181,9 @@ mod tests {
     }
 
     #[test]
-    fn test_component_id_func() {
+    fn test_component_id_to_string() {
         assert_eq!(
-            component_id("cargo", "crates/core"),
+            ComponentId::new("cargo", "crates/core").to_string(),
             "component::cargo::crates/core"
         );
     }

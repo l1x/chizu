@@ -257,15 +257,11 @@ impl SqliteStore {
     }
 
     pub fn get_entity(&self, id: &str) -> Result<Option<Entity>> {
-        let entity = self
-            .conn
-            .query_row(
-                "SELECT id, kind, name, component_id, path, language, line_start, line_end, visibility, exported
-                 FROM entities WHERE id = ?1",
-                [id],
-                entity_from_row,
-            )
-            .optional()?;
+        let mut stmt = self.conn.prepare_cached(
+            "SELECT id, kind, name, component_id, path, language, line_start, line_end, visibility, exported
+             FROM entities WHERE id = ?1",
+        )?;
+        let entity = stmt.query_row([id], entity_from_row).optional()?;
         Ok(entity)
     }
 
@@ -394,14 +390,10 @@ impl SqliteStore {
     }
 
     pub fn get_file(&self, path: &str) -> Result<Option<FileRecord>> {
-        let file = self
-            .conn
-            .query_row(
-                "SELECT path, component_id, kind, hash, indexed, ignore_reason FROM files WHERE path = ?1",
-                [path],
-                file_from_row,
-            )
-            .optional()?;
+        let mut stmt = self.conn.prepare_cached(
+            "SELECT path, component_id, kind, hash, indexed, ignore_reason FROM files WHERE path = ?1",
+        )?;
+        let file = stmt.query_row([path], file_from_row).optional()?;
         Ok(file)
     }
 
@@ -444,15 +436,11 @@ impl SqliteStore {
     }
 
     pub fn get_summary(&self, entity_id: &str) -> Result<Option<Summary>> {
-        let summary = self
-            .conn
-            .query_row(
-                "SELECT entity_id, short_summary, detailed_summary, keywords_json, updated_at, source_hash
-                 FROM summaries WHERE entity_id = ?1",
-                [entity_id],
-                summary_from_row,
-            )
-            .optional()?;
+        let mut stmt = self.conn.prepare_cached(
+            "SELECT entity_id, short_summary, detailed_summary, keywords_json, updated_at, source_hash
+             FROM summaries WHERE entity_id = ?1",
+        )?;
+        let summary = stmt.query_row([entity_id], summary_from_row).optional()?;
         Ok(summary)
     }
 
@@ -518,14 +506,12 @@ impl SqliteStore {
     }
 
     pub fn get_embedding_meta(&self, entity_id: &str) -> Result<Option<EmbeddingMeta>> {
-        let meta = self
-            .conn
-            .query_row(
-                "SELECT entity_id, model, dimensions, updated_at, usearch_key
-                 FROM embeddings WHERE entity_id = ?1",
-                [entity_id],
-                embedding_meta_from_row,
-            )
+        let mut stmt = self.conn.prepare_cached(
+            "SELECT entity_id, model, dimensions, updated_at, usearch_key
+             FROM embeddings WHERE entity_id = ?1",
+        )?;
+        let meta = stmt
+            .query_row([entity_id], embedding_meta_from_row)
             .optional()?;
         Ok(meta)
     }
@@ -541,14 +527,12 @@ impl SqliteStore {
         &self,
         usearch_key: i64,
     ) -> Result<Option<EmbeddingMeta>> {
-        let meta = self
-            .conn
-            .query_row(
-                "SELECT entity_id, model, dimensions, updated_at, usearch_key
-                 FROM embeddings WHERE usearch_key = ?1",
-                [usearch_key],
-                embedding_meta_from_row,
-            )
+        let mut stmt = self.conn.prepare_cached(
+            "SELECT entity_id, model, dimensions, updated_at, usearch_key
+             FROM embeddings WHERE usearch_key = ?1",
+        )?;
+        let meta = stmt
+            .query_row([usearch_key], embedding_meta_from_row)
             .optional()?;
         Ok(meta)
     }
