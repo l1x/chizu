@@ -16,7 +16,8 @@ pub use config::{
     SummaryConfig,
 };
 pub use model::{
-    ComponentId, Edge, EdgeKind, EmbeddingMeta, Entity, EntityKind, FileRecord, Summary, TaskRoute,
+    ComponentId, Edge, EdgeKind, EmbeddingMeta, Entity, EntityKind, FileKind, FileRecord, Summary,
+    TaskRoute, Visibility,
 };
 pub use model::{
     component_id, doc_id, entity_id_to_usearch_key, source_unit_id, symbol_id, test_id,

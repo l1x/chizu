@@ -2,11 +2,87 @@
 //!
 //! Usage: chizu [--repo <path>] <command>
 
-// Fields are parsed by argh but unread until commands are implemented.
-#![allow(dead_code)]
-
 use argh::FromArgs;
 use std::path::{Path, PathBuf};
+
+#[allow(dead_code)]
+#[derive(Debug, Clone, Copy)]
+enum OutputFormat {
+    Text,
+    Json,
+}
+
+impl std::str::FromStr for OutputFormat {
+    type Err = String;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "text" => Ok(Self::Text),
+            "json" => Ok(Self::Json),
+            _ => Err(format!("unknown format '{s}': expected 'text' or 'json'")),
+        }
+    }
+}
+
+impl std::fmt::Display for OutputFormat {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Text => f.write_str("text"),
+            Self::Json => f.write_str("json"),
+        }
+    }
+}
+
+#[allow(dead_code)]
+#[derive(Debug, Clone, Copy)]
+enum TaskCategory {
+    Understand,
+    Debug,
+    Build,
+    Test,
+    Deploy,
+    Configure,
+    General,
+}
+
+impl std::str::FromStr for TaskCategory {
+    type Err = String;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "understand" => Ok(Self::Understand),
+            "debug" => Ok(Self::Debug),
+            "build" => Ok(Self::Build),
+            "test" => Ok(Self::Test),
+            "deploy" => Ok(Self::Deploy),
+            "configure" => Ok(Self::Configure),
+            "general" => Ok(Self::General),
+            _ => Err(format!(
+                "unknown category '{s}': expected understand|debug|build|test|deploy|configure|general"
+            )),
+        }
+    }
+}
+
+#[allow(dead_code)]
+#[derive(Debug, Clone, Copy)]
+enum LayoutAlgorithm {
+    Dot,
+    Neato,
+    Fdp,
+}
+
+impl std::str::FromStr for LayoutAlgorithm {
+    type Err = String;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "dot" => Ok(Self::Dot),
+            "neato" => Ok(Self::Neato),
+            "fdp" => Ok(Self::Fdp),
+            _ => Err(format!(
+                "unknown layout '{s}': expected 'dot', 'neato', or 'fdp'"
+            )),
+        }
+    }
+}
 
 /// Chizu - Local repository understanding engine
 #[derive(FromArgs, Debug)]
@@ -45,6 +121,7 @@ enum Command {
 }
 
 /// Index the repository (parse + summarize + embed)
+#[allow(dead_code)]
 #[derive(FromArgs, Debug)]
 #[argh(subcommand, name = "index")]
 struct IndexArgs {
@@ -54,6 +131,7 @@ struct IndexArgs {
 }
 
 /// Search for entities and return a ranked reading plan
+#[allow(dead_code)]
 #[derive(FromArgs, Debug)]
 #[argh(subcommand, name = "search")]
 struct SearchArgs {
@@ -67,14 +145,15 @@ struct SearchArgs {
 
     /// task category (understand, debug, build, test, deploy, configure, general)
     #[argh(option)]
-    category: Option<String>,
+    category: Option<TaskCategory>,
 
     /// output format (text, json)
-    #[argh(option, default = "String::from(\"text\")")]
-    format: String,
+    #[argh(option, default = "OutputFormat::Text")]
+    format: OutputFormat,
 }
 
 /// Look up a single entity by ID
+#[allow(dead_code)]
 #[derive(FromArgs, Debug)]
 #[argh(subcommand, name = "entity")]
 struct EntityArgs {
@@ -84,6 +163,7 @@ struct EntityArgs {
 }
 
 /// List entities with optional filtering
+#[allow(dead_code)]
 #[derive(FromArgs, Debug)]
 #[argh(subcommand, name = "entities")]
 struct EntitiesArgs {
@@ -97,6 +177,7 @@ struct EntitiesArgs {
 }
 
 /// List task routes
+#[allow(dead_code)]
 #[derive(FromArgs, Debug)]
 #[argh(subcommand, name = "routes")]
 struct RoutesArgs {
@@ -110,6 +191,7 @@ struct RoutesArgs {
 }
 
 /// List edges with optional filtering
+#[allow(dead_code)]
 #[derive(FromArgs, Debug)]
 #[argh(subcommand, name = "edges")]
 struct EdgesArgs {
@@ -127,6 +209,7 @@ struct EdgesArgs {
 }
 
 /// Generate graph visualization (SVG)
+#[allow(dead_code)]
 #[derive(FromArgs, Debug)]
 #[argh(subcommand, name = "visualize")]
 struct VisualizeArgs {
@@ -139,8 +222,8 @@ struct VisualizeArgs {
     depth: u32,
 
     /// layout algorithm (dot, neato, fdp)
-    #[argh(option, default = "String::from(\"dot\")")]
-    layout: String,
+    #[argh(option, default = "LayoutAlgorithm::Dot")]
+    layout: LayoutAlgorithm,
 
     /// maximum number of nodes
     #[argh(option, default = "100")]

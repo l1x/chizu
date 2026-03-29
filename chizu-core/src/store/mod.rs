@@ -188,22 +188,14 @@ impl ChizuStore {
     /// Execute a closure inside a SQLite transaction.
     ///
     /// If the closure returns `Ok`, the transaction is committed.
-    /// If the closure returns `Err` or panics, the transaction is rolled back.
+    /// If the closure returns `Err`, the transaction is rolled back.
     pub fn in_transaction<F, T>(&self, f: F) -> Result<T>
     where
         F: FnOnce(&Self) -> Result<T>,
     {
-        self.sqlite.begin_transaction()?;
-        match f(self) {
-            Ok(val) => {
-                self.sqlite.commit_transaction()?;
-                Ok(val)
-            }
-            Err(e) => {
-                let _ = self.sqlite.rollback_transaction();
-                Err(e)
-            }
-        }
+        // Reuse SqliteStore's transaction machinery to avoid duplicating
+        // the begin/commit/rollback logic.
+        self.sqlite.in_transaction(|_sqlite| f(self))
     }
 
     /// Dimensions of the vector index.
@@ -332,15 +324,14 @@ impl Store for ChizuStore {
     // ── Vector operations (delegate to usearch with collision check) ────
 
     fn add_vector(&self, entity_id: &str, key: i64, vector: &[f32]) -> Result<()> {
-        // Collision check: if the key already exists, verify it belongs to
-        // the same entity (re-index) rather than a different one (collision).
-        if self.usearch.contains(key) {
-            if let Some(existing) = self.sqlite.get_embedding_meta_by_usearch_key(key)? {
-                if existing.entity_id != entity_id {
-                    return Err(StoreError::VectorKeyCollision { key });
-                }
+        // Collision check via the embeddings metadata table. If a different
+        // entity already owns this key, it's a hash collision (astronomically
+        // unlikely at 64-bit keys, but guarded for safety).
+        if let Some(existing) = self.sqlite.get_embedding_meta_by_usearch_key(key)? {
+            if existing.entity_id != entity_id {
+                return Err(StoreError::VectorKeyCollision { key });
             }
-            // Same entity re-indexed — remove old vector first
+            // Same entity re-indexed — remove old vector before adding new one.
             self.usearch.remove(key)?;
         }
         self.usearch.add(key, vector)

@@ -85,21 +85,25 @@ CREATE INDEX IF NOT EXISTS idx_embeddings_usearch_key ON embeddings(usearch_key)
 
 // ── Row mapping helpers ─────────────────────────────────────────────────
 
+fn parse_text_column<T: std::str::FromStr<Err = String>>(s: String) -> rusqlite::Result<T> {
+    s.parse()
+        .map_err(|e: String| rusqlite::Error::ToSqlConversionFailure(e.into()))
+}
+
 fn entity_from_row(row: &Row<'_>) -> rusqlite::Result<Entity> {
     let kind_str: String = row.get(1)?;
     let component_id: Option<String> = row.get(3)?;
+    let visibility_str: Option<String> = row.get(8)?;
     Ok(Entity {
         id: row.get(0)?,
-        kind: kind_str
-            .parse()
-            .map_err(|e: String| rusqlite::Error::ToSqlConversionFailure(e.into()))?,
+        kind: parse_text_column(kind_str)?,
         name: row.get(2)?,
         component_id: component_id.and_then(|c| ComponentId::parse(&c)),
         path: row.get(4)?,
         language: row.get(5)?,
         line_start: row.get::<_, Option<i64>>(6)?.map(|n| n as u32),
         line_end: row.get::<_, Option<i64>>(7)?.map(|n| n as u32),
-        visibility: row.get(8)?,
+        visibility: visibility_str.map(parse_text_column).transpose()?,
         exported: row.get::<_, i32>(9)? != 0,
     })
 }
@@ -119,10 +123,11 @@ fn edge_from_row(row: &Row<'_>) -> rusqlite::Result<Edge> {
 
 fn file_from_row(row: &Row<'_>) -> rusqlite::Result<FileRecord> {
     let cid: Option<String> = row.get(1)?;
+    let kind_str: String = row.get(2)?;
     Ok(FileRecord {
         path: row.get(0)?,
         component_id: cid.and_then(|c| ComponentId::parse(&c)),
-        kind: row.get(2)?,
+        kind: parse_text_column(kind_str)?,
         hash: row.get(3)?,
         indexed: row.get::<_, i32>(4)? != 0,
         ignore_reason: row.get(5)?,
@@ -130,11 +135,12 @@ fn file_from_row(row: &Row<'_>) -> rusqlite::Result<FileRecord> {
 }
 
 fn summary_from_row(row: &Row<'_>) -> rusqlite::Result<Summary> {
+    let keywords_json: Option<String> = row.get(3)?;
     Ok(Summary {
         entity_id: row.get(0)?,
         short_summary: row.get(1)?,
         detailed_summary: row.get(2)?,
-        keywords_json: row.get(3)?,
+        keywords: keywords_json.and_then(|s| serde_json::from_str(&s).ok()),
         updated_at: row.get(4)?,
         source_hash: row.get(5)?,
     })
@@ -238,12 +244,12 @@ impl SqliteStore {
                 entity.id,
                 entity.kind.to_string(),
                 entity.name,
-                entity.component_id.as_ref().map(|c| c.to_string()),
+                entity.component_id.as_ref().map(|c| c.as_str()),
                 entity.path,
                 entity.language,
                 entity.line_start.map(|n| n as i64),
                 entity.line_end.map(|n| n as i64),
-                entity.visibility,
+                entity.visibility.as_ref().map(|v| v.to_string()),
                 entity.exported as i32,
             ],
         )?;
@@ -264,7 +270,7 @@ impl SqliteStore {
     }
 
     pub fn get_entities_by_kind(&self, kind: EntityKind) -> Result<Vec<Entity>> {
-        let mut stmt = self.conn.prepare(
+        let mut stmt = self.conn.prepare_cached(
             "SELECT id, kind, name, component_id, path, language, line_start, line_end, visibility, exported
              FROM entities WHERE kind = ?1",
         )?;
@@ -275,12 +281,12 @@ impl SqliteStore {
     }
 
     pub fn get_entities_by_component(&self, component_id: &ComponentId) -> Result<Vec<Entity>> {
-        let mut stmt = self.conn.prepare(
+        let mut stmt = self.conn.prepare_cached(
             "SELECT id, kind, name, component_id, path, language, line_start, line_end, visibility, exported
              FROM entities WHERE component_id = ?1",
         )?;
         let entities = stmt
-            .query_map([component_id.to_string()], entity_from_row)?
+            .query_map([component_id.as_str()], entity_from_row)?
             .collect::<std::result::Result<Vec<_>, _>>()?;
         Ok(entities)
     }
@@ -294,7 +300,7 @@ impl SqliteStore {
     pub fn delete_entities_by_component(&self, component_id: &ComponentId) -> Result<usize> {
         let count = self.conn.execute(
             "DELETE FROM entities WHERE component_id = ?1",
-            [component_id.to_string()],
+            [component_id.as_str()],
         )?;
         Ok(count)
     }
@@ -318,7 +324,7 @@ impl SqliteStore {
     }
 
     pub fn get_edges_from(&self, src_id: &str) -> Result<Vec<Edge>> {
-        let mut stmt = self.conn.prepare(
+        let mut stmt = self.conn.prepare_cached(
             "SELECT src_id, rel, dst_id, provenance_path, provenance_line FROM edges WHERE src_id = ?1",
         )?;
         let edges = stmt
@@ -328,7 +334,7 @@ impl SqliteStore {
     }
 
     pub fn get_edges_to(&self, dst_id: &str) -> Result<Vec<Edge>> {
-        let mut stmt = self.conn.prepare(
+        let mut stmt = self.conn.prepare_cached(
             "SELECT src_id, rel, dst_id, provenance_path, provenance_line FROM edges WHERE dst_id = ?1",
         )?;
         let edges = stmt
@@ -338,7 +344,7 @@ impl SqliteStore {
     }
 
     pub fn get_edges_by_rel(&self, rel: EdgeKind) -> Result<Vec<Edge>> {
-        let mut stmt = self.conn.prepare(
+        let mut stmt = self.conn.prepare_cached(
             "SELECT src_id, rel, dst_id, provenance_path, provenance_line FROM edges WHERE rel = ?1",
         )?;
         let edges = stmt
@@ -357,10 +363,13 @@ impl SqliteStore {
 
     pub fn delete_edges_by_component(&self, component_id: &ComponentId) -> Result<usize> {
         let count = self.conn.execute(
-            "DELETE FROM edges WHERE
-             src_id IN (SELECT id FROM entities WHERE component_id = ?1) OR
-             dst_id IN (SELECT id FROM entities WHERE component_id = ?1)",
-            [component_id.to_string()],
+            "WITH component_entities(id) AS (
+                SELECT id FROM entities WHERE component_id = ?1
+             )
+             DELETE FROM edges WHERE
+             src_id IN (SELECT id FROM component_entities) OR
+             dst_id IN (SELECT id FROM component_entities)",
+            [component_id.as_str()],
         )?;
         Ok(count)
     }
@@ -374,8 +383,8 @@ impl SqliteStore {
              VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
             params![
                 file.path,
-                file.component_id.as_ref().map(|c| c.to_string()),
-                file.kind,
+                file.component_id.as_ref().map(|c| c.as_str()),
+                file.kind.to_string(),
                 file.hash,
                 file.indexed as i32,
                 file.ignore_reason,
@@ -423,7 +432,10 @@ impl SqliteStore {
                 summary.entity_id,
                 summary.short_summary,
                 summary.detailed_summary,
-                summary.keywords_json,
+                summary
+                    .keywords
+                    .as_ref()
+                    .map(|k| serde_json::to_string(k).unwrap_or_default()),
                 summary.updated_at,
                 summary.source_hash,
             ],
@@ -462,7 +474,7 @@ impl SqliteStore {
     }
 
     pub fn get_task_routes(&self, task_name: &str) -> Result<Vec<TaskRoute>> {
-        let mut stmt = self.conn.prepare(
+        let mut stmt = self.conn.prepare_cached(
             "SELECT task_name, entity_id, priority FROM task_routes WHERE task_name = ?1",
         )?;
         let routes = stmt
@@ -472,7 +484,7 @@ impl SqliteStore {
     }
 
     pub fn get_entity_task_routes(&self, entity_id: &str) -> Result<Vec<TaskRoute>> {
-        let mut stmt = self.conn.prepare(
+        let mut stmt = self.conn.prepare_cached(
             "SELECT task_name, entity_id, priority FROM task_routes WHERE entity_id = ?1",
         )?;
         let routes = stmt
@@ -545,6 +557,7 @@ impl SqliteStore {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::model::FileKind;
     use tempfile::TempDir;
 
     fn create_test_store() -> (SqliteStore, TempDir) {
@@ -641,7 +654,7 @@ mod tests {
     fn test_file_record() {
         let (store, _temp) = create_test_store();
 
-        let file = FileRecord::new("src/main.rs", "rust", "abc123")
+        let file = FileRecord::new("src/main.rs", FileKind::Source, "abc123")
             .with_component(ComponentId::new("cargo", "."));
 
         store.insert_file(&file).unwrap();
@@ -671,7 +684,7 @@ mod tests {
             retrieved.detailed_summary,
             Some("Detailed text here".to_string())
         );
-        assert!(retrieved.keywords_json.is_some());
+        assert!(retrieved.keywords.is_some());
         assert_eq!(retrieved.source_hash, Some("hash123".to_string()));
     }
 
@@ -679,12 +692,8 @@ mod tests {
     fn test_summary_replace_on_reinsert() {
         let (store, _temp) = create_test_store();
 
-        store
-            .insert_summary(&Summary::new("e1", "first"))
-            .unwrap();
-        store
-            .insert_summary(&Summary::new("e1", "second"))
-            .unwrap();
+        store.insert_summary(&Summary::new("e1", "first")).unwrap();
+        store.insert_summary(&Summary::new("e1", "second")).unwrap();
 
         let retrieved = store.get_summary("e1").unwrap().unwrap();
         assert_eq!(retrieved.short_summary, "second");
@@ -694,9 +703,7 @@ mod tests {
     fn test_delete_summary() {
         let (store, _temp) = create_test_store();
 
-        store
-            .insert_summary(&Summary::new("e1", "text"))
-            .unwrap();
+        store.insert_summary(&Summary::new("e1", "text")).unwrap();
         assert!(store.get_summary("e1").unwrap().is_some());
 
         store.delete_summary("e1").unwrap();
@@ -789,8 +796,7 @@ mod tests {
     fn test_insert_and_get_embedding_meta() {
         let (store, _temp) = create_test_store();
 
-        let meta =
-            EmbeddingMeta::new("entity::1", "nomic-embed-text", 768).with_usearch_key(42);
+        let meta = EmbeddingMeta::new("entity::1", "nomic-embed-text", 768).with_usearch_key(42);
 
         store.insert_embedding_meta(&meta).unwrap();
 
@@ -815,10 +821,12 @@ mod tests {
     #[test]
     fn test_get_nonexistent_embedding_meta() {
         let (store, _temp) = create_test_store();
-        assert!(store
-            .get_embedding_meta("does_not_exist")
-            .unwrap()
-            .is_none());
+        assert!(
+            store
+                .get_embedding_meta("does_not_exist")
+                .unwrap()
+                .is_none()
+        );
     }
 
     #[test]
@@ -844,13 +852,18 @@ mod tests {
         let meta = EmbeddingMeta::new("e1", "model", 768).with_usearch_key(999);
         store.insert_embedding_meta(&meta).unwrap();
 
-        let retrieved = store.get_embedding_meta_by_usearch_key(999).unwrap().unwrap();
+        let retrieved = store
+            .get_embedding_meta_by_usearch_key(999)
+            .unwrap()
+            .unwrap();
         assert_eq!(retrieved.entity_id, "e1");
 
-        assert!(store
-            .get_embedding_meta_by_usearch_key(0)
-            .unwrap()
-            .is_none());
+        assert!(
+            store
+                .get_embedding_meta_by_usearch_key(0)
+                .unwrap()
+                .is_none()
+        );
     }
 
     // ── Schema / migration tests ────────────────────────────────────────
