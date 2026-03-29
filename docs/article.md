@@ -28,7 +28,7 @@ Consider a seemingly simple question: "What tests cover the user authentication 
 3. Search for test files that import or reference those functions
 4. Manually verify which tests actually test the flow vs. just mention it
 
-With Chizu, you ask: `chizu plan "what tests cover user authentication"` and get a ranked list of relevant test entities with explanations of why they matter.
+With Chizu, you ask: `chizu --repo . search "what tests cover user authentication"` and get a ranked list of relevant entities with explanations of why they matter.
 
 ## What Chizu Does
 
@@ -106,11 +106,8 @@ Input (Rust, TS, Astro, Terraform, Markdown)
 ### Basic Indexing
 
 ```bash
-# Index a repository
-chizu index /path/to/repo
-
-# With embeddings (requires Ollama)
-chizu index --embed /path/to/repo
+chizu --repo /path/to/repo config init
+chizu --repo /path/to/repo index
 ```
 
 The index is stored in `.chizu/` at the repository root:
@@ -118,16 +115,18 @@ The index is stored in `.chizu/` at the repository root:
 - `vectors.usearch` - Vector index for semantic search
 - `content_hashes.json` - Content addressing for incremental updates
 
+Indexing also generates summaries and embeddings. An embedding provider is required.
+
 ### Natural Language Queries
 
 ```bash
-chizu plan "how does routing work"
+chizu --repo /path/to/repo search "how does routing work"
 ```
 
-This uses an LLM to interpret your question, query the graph, and return relevant entities with explanations. The reranking system considers:
+This runs Chizu's full query pipeline and returns a ranked reading plan. The reranking system considers:
 
 - Keyword matches in entity names
-- Semantic similarity (if embeddings enabled)
+- Semantic similarity over required embeddings
 - Entity type relevance
 - Graph connectivity
 - Path matching
@@ -135,12 +134,15 @@ This uses an LLM to interpret your question, query the graph, and return relevan
 ### Direct Entity Queries
 
 ```bash
-# List all symbols
-chizu query entities --kind symbol
+# List entities
+chizu --repo /path/to/repo entities
 
 # Find specific entity
-chizu inspect "symbol::src/main.rs::main"
+chizu --repo /path/to/repo entity "symbol::src/main.rs::main"
 ```
+
+For lower-level inspection, `routes` and `edges` expose task-route and
+relationship data as top-level commands.
 
 ### SQL Access
 
@@ -195,18 +197,18 @@ As entities are extracted, relationships are recorded:
 - A test file "tests" the source file it's named after
 - Documentation "mentions" symbols referenced in backticks
 
-### 5. Embedding Generation (Optional)
+### 5. Summary and Embedding Generation
 
-If embeddings are enabled, Chizu sends entity text to a local Ollama instance (or OpenAI) and stores the resulting vectors in usearch. This enables semantic search - finding entities related by meaning, not just keyword.
+During indexing, Chizu sends entity text to a local Ollama instance (or OpenAI-compatible provider), stores summaries, and writes embedding vectors to usearch. This enables retrieval by meaning, not just keyword.
 
 ## Query Processing
 
-When you run `chizu plan "how does error handling work"`, here's what happens:
+When you run `chizu --repo . search "how does error handling work"`, here's what happens:
 
-1. **Entity Retrieval**: Fetch candidate entities from the graph
-2. **Keyword Matching**: Score entities whose names contain query terms
-3. **Vector Search** (if enabled): Find semantically similar entities
-4. **Reranking**: Combine scores using weighted factors:
+1. **Classify**: Assign a task category such as understand, debug, or build
+2. **Retrieve**: Merge candidates from task routes, keyword/name/path matching, and vector search
+3. **Expand**: Traverse graph neighbors from the strongest seeds
+4. **Rerank**: Combine scores using weighted factors:
    - Task routing (detect query intent)
    - Keyword relevance
    - Name match quality
@@ -214,7 +216,7 @@ When you run `chizu plan "how does error handling work"`, here's what happens:
    - Entity type preference
    - Whether symbol is exported
    - Path relevance
-5. **LLM Synthesis**: Present top entities to an LLM with context, get structured answer
+5. **Reading Plan**: Return the top-ranked entities and files to read first
 
 ## Configuration
 
@@ -242,7 +244,7 @@ default_model = "gpt-4o-mini"
 timeout_secs = 60
 
 [embedding]
-enabled = true
+enabled = true # required
 provider = "ollama"
 base_url = "http://localhost:11434/v1"
 model = "nomic-embed-text-v2-moe:latest"
@@ -254,7 +256,7 @@ dimensions = 768
 ### Onboarding to a New Codebase
 
 ```bash
-chizu plan "explain the architecture of the payment system"
+chizu --repo . search "explain the architecture of the payment system"
 ```
 
 Get a high-level overview without reading hundreds of files.
@@ -262,7 +264,7 @@ Get a high-level overview without reading hundreds of files.
 ### Finding Relevant Tests
 
 ```bash
-chizu plan "what tests cover the checkout flow"
+chizu --repo . search "what tests cover the checkout flow"
 ```
 
 Skip the grep-and-hope approach.
@@ -329,10 +331,11 @@ cd chizu
 cargo build --release
 
 # Index your project
-./target/release/chizu index /path/to/your/project
+./target/release/chizu --repo /path/to/your/project config init
+./target/release/chizu --repo /path/to/your/project index
 
 # Start exploring
-./target/release/chizu plan "how does this codebase work"
+./target/release/chizu --repo /path/to/your/project search "how does this codebase work"
 ```
 
 ## Conclusion

@@ -447,8 +447,7 @@ Embeddings are a first-class retrieval signal, not the definition of repository
 truth. `index` should generate summaries and embeddings as part of normal
 indexing, and `search` should use them when available to improve recall and
 ranking. There is no standalone `embed` or `summarize` command in the
-simplified CLI. Configure providers in `.chizu.toml` under `[llm]` and
-`[embedding]`.
+simplified CLI.
 
 Graph structure and vector retrieval are not treated as fully orthogonal
 subsystems. Both can be derived from the same extracted facts, and both can
@@ -458,6 +457,67 @@ If summary or embedding generation fails for some entities, `index` must report
 that degradation clearly. `search` must still be able to run against the
 deterministic fact index using available structural and lexical signals, while
 indicating reduced retrieval quality.
+
+## Configuration
+
+All runtime configuration lives in `.chizu.toml` at the repository root.
+Missing file means all defaults apply. Missing sections or keys fall back to
+defaults individually.
+
+```toml
+[index]
+exclude_patterns = [
+    "**/target/**",
+    "**/.git/**",
+    "**/node_modules/**",
+    "**/.venv/**",
+    "**/fuzz/**",
+    "**/*.lock",
+]
+
+[search]
+default_limit = 15
+
+[search.rerank_weights]
+task_route = 0.00
+keyword = 0.25
+name_match = 0.20
+vector = 0.25
+kind_preference = 0.10
+exported = 0.10
+path_match = 0.10
+
+[providers.ollama]
+base_url = "http://localhost:11434/v1"
+timeout_secs = 120
+retry_attempts = 3
+
+[summary]
+provider = "ollama"
+model = "llama3:8b"
+max_tokens = 512
+temperature = 0.2
+
+[embedding]
+provider = "ollama"
+model = "nomic-embed-text-v2-moe:latest"
+dimensions = 768
+batch_size = 32
+```
+
+### Configuration Design Rules
+
+- Provider connection config (`base_url`, `timeout_secs`, `retry_attempts`) is
+  defined once per provider under `[providers.<name>]`. The `[summary]` and
+  `[embedding]` sections reference a provider by name.
+- `api_key` defaults to empty string (local providers like Ollama need no key).
+  Only specify when using a remote provider.
+- `parallel_workers` for indexing defaults to the number of available CPUs.
+  Only specify to override.
+- Rerank weights must sum to 1.0. `task_route` stays at 0.00 until task route
+  generation is fully implemented.
+- `config validate` checks that weights sum to 1.0, referenced providers
+  exist, and required fields are present.
 
 ## Open Questions
 

@@ -26,7 +26,7 @@ Chizu workflow:    ask question → get relevant entities → understand context
 │  2. Parse files (tree-sitter parsers)                       │
 │  3. Extract entities (symbols, tests, docs, infra)          │
 │  4. Create edges (defines, uses, mentions, deploys)         │
-│  5. Generate embeddings (Ollama/OpenAI) - optional          │
+│  5. Generate summaries + embeddings (Ollama/OpenAI)         │
 └──────────────────────┬──────────────────────────────────────┘
                        │
                        ▼
@@ -45,7 +45,7 @@ Chizu workflow:    ask question → get relevant entities → understand context
 │  - Natural language queries                                 │
 │  - Entity inspection                                        │
 │  - Graph traversal                                          │
-│  - Vector search (if embeddings enabled)                    │
+│  - Vector-backed retrieval                                  │
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -74,27 +74,25 @@ Chizu workflow:    ask question → get relevant entities → understand context
 ### 1. Index a Repository
 
 ```bash
-# Basic indexing
-chizu index /path/to/repo
-
-# With embeddings (requires Ollama)
-chizu index --embed /path/to/repo
+# Create config and run the full indexing pipeline
+chizu --repo /path/to/repo config init
+chizu --repo /path/to/repo index
 
 # Check results
-chizu inspect
+chizu --repo /path/to/repo entities
 ```
 
 ### 2. Query the Graph
 
 ```bash
 # Natural language query
-chizu plan "how does routing work"
+chizu --repo /path/to/repo search "how does routing work"
 
 # List all entities
-chizu query entities
+chizu --repo /path/to/repo entities
 
 # Inspect specific entity
-chizu inspect "symbol::src/main.rs::main"
+chizu --repo /path/to/repo entity "symbol::src/main.rs::main"
 ```
 
 ### 3. Direct SQL Access
@@ -140,7 +138,7 @@ timeout_secs = 60
 retry_attempts = 3
 
 [embedding]
-enabled = true
+enabled = true # required
 provider = "ollama"
 base_url = "http://localhost:11434/v1"
 api_key = ""
@@ -239,7 +237,7 @@ store.insert_edge(&Edge {
 
 ```bash
 # Run with debug logging
-RUST_LOG=debug chizu index /path/to/repo 2>&1 | head -50
+RUST_LOG=debug chizu --repo /path/to/repo index 2>&1 | head -50
 
 # Check specific file
 sqlite3 .chizu/graph.db "SELECT * FROM files WHERE path LIKE '%problematic%';"
@@ -259,20 +257,20 @@ cargo test -p chizu-index
 
 # Test on sample repo
 rm -rf /tmp/test_repo/.chizu
-cargo run -- index /tmp/test_repo
+cargo run -- --repo /tmp/test_repo index
 ```
 
 ### Performance Profiling
 
 ```bash
 # Time indexing
-time chizu index /large/repo
+time chizu --repo /large/repo index
 
 # Check DB size
 ls -lh .chizu/
 
 # Query performance
-time chizu plan "complex query"
+time chizu --repo /large/repo search "complex query"
 ```
 
 ## Design Principles
@@ -290,8 +288,8 @@ time chizu plan "complex query"
 | Unicode panic | Already fixed (pulldown-cmark) |
 | Embeddings fail | Check Ollama running + model pulled |
 | No results | Check `.chizu/graph.db` exists |
-| Slow queries | Enable embeddings for vector search |
-| Wrong entity IDs | Use `chizu query entities` to find correct format |
+| Slow queries | Check the embedding provider and re-run `chizu --repo . index` |
+| Wrong entity IDs | Use `chizu --repo . entities` to find correct format |
 
 ## Future Extensions
 

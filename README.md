@@ -6,6 +6,9 @@ Chizu is a local-first code knowledge graph for software repositories. It builds
 structured model of your codebase: symbols, files, components, and their relationships.
 It helps you navigate large codebases by understanding structure, not just text.
 
+The CLI surface is a flat 9-command interface: `index`, `search`, `entity`,
+`entities`, `routes`, `edges`, `visualize`, `config`, and `guide`.
+
 ![Chizu Knowledge Graph](docs/knowledge-graph.svg)
 
 ## Quick Start
@@ -21,35 +24,31 @@ Or from crates.io (when published):
 cargo install chizu
 ```
 
-### 1. Index Your Repository
+### 1. Configure and Index Your Repository
 
 ```bash
-# Basic indexing (fast, no embeddings)
+chizu --repo /path/to/repo config init
 chizu --repo /path/to/repo index
-
-# With embeddings for semantic search (requires Ollama or OpenAI-compatible API)
-chizu --repo /path/to/repo index --embed
 ```
 
 This creates a `.chizu/graph.db` file in your repository with:
 - Entities (symbols, files, components, docs)
 - Edges (relationships like "defines", "uses", "imports")
-- Embeddings (if `--embed` is used)
+- Summaries and embeddings for query-time retrieval
 
-### 2. Query the Graph
+Requires configured LLM and embedding providers (for example, Ollama) to be running.
+
+### 2. Search and Inspect the Graph
 
 ```bash
 # Generate a reading plan for a task
-chizu --repo /path/to/repo plan "how does authentication work"
+chizu --repo /path/to/repo search "how does authentication work"
 
-# Semantic search (requires embeddings)
-chizu --repo /path/to/repo search "error handling patterns"
-
-# List all components
-chizu --repo /path/to/repo query entities
+# List entities
+chizu --repo /path/to/repo entities
 
 # Inspect a specific entity
-chizu --repo /path/to/repo inspect "component::cargo::crates/my-crate"
+chizu --repo /path/to/repo entity "component::cargo::crates/my-crate"
 ```
 
 ### 3. Visualize
@@ -66,33 +65,32 @@ open graph.svg
 
 | Command | Description | Example |
 |---------|-------------|---------|
-| `index` | Parse codebase into graph | `chizu --repo . index --embed` |
-| `plan` | Generate reading plan for query | `chizu --repo . plan "fix auth bug"` |
-| `search` | Semantic search over embeddings | `chizu --repo . search "database pool"` |
-| `query entities` | List entities in graph | `chizu --repo . query entities --component X` |
-| `query edges` | Show relationships | `chizu --repo . query edges --from <id>` |
-| `inspect` | Show entity details | `chizu --repo . inspect <entity-id>` |
+| `index` | Parse graph + summarize + embed | `chizu --repo . index` |
+| `search` | Full query pipeline -> reading plan | `chizu --repo . search "fix auth bug"` |
+| `entity` | Show a single entity in detail | `chizu --repo . entity <entity-id>` |
+| `entities` | List entities in graph | `chizu --repo . entities --component X` |
+| `routes` | Show task routes | `chizu --repo . routes --task deploy` |
+| `edges` | Show relationships | `chizu --repo . edges --from <id>` |
 | `visualize` | Generate SVG graph | `chizu --repo . visualize > graph.svg` |
-| `summarize` | LLM summaries of components | `chizu --repo . summarize --component X` |
-| `watch` | Auto-reindex on changes | `chizu --repo . watch` |
-| `config init` | Create config file | `chizu config init` |
+| `config` | Create or validate config | `chizu --repo . config init` |
 | `guide` | Show interactive guide | `chizu guide` |
 
-## Plan vs Search
+## Search and Lookup
 
-**Use `plan`** when you have a task:
+**Use `search`** when you have a task:
 - "how do I add a new API endpoint"
 - "debug the authentication flow"
 - "refactor the database layer"
 
-Plan combines multiple signals: keywords, names, vector similarity, and task routing.
+Search combines task classification, keyword/name/path matching, graph expansion,
+and vector retrieval into one reading-plan pipeline.
 
-**Use `search`** when you want to find similar code:
-- "error handling patterns"
-- "database connection retry logic"
-- "configuration validation"
-
-Search uses pure semantic similarity over embeddings.
+**Use `entity`, `entities`, `routes`, and `edges`** when you already know what
+you want to inspect:
+- `entity <id>` for one detailed record
+- `entities` to browse the graph
+- `routes` to inspect task routing
+- `edges` to inspect relationships directly
 
 ## Configuration
 
@@ -119,7 +117,7 @@ default_model = "llama3.2-vision:latest"
 timeout_secs = 120
 
 [embedding]
-enabled = true
+enabled = true # required
 provider = "ollama"
 base_url = "http://localhost:11434/v1"
 model = "nomic-embed-text-v2-moe:latest"
@@ -165,13 +163,13 @@ This ensures consistency even when package names change.
 
 ```bash
 # 1. Start a new task - get oriented
-chizu --repo . plan "implement user profiles"
+chizu --repo . search "implement user profiles"
 
 # 2. Inspect the most relevant entities
-chizu --repo . inspect "symbol::src/auth.rs::verify_token"
+chizu --repo . entity "symbol::src/auth.rs::verify_token"
 
-# 3. While coding, keep watch running in another terminal
-chizu --repo . watch
+# 3. Inspect graph relationships directly
+chizu --repo . edges --from "symbol::src/auth.rs::verify_token"
 
 # 4. Find similar implementations
 chizu --repo . search "session management"
@@ -183,14 +181,15 @@ chizu --repo . visualize --legend > arch.svg
 ## Requirements
 
 - **Rust** 1.70+ (to build)
-- **Ollama** (optional, for embeddings/summaries)
+- **Ollama** or another configured OpenAI-compatible provider
+  (required for indexing summaries/embeddings and for search)
   - Install: https://ollama.com
   - Pull models: `ollama pull nomic-embed-text-v2-moe:latest`
 
 ## Documentation
 
 - [Product PRD](docs/prd.md)
-- [Graph Model Spec](docs/graph-model-spec.md)
+- [Brief](docs/brief.md)
 - Interactive guide: `chizu guide`
 
 ## License
