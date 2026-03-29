@@ -1,13 +1,12 @@
 # Chizu (地図)
 
-**Your code's mental map.**
+**Subject-to-file routing for coding agents.**
 
-Chizu is a local-first code knowledge graph for software repositories. It builds a
-structured model of your codebase: symbols, files, components, and their relationships.
-It helps you navigate large codebases by understanding structure, not just text.
-
-The CLI surface is a flat 9-command interface: `index`, `search`, `entity`,
-`entities`, `routes`, `edges`, `visualize`, `config`, and `guide`.
+Chizu is a local repository understanding engine. It extracts deterministic
+structural facts about a codebase -- components, files, symbols, docs, infra
+units, and their relationships -- and uses those facts to route a subject to the
+most relevant files and components. It also materializes a graph for human
+visualization and navigation.
 
 ![Chizu Knowledge Graph](docs/knowledge-graph.svg)
 
@@ -24,172 +23,160 @@ Or from crates.io (when published):
 cargo install chizu
 ```
 
-### 1. Configure and Index Your Repository
+### 1. Configure and Index
 
 ```bash
 chizu --repo /path/to/repo config init
 chizu --repo /path/to/repo index
 ```
 
-This creates a `.chizu/graph.db` file in your repository with:
-- Entities (symbols, files, components, docs)
-- Edges (relationships like "defines", "uses", "imports")
-- Summaries and embeddings for query-time retrieval
+This creates `.chizu/graph.db` and `.chizu/graph.db.usearch` in your repository
+with entities, edges, summaries, and embeddings. Requires a configured
+LLM and embedding provider (e.g. Ollama) to be running.
 
-Requires configured LLM and embedding providers (for example, Ollama) to be running.
-
-### 2. Search and Inspect the Graph
+### 2. Search
 
 ```bash
-# Generate a reading plan for a task
 chizu --repo /path/to/repo search "how does authentication work"
-
-# List entities
-chizu --repo /path/to/repo entities
-
-# Inspect a specific entity
-chizu --repo /path/to/repo entity "component::cargo::crates/my-crate"
 ```
 
-### 3. Visualize
+Returns a ranked reading plan: which files and entities to read first and why.
+The pipeline classifies the query, retrieves candidates via task routes,
+keyword/name/path matching, and vector search, expands graph neighbors, then
+reranks with weighted multi-signal scoring.
+
+### 3. Inspect
 
 ```bash
-# Generate an SVG graph
-chizu --repo /path/to/repo visualize --legend > graph.svg
+chizu --repo /path/to/repo entities
+chizu --repo /path/to/repo entity "component::cargo::crates/my-crate"
+chizu --repo /path/to/repo edges --from "component::cargo::crates/my-crate"
+chizu --repo /path/to/repo routes --task deploy
+```
 
-# Open in browser
+### 4. Visualize
+
+```bash
+chizu --repo /path/to/repo visualize --legend > graph.svg
 open graph.svg
 ```
 
-## Commands Reference
+## Commands
 
-| Command | Description | Example |
-|---------|-------------|---------|
-| `index` | Parse graph + summarize + embed | `chizu --repo . index` |
-| `search` | Full query pipeline -> reading plan | `chizu --repo . search "fix auth bug"` |
-| `entity` | Show a single entity in detail | `chizu --repo . entity <entity-id>` |
-| `entities` | List entities in graph | `chizu --repo . entities --component X` |
-| `routes` | Show task routes | `chizu --repo . routes --task deploy` |
-| `edges` | Show relationships | `chizu --repo . edges --from <id>` |
-| `visualize` | Generate SVG graph | `chizu --repo . visualize > graph.svg` |
-| `config` | Create or validate config | `chizu --repo . config init` |
-| `guide` | Show interactive guide | `chizu guide` |
+| Command     | Description                         | Key flags |
+| ----------- | ----------------------------------- | --------- |
+| `index`     | Extract facts + summarize + embed   | none |
+| `search`    | Full query pipeline -> reading plan | `--limit`, `--category`, `--format`, positional query |
+| `entity`    | Look up a single entity by id       | positional id |
+| `entities`  | List entities                       | `--component` |
+| `routes`    | List task routes                    | `--task`, `--entity` |
+| `edges`     | List edges                          | `--from`, `--to`, `--rel` |
+| `visualize` | Generate SVG graph                  | `--entity-id`, `--depth`, `--kind`, `--exclude`, `--layout`, `--max-nodes`, `--output`, `--legend` |
+| `config`    | Initialize or validate config       | subcommands: `init`, `validate` |
+| `guide`     | Interactive usage guide             | none |
 
-## Search and Lookup
+## Architecture
 
-**Use `search`** when you have a task:
-- "how do I add a new API endpoint"
-- "debug the authentication flow"
-- "refactor the database layer"
+```text
+source inputs
+  -> adapters
+  -> deterministic fact extraction
+  -> fact store (sqlite)
+  -> derived projections
+       - graph relationships / traversal
+       - summaries
+       - task routes
+       - vector index (usearch HNSW)
+  -> query / expansion / rerank
+  -> reading plan
+```
 
-Search combines task classification, keyword/name/path matching, graph expansion,
-and vector retrieval into one reading-plan pipeline.
+The store backend is **sqlite+usearch**. SQLite stores canonical repo facts and
+derived metadata (entities, edges, files, summaries, task routes, embedding
+metadata). usearch provides HNSW-based approximate nearest neighbor search over
+embedding vectors. Vectors live only in usearch, not duplicated in SQLite.
 
-**Use `entity`, `entities`, `routes`, and `edges`** when you already know what
-you want to inspect:
-- `entity <id>` for one detailed record
-- `entities` to browse the graph
-- `routes` to inspect task routing
-- `edges` to inspect relationships directly
+## Component Identity
+
+Components use canonical path-based IDs derived from the repo-relative component
+root path, not from manifest display names:
+
+- `component::cargo::crates/chizu-core` (Rust crate)
+- `component::npm::packages/web` (npm package)
+- `component::npm::.` (root package)
+
+Every file under a component root inherits that component's canonical
+`component_id`. Every entity derived from that file inherits the same ID.
+Component discovery happens before file extraction (two-phase indexing).
 
 ## Configuration
 
-Create a `.chizu.toml` config file:
-
-```bash
-chizu --repo /path/to/repo config init
-```
-
-Example configuration:
+All runtime configuration lives in `.chizu.toml` at the repository root.
+Missing file means all defaults apply. Generate one with `chizu config init`.
 
 ```toml
 [index]
-exclude_patterns = ["**/target/**", "**/.git/**", "**/node_modules/**"]
-parallel_workers = 4
+exclude_patterns = [
+    "**/target/**",
+    "**/.git/**",
+    "**/node_modules/**",
+    "**/.venv/**",
+    "**/fuzz/**",
+    "**/*.lock",
+]
 
-[query]
+[search]
 default_limit = 15
 
-[llm]
+[search.rerank_weights]
+task_route = 0.00
+keyword = 0.25
+name_match = 0.20
+vector = 0.25
+kind_preference = 0.10
+exported = 0.10
+path_match = 0.10
+
+[providers.ollama]
 base_url = "http://localhost:11434/v1"
-api_key = ""
-default_model = "llama3.2-vision:latest"
 timeout_secs = 120
+retry_attempts = 3
+
+[summary]
+provider = "ollama"
+model = "llama3:8b"
+max_tokens = 512
+temperature = 0.2
 
 [embedding]
-enabled = true # required
 provider = "ollama"
-base_url = "http://localhost:11434/v1"
 model = "nomic-embed-text-v2-moe:latest"
 dimensions = 768
 batch_size = 32
 ```
 
-## Architecture
+Provider connection config is defined once per provider under
+`[providers.<name>]`. The `[summary]` and `[embedding]` sections reference a
+provider by name. See [docs/prd.md](docs/prd.md) for configuration design rules.
 
-Chizu uses a **dual-backend storage system**:
+## Target Repositories
 
-### SQLite + usearch (default)
-- **SQLite**: Stores entities, edges, files, summaries, and task routes
-- **usearch**: HNSW vector index for fast similarity search over embeddings
-- Local, fast, no external dependencies
-
-### Grafeo (alternative)
-- Unified graph database backend
-- Handles both structured data and vector search in one system
-
-## Entity Types
-
-| Type | Description | Example |
-|------|-------------|---------|
-| `symbol` | Functions, structs, traits | `fn handle_request` |
-| `source_unit` | Source files | `src/main.rs` |
-| `component` | Crate/package | `component::cargo::crates/chizu-core` |
-| `doc` | Markdown documentation | `README.md` |
-| `test` | Test functions | `#[test] fn test_routing` |
-| `containerized` | Dockerfiles | `Dockerfile` |
-| `infra_root` | Terraform directories | `infra/prod` |
-
-## Component IDs
-
-Components use canonical path-based IDs:
-- `component::cargo::crates/chizu-core` (Rust crate)
-- `component::npm::packages/web` (npm package)
-- `component::npm::.` (root package)
-
-This ensures consistency even when package names change.
-
-## Daily Workflow
-
-```bash
-# 1. Start a new task - get oriented
-chizu --repo . search "implement user profiles"
-
-# 2. Inspect the most relevant entities
-chizu --repo . entity "symbol::src/auth.rs::verify_token"
-
-# 3. Inspect graph relationships directly
-chizu --repo . edges --from "symbol::src/auth.rs::verify_token"
-
-# 4. Find similar implementations
-chizu --repo . search "session management"
-
-# 5. Visualize the architecture
-chizu --repo . visualize --legend > arch.svg
-```
+Mixed-language monorepos with infrastructure and documentation: Rust workspaces,
+TypeScript/npm workspaces, Terraform roots, Docker deployments, Astro/Hugo
+sites, and combinations thereof.
 
 ## Requirements
 
 - **Rust** 1.70+ (to build)
-- **Ollama** or another configured OpenAI-compatible provider
-  (required for indexing summaries/embeddings and for search)
+- **Ollama** or another OpenAI-compatible provider (required for summaries and
+  embeddings during indexing)
   - Install: https://ollama.com
-  - Pull models: `ollama pull nomic-embed-text-v2-moe:latest`
+  - Pull models: `ollama pull llama3:8b && ollama pull nomic-embed-text-v2-moe:latest`
 
 ## Documentation
 
-- [Product PRD](docs/prd.md)
 - [Brief](docs/brief.md)
+- [Product Requirements](docs/prd.md)
 - Interactive guide: `chizu guide`
 
 ## License
