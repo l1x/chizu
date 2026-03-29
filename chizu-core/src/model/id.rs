@@ -99,6 +99,15 @@ pub fn entity_id_to_usearch_key(entity_id: &str) -> i64 {
     hash_to_i64(&hash)
 }
 
+/// Generic entity ID formatter: `{kind}::{path}`.
+///
+/// Examples:
+/// - `entity_id("workflow", ".github/workflows/ci.yml")` → `"workflow::.github/workflows/ci.yml"`
+/// - `entity_id("migration", "migrations/001.sql")` → `"migration::migrations/001.sql"`
+pub fn entity_id(kind: &str, path: &str) -> String {
+    format!("{}::{}", kind, path)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

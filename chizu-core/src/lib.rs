@@ -8,6 +8,7 @@
 
 pub mod config;
 pub mod model;
+pub mod provider;
 pub mod store;
 
 // Re-export commonly used types
@@ -19,5 +20,6 @@ pub use model::{
     ComponentId, Edge, EdgeKind, EmbeddingMeta, Entity, EntityKind, FileKind, FileRecord, Summary,
     TaskRoute, Visibility,
 };
-pub use model::{doc_id, entity_id_to_usearch_key, source_unit_id, symbol_id, test_id};
+pub use model::{doc_id, entity_id, entity_id_to_usearch_key, source_unit_id, symbol_id, test_id};
+pub use provider::{OpenAiProvider, Provider, ProviderError, with_retry};
 pub use store::{ChizuStore, Store, StoreError};

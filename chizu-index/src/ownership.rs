@@ -42,6 +42,70 @@ pub fn discover_cargo_components(
     Ok(registry)
 }
 
+/// Build a component registry from discovered package.json paths.
+///
+/// V1 scope: literal paths in the `workspaces` array. Glob patterns,
+/// pnpm-workspace.yaml, and Yarn nested workspaces are deferred.
+pub fn discover_npm_components(
+    files: &[WalkedFile],
+    repo_root: &Path,
+) -> crate::error::Result<ComponentRegistry> {
+    let mut registry = ComponentRegistry::new();
+
+    for file in files {
+        if file.path.file_name() != Some(std::ffi::OsStr::new("package.json")) {
+            continue;
+        }
+
+        let abs_path = repo_root.join(&file.path);
+        let content = std::fs::read_to_string(&abs_path)?;
+        let manifest: serde_json::Value = serde_json::from_str(&content)?;
+
+        let package_name = manifest
+            .get("name")
+            .and_then(|n| n.as_str());
+
+        let name = match package_name {
+            Some(n) => n.to_string(),
+            None => continue,
+        };
+
+        let parent = file.path.parent().unwrap_or(Path::new(""));
+        registry.register(parent.to_path_buf(), name.clone(), "npm");
+
+        // Register workspace members (literal paths only)
+        if let Some(workspaces) = manifest.get("workspaces").and_then(|w| w.as_array()) {
+            for ws in workspaces {
+                if let Some(ws_path) = ws.as_str() {
+                    let resolved = parent.join(ws_path);
+                    // Try to read the member's package.json to get its name
+                    let member_pkg = repo_root.join(&resolved).join("package.json");
+                    if let Ok(member_content) = std::fs::read_to_string(member_pkg) {
+                        if let Ok(member_manifest) = serde_json::from_str::<serde_json::Value>(&member_content) {
+                            if let Some(member_name) = member_manifest.get("name").and_then(|n| n.as_str()) {
+                                registry.register(resolved, member_name.to_string(), "npm");
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    Ok(registry)
+}
+
+/// Build a combined component registry from all supported ecosystems.
+pub fn discover_all_components(
+    files: &[WalkedFile],
+    repo_root: &Path,
+) -> crate::error::Result<ComponentRegistry> {
+    let mut cargo_registry = discover_cargo_components(files, repo_root)?;
+    let npm_registry = discover_npm_components(files, repo_root)?;
+    cargo_registry.merge_from(npm_registry);
+    Ok(cargo_registry)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -119,6 +183,89 @@ version = "0.1.0"
         assert_eq!(
             registry.resolve_name("bar"),
             Some(&ComponentId::new("cargo", "crates/bar"))
+        );
+    }
+
+    #[test]
+    fn discover_npm_components_finds_packages() {
+        let tmp = TempDir::new().unwrap();
+        let root = tmp.path();
+
+        fs::create_dir_all(root.join("packages/foo")).unwrap();
+        fs::create_dir_all(root.join("packages/bar")).unwrap();
+        fs::write(
+            root.join("package.json"),
+            r#"{
+  "name": "root-pkg",
+  "workspaces": ["packages/foo", "packages/bar"]
+}"#,
+        )
+        .unwrap();
+        fs::write(
+            root.join("packages/foo/package.json"),
+            r#"{"name": "foo"}"#,
+        )
+        .unwrap();
+        fs::write(
+            root.join("packages/bar/package.json"),
+            r#"{"name": "bar"}"#,
+        )
+        .unwrap();
+
+        let config = Config::default();
+        let walker = FileWalker::new(root, &config).unwrap();
+        let files = walker.walk().unwrap();
+
+        let registry = discover_npm_components(&files, root).unwrap();
+
+        assert_eq!(
+            registry.resolve_name("root-pkg"),
+            Some(&ComponentId::new("npm", "."))
+        );
+        assert_eq!(
+            registry.resolve_name("foo"),
+            Some(&ComponentId::new("npm", "packages/foo"))
+        );
+        assert_eq!(
+            registry.resolve_name("bar"),
+            Some(&ComponentId::new("npm", "packages/bar"))
+        );
+    }
+
+    #[test]
+    fn discover_all_components_merges_ecosystems() {
+        let tmp = TempDir::new().unwrap();
+        let root = tmp.path();
+
+        fs::create_dir_all(root.join("crates/core")).unwrap();
+        fs::create_dir_all(root.join("packages/web")).unwrap();
+        fs::write(
+            root.join("crates/core/Cargo.toml"),
+            r#"[package]
+name = "core"
+version = "0.1.0"
+"#,
+        )
+        .unwrap();
+        fs::write(
+            root.join("packages/web/package.json"),
+            r#"{"name": "web"}"#,
+        )
+        .unwrap();
+
+        let config = Config::default();
+        let walker = FileWalker::new(root, &config).unwrap();
+        let files = walker.walk().unwrap();
+
+        let registry = discover_all_components(&files, root).unwrap();
+
+        assert_eq!(
+            registry.resolve_name("core"),
+            Some(&ComponentId::new("cargo", "crates/core"))
+        );
+        assert_eq!(
+            registry.resolve_name("web"),
+            Some(&ComponentId::new("npm", "packages/web"))
         );
     }
 }

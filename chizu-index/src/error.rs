@@ -15,6 +15,9 @@ pub enum IndexError {
     #[error("TOML parse error: {0}")]
     TomlParse(#[from] toml::de::Error),
 
+    #[error("JSON parse error: {0}")]
+    JsonParse(#[from] serde_json::Error),
+
     #[error("walk error: {0}")]
     Walk(String),
 
@@ -23,6 +26,9 @@ pub enum IndexError {
 
     #[error("invalid manifest at {path}: {message}")]
     InvalidManifest { path: PathBuf, message: String },
+
+    #[error("provider error: {0}")]
+    Provider(#[from] chizu_core::ProviderError),
 
     #[error("{0}")]
     Other(String),

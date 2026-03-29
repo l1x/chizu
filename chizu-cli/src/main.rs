@@ -314,7 +314,10 @@ fn cmd_index(repo: &Path, args: IndexArgs) -> Result<(), Box<dyn std::error::Err
 
     let config = load_config(repo)?;
     let store = chizu_core::ChizuStore::open(&repo.join(".chizu"), &config)?;
-    let stats = chizu_index::IndexPipeline::run(repo, &store, &config)?;
+
+    // Build provider if any LLM step is configured.
+    let provider = build_provider(&config)?;
+    let stats = chizu_index::IndexPipeline::run(repo, &store, &config, provider.as_deref())?;
 
     println!("Indexed {} files ({} walked)", stats.files_indexed, stats.files_walked);
     println!("Discovered {} components", stats.components_discovered);
@@ -322,9 +325,62 @@ fn cmd_index(repo: &Path, args: IndexArgs) -> Result<(), Box<dyn std::error::Err
         "Inserted {} entities and {} edges",
         stats.entities_inserted, stats.edges_inserted
     );
+    if config.summary.provider.is_some() {
+        println!(
+            "Summaries: {} generated, {} skipped, {} failed",
+            stats.summaries_generated, stats.summaries_skipped, stats.summaries_failed
+        );
+    }
+    if config.embedding.provider.is_some() {
+        println!(
+            "Embeddings: {} generated, {} skipped, {} failed",
+            stats.embeddings_generated, stats.embeddings_skipped, stats.embeddings_failed
+        );
+    }
+
+    let failures = stats.summaries_failed + stats.embeddings_failed;
+    if failures > 0 {
+        eprintln!("Warning: {} LLM operations failed; index is degraded.", failures);
+    }
 
     store.close()?;
     Ok(())
+}
+
+fn build_provider(config: &chizu_core::Config) -> Result<Option<Box<dyn chizu_core::Provider>>, Box<dyn std::error::Error>> {
+    let summary_provider = config.summary.provider.as_ref();
+    let embedding_provider = config.embedding.provider.as_ref();
+
+    let provider_name = match (summary_provider, embedding_provider) {
+        (Some(s), Some(e)) if s == e => Some(s.as_str()),
+        (Some(s), None) => Some(s.as_str()),
+        (None, Some(e)) => Some(e.as_str()),
+        (Some(s), Some(e)) => {
+            return Err(format!(
+                "Different providers for summary ({}) and embedding ({}) are not yet supported. Please use the same provider.",
+                s, e
+            ).into());
+        }
+        (None, None) => None,
+    };
+
+    let Some(name) = provider_name else {
+        return Ok(None);
+    };
+
+    let provider_config = config.providers.get(name)
+        .ok_or_else(|| format!("Provider '{}' not found in config", name))?;
+
+    let completion_model = config.summary.model.clone().unwrap_or_else(|| "llama3:8b".to_string());
+    let embedding_model = config.embedding.model.clone().unwrap_or_else(|| "nomic-embed-text-v2-moe:latest".to_string());
+
+    let provider = chizu_core::OpenAiProvider::new(
+        provider_config,
+        completion_model,
+        embedding_model,
+    ).map_err(|e| format!("Failed to create provider: {e}"))?;
+
+    Ok(Some(Box::new(provider)))
 }
 
 fn load_config(repo: &Path) -> Result<chizu_core::Config, Box<dyn std::error::Error>> {

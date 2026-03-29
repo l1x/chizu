@@ -81,6 +81,8 @@ CREATE INDEX IF NOT EXISTS idx_edges_rel ON edges(rel);
 CREATE INDEX IF NOT EXISTS idx_task_routes_task ON task_routes(task_name);
 CREATE INDEX IF NOT EXISTS idx_task_routes_entity ON task_routes(entity_id);
 CREATE INDEX IF NOT EXISTS idx_embeddings_usearch_key ON embeddings(usearch_key);
+CREATE INDEX IF NOT EXISTS idx_entities_path ON entities(path);
+CREATE INDEX IF NOT EXISTS idx_edges_provenance ON edges(provenance_path);
 "#;
 
 // ── Row mapping helpers ─────────────────────────────────────────────────
@@ -236,23 +238,23 @@ impl SqliteStore {
     // ── Entity operations ───────────────────────────────────────────────
 
     pub fn insert_entity(&self, entity: &Entity) -> Result<()> {
-        self.conn.execute(
+        let mut stmt = self.conn.prepare_cached(
             "INSERT OR REPLACE INTO entities
              (id, kind, name, component_id, path, language, line_start, line_end, visibility, exported)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
-            params![
-                entity.id,
-                entity.kind.to_string(),
-                entity.name,
-                entity.component_id.as_ref().map(|c| c.as_str()),
-                entity.path,
-                entity.language,
-                entity.line_start.map(|n| n as i64),
-                entity.line_end.map(|n| n as i64),
-                entity.visibility.as_ref().map(|v| v.to_string()),
-                entity.exported as i32,
-            ],
         )?;
+        stmt.execute(params![
+            entity.id,
+            entity.kind.to_string(),
+            entity.name,
+            entity.component_id.as_ref().map(|c| c.as_str()),
+            entity.path,
+            entity.language,
+            entity.line_start.map(|n| n as i64),
+            entity.line_end.map(|n| n as i64),
+            entity.visibility.as_ref().map(|v| v.to_string()),
+            entity.exported as i32,
+        ])?;
         Ok(())
     }
 
@@ -289,7 +291,8 @@ impl SqliteStore {
 
     pub fn delete_entity(&self, id: &str) -> Result<()> {
         self.conn
-            .execute("DELETE FROM entities WHERE id = ?1", [id])?;
+            .prepare_cached("DELETE FROM entities WHERE id = ?1")?
+            .execute([id])?;
         Ok(())
     }
 
@@ -301,21 +304,40 @@ impl SqliteStore {
         Ok(count)
     }
 
+    pub fn get_entities_by_path(&self, path: &str) -> Result<Vec<Entity>> {
+        let mut stmt = self.conn.prepare_cached(
+            "SELECT id, kind, name, component_id, path, language, line_start, line_end, visibility, exported
+             FROM entities WHERE path = ?1",
+        )?;
+        let entities = stmt
+            .query_map([path], entity_from_row)?
+            .collect::<std::result::Result<Vec<_>, _>>()?;
+        Ok(entities)
+    }
+
+    pub fn delete_entities_by_path(&self, path: &str) -> Result<usize> {
+        let count = self.conn.execute(
+            "DELETE FROM entities WHERE path = ?1",
+            [path],
+        )?;
+        Ok(count)
+    }
+
     // ── Edge operations ─────────────────────────────────────────────────
 
     pub fn insert_edge(&self, edge: &Edge) -> Result<()> {
-        self.conn.execute(
+        let mut stmt = self.conn.prepare_cached(
             "INSERT OR REPLACE INTO edges
              (src_id, rel, dst_id, provenance_path, provenance_line)
              VALUES (?1, ?2, ?3, ?4, ?5)",
-            params![
-                edge.src_id,
-                edge.rel.to_string(),
-                edge.dst_id,
-                edge.provenance_path,
-                edge.provenance_line.map(|n| n as i64),
-            ],
         )?;
+        stmt.execute(params![
+            edge.src_id,
+            edge.rel.to_string(),
+            edge.dst_id,
+            edge.provenance_path,
+            edge.provenance_line.map(|n| n as i64),
+        ])?;
         Ok(())
     }
 
@@ -350,10 +372,9 @@ impl SqliteStore {
     }
 
     pub fn delete_edge(&self, src_id: &str, rel: EdgeKind, dst_id: &str) -> Result<()> {
-        self.conn.execute(
-            "DELETE FROM edges WHERE src_id = ?1 AND rel = ?2 AND dst_id = ?3",
-            params![src_id, rel.to_string(), dst_id],
-        )?;
+        self.conn
+            .prepare_cached("DELETE FROM edges WHERE src_id = ?1 AND rel = ?2 AND dst_id = ?3")?
+            .execute(params![src_id, rel.to_string(), dst_id])?;
         Ok(())
     }
 
@@ -370,22 +391,30 @@ impl SqliteStore {
         Ok(count)
     }
 
+    pub fn delete_edges_by_provenance_path(&self, path: &str) -> Result<usize> {
+        let count = self.conn.execute(
+            "DELETE FROM edges WHERE provenance_path = ?1",
+            [path],
+        )?;
+        Ok(count)
+    }
+
     // ── File operations ─────────────────────────────────────────────────
 
     pub fn insert_file(&self, file: &FileRecord) -> Result<()> {
-        self.conn.execute(
+        let mut stmt = self.conn.prepare_cached(
             "INSERT OR REPLACE INTO files
              (path, component_id, kind, hash, indexed, ignore_reason)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
-            params![
-                file.path,
-                file.component_id.as_ref().map(|c| c.as_str()),
-                file.kind.to_string(),
-                file.hash,
-                file.indexed as i32,
-                file.ignore_reason,
-            ],
         )?;
+        stmt.execute(params![
+            file.path,
+            file.component_id.as_ref().map(|c| c.as_str()),
+            file.kind.to_string(),
+            file.hash,
+            file.indexed as i32,
+            file.ignore_reason,
+        ])?;
         Ok(())
     }
 
@@ -413,25 +442,33 @@ impl SqliteStore {
         Ok(())
     }
 
+    pub fn delete_files_by_component(&self, component_id: &ComponentId) -> Result<usize> {
+        let count = self.conn.execute(
+            "DELETE FROM files WHERE component_id = ?1",
+            [component_id.as_str()],
+        )?;
+        Ok(count)
+    }
+
     // ── Summary operations ──────────────────────────────────────────────
 
     pub fn insert_summary(&self, summary: &Summary) -> Result<()> {
-        self.conn.execute(
+        let mut stmt = self.conn.prepare_cached(
             "INSERT OR REPLACE INTO summaries
              (entity_id, short_summary, detailed_summary, keywords_json, updated_at, source_hash)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
-            params![
-                summary.entity_id,
-                summary.short_summary,
-                summary.detailed_summary,
-                summary
-                    .keywords
-                    .as_ref()
-                    .map(|k| serde_json::to_string(k).unwrap_or_default()),
-                summary.updated_at,
-                summary.source_hash,
-            ],
         )?;
+        stmt.execute(params![
+            summary.entity_id,
+            summary.short_summary,
+            summary.detailed_summary,
+            summary
+                .keywords
+                .as_ref()
+                .map(|k| serde_json::to_string(k).unwrap_or_default()),
+            summary.updated_at,
+            summary.source_hash,
+        ])?;
         Ok(())
     }
 
@@ -444,20 +481,32 @@ impl SqliteStore {
         Ok(summary)
     }
 
+    pub fn get_all_summaries(&self) -> Result<Vec<Summary>> {
+        let mut stmt = self
+            .conn
+            .prepare("SELECT entity_id, short_summary, detailed_summary, keywords_json, updated_at, source_hash FROM summaries")?;
+        let summaries = stmt
+            .query_map([], summary_from_row)?
+            .collect::<std::result::Result<Vec<_>, _>>()?;
+        Ok(summaries)
+    }
+
     pub fn delete_summary(&self, entity_id: &str) -> Result<()> {
         self.conn
-            .execute("DELETE FROM summaries WHERE entity_id = ?1", [entity_id])?;
+            .prepare_cached("DELETE FROM summaries WHERE entity_id = ?1")?
+            .execute([entity_id])?;
         Ok(())
     }
 
     // ── Task route operations ───────────────────────────────────────────
 
     pub fn insert_task_route(&self, route: &TaskRoute) -> Result<()> {
-        self.conn.execute(
-            "INSERT OR REPLACE INTO task_routes (task_name, entity_id, priority)
-             VALUES (?1, ?2, ?3)",
-            params![route.task_name, route.entity_id, route.priority],
-        )?;
+        self.conn
+            .prepare_cached(
+                "INSERT OR REPLACE INTO task_routes (task_name, entity_id, priority)
+                 VALUES (?1, ?2, ?3)",
+            )?
+            .execute(params![route.task_name, route.entity_id, route.priority])?;
         Ok(())
     }
 
@@ -483,25 +532,26 @@ impl SqliteStore {
 
     pub fn delete_entity_task_routes(&self, entity_id: &str) -> Result<()> {
         self.conn
-            .execute("DELETE FROM task_routes WHERE entity_id = ?1", [entity_id])?;
+            .prepare_cached("DELETE FROM task_routes WHERE entity_id = ?1")?
+            .execute([entity_id])?;
         Ok(())
     }
 
     // ── Embedding metadata operations ───────────────────────────────────
 
     pub fn insert_embedding_meta(&self, meta: &EmbeddingMeta) -> Result<()> {
-        self.conn.execute(
+        let mut stmt = self.conn.prepare_cached(
             "INSERT OR REPLACE INTO embeddings
              (entity_id, model, dimensions, updated_at, usearch_key)
              VALUES (?1, ?2, ?3, ?4, ?5)",
-            params![
-                meta.entity_id,
-                meta.model,
-                meta.dimensions as i64,
-                meta.updated_at,
-                meta.usearch_key,
-            ],
         )?;
+        stmt.execute(params![
+            meta.entity_id,
+            meta.model,
+            meta.dimensions as i64,
+            meta.updated_at,
+            meta.usearch_key,
+        ])?;
         Ok(())
     }
 
@@ -518,7 +568,8 @@ impl SqliteStore {
 
     pub fn delete_embedding_meta(&self, entity_id: &str) -> Result<()> {
         self.conn
-            .execute("DELETE FROM embeddings WHERE entity_id = ?1", [entity_id])?;
+            .prepare_cached("DELETE FROM embeddings WHERE entity_id = ?1")?
+            .execute([entity_id])?;
         Ok(())
     }
 

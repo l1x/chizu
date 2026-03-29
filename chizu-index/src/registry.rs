@@ -55,6 +55,12 @@ impl ComponentRegistry {
     pub fn all_components(&self) -> impl Iterator<Item = (&PathBuf, &ComponentId)> {
         self.by_path.iter()
     }
+
+    /// Merge another registry into this one.
+    pub fn merge_from(&mut self, other: ComponentRegistry) {
+        self.by_path.extend(other.by_path);
+        self.by_name.extend(other.by_name);
+    }
 }
 
 #[cfg(test)]

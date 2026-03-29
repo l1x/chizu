@@ -4,6 +4,7 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+reqwest = { workspace = true }
 rusqlite = { workspace = true }
 thiserror = { workspace = true }
 serde = { workspace = true }
@@ -15,4 +16,5 @@ tracing = { workspace = true }
 usearch = { workspace = true }
 
 [dev-dependencies]
+mockito = "1"
 tempfile = "3"

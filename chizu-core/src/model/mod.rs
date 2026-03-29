@@ -9,5 +9,5 @@ pub use entity::{
 };
 pub use entity_kind::EntityKind;
 pub use id::{
-    ComponentId, doc_id, entity_id_to_usearch_key, source_unit_id, symbol_id, test_id,
+    ComponentId, doc_id, entity_id, entity_id_to_usearch_key, source_unit_id, symbol_id, test_id,
 };

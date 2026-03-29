@@ -98,6 +98,9 @@ pub trait Store {
     /// Get a summary by entity ID.
     fn get_summary(&self, entity_id: &str) -> Result<Option<Summary>>;
 
+    /// Get all summaries.
+    fn get_all_summaries(&self) -> Result<Vec<Summary>>;
+
     /// Delete a summary.
     fn delete_summary(&self, entity_id: &str) -> Result<()>;
 
@@ -202,6 +205,11 @@ impl ChizuStore {
     pub fn vector_dimensions(&self) -> usize {
         self.usearch.dimensions()
     }
+
+    /// Access the underlying SQLite store.
+    pub fn sqlite(&self) -> &SqliteStore {
+        &self.sqlite
+    }
 }
 
 impl Store for ChizuStore {
@@ -275,6 +283,10 @@ impl Store for ChizuStore {
 
     fn get_summary(&self, entity_id: &str) -> Result<Option<Summary>> {
         self.sqlite.get_summary(entity_id)
+    }
+
+    fn get_all_summaries(&self) -> Result<Vec<Summary>> {
+        self.sqlite.get_all_summaries()
     }
 
     fn delete_summary(&self, entity_id: &str) -> Result<()> {

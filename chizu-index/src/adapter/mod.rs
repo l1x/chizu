@@ -1,1 +1,46 @@
 pub mod cargo;
+pub mod doc;
+pub mod frontmatter;
+pub mod mise;
+pub mod npm;
+pub mod rust;
+pub mod scanner;
+pub mod site;
+
+use std::path::Path;
+
+use crate::error::Result;
+use crate::registry::ComponentRegistry;
+use crate::walk::WalkedFile;
+
+/// Dispatch a file to the appropriate adapter(s) and return emitted entities/edges.
+pub fn index_file(
+    repo_root: &Path,
+    file: &WalkedFile,
+    _registry: &ComponentRegistry,
+) -> Result<(Vec<chizu_core::Entity>, Vec<chizu_core::Edge>)> {
+    let ext = file.path.extension().and_then(|e| e.to_str()).unwrap_or("");
+    let name = file
+        .path
+        .file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or("");
+
+    if ext == "rs" {
+        return rust::index_rust_file(file, repo_root);
+    }
+
+    if name == "mise.toml" {
+        return mise::index_mise_file(file, repo_root);
+    }
+
+    if ext == "md" {
+        let (mut entities, mut edges) = doc::index_doc_file(file)?;
+        let (fm_entities, fm_edges) = frontmatter::index_frontmatter_file(file, repo_root)?;
+        entities.extend(fm_entities);
+        edges.extend(fm_edges);
+        return Ok((entities, edges));
+    }
+
+    scanner::scan_file(file)
+}

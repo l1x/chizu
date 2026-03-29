@@ -71,7 +71,7 @@ foo = { path = "../foo" }
         .exclude_patterns
         .push("**/.chizu/**".to_string());
     let store = chizu_core::ChizuStore::open(&root.join(".chizu"), &config).unwrap();
-    let stats = IndexPipeline::run(root, &store, &config).unwrap();
+    let stats = IndexPipeline::run(root, &store, &config, None).unwrap();
 
     assert_eq!(stats.components_discovered, 2);
     assert_eq!(stats.files_indexed, 5); // 3 Cargo.toml + 2 source files
