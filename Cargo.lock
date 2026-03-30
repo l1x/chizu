@@ -253,6 +253,8 @@ dependencies = [
  "chizu-core",
  "chizu-index",
  "chizu-query",
+ "serde_json",
+ "tempfile",
  "tracing",
  "tracing-subscriber",
 ]

@@ -50,6 +50,9 @@ pub trait Store {
     /// Query entities by component ID.
     fn get_entities_by_component(&self, component_id: &ComponentId) -> Result<Vec<Entity>>;
 
+    /// Get all entities.
+    fn get_all_entities(&self) -> Result<Vec<Entity>>;
+
     /// Delete an entity by ID.
     fn delete_entity(&self, id: &str) -> Result<()>;
 
@@ -230,6 +233,10 @@ impl Store for ChizuStore {
 
     fn get_entities_by_component(&self, component_id: &ComponentId) -> Result<Vec<Entity>> {
         self.sqlite.get_entities_by_component(component_id)
+    }
+
+    fn get_all_entities(&self) -> Result<Vec<Entity>> {
+        self.sqlite.get_all_entities()
     }
 
     fn delete_entity(&self, id: &str) -> Result<()> {

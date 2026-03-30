@@ -315,6 +315,16 @@ impl SqliteStore {
         Ok(entities)
     }
 
+    pub fn get_all_entities(&self) -> Result<Vec<Entity>> {
+        let mut stmt = self
+            .conn
+            .prepare("SELECT id, kind, name, component_id, path, language, line_start, line_end, visibility, exported FROM entities")?;
+        let entities = stmt
+            .query_map([], entity_from_row)?
+            .collect::<std::result::Result<Vec<_>, _>>()?;
+        Ok(entities)
+    }
+
     pub fn delete_entities_by_path(&self, path: &str) -> Result<usize> {
         let count = self.conn.execute(
             "DELETE FROM entities WHERE path = ?1",
