@@ -75,6 +75,156 @@ open graph.svg
 | `config`    | Initialize or validate config       | subcommands: `init`, `validate` |
 | `guide`     | Interactive usage guide             | none |
 
+## Onboarding
+
+### Prerequisites
+
+1. **Rust toolchain** (1.70+): https://rustup.rs
+2. **Ollama** running locally: https://ollama.com
+3. Pull the required models:
+
+```bash
+ollama pull llama3:8b
+ollama pull nomic-embed-text-v2-moe:latest
+```
+
+Verify ollama is running:
+
+```bash
+curl -s http://localhost:11434/v1/models | head -1
+```
+
+### Step 1: Install chizu
+
+```bash
+git clone https://github.com/l1x/chizu.git
+cd chizu
+cargo install --path chizu-cli
+```
+
+### Step 2: Configure
+
+From your target repository root:
+
+```bash
+cd /path/to/your/repo
+chizu config init
+```
+
+This creates `.chizu.toml` with sensible defaults pointing to a local ollama
+instance. Edit it to customize exclude patterns, models, or rerank weights:
+
+```toml
+[index]
+exclude_patterns = [
+    "**/target/**",
+    "**/.git/**",
+    "**/node_modules/**",
+    "**/.venv/**",
+    "**/*.lock",
+]
+
+[providers.ollama]
+base_url = "http://localhost:11434/v1"
+timeout_secs = 120
+retry_attempts = 3
+
+[summary]
+provider = "ollama"
+model = "llama3:8b"
+max_tokens = 512
+temperature = 0.2
+
+[embedding]
+provider = "ollama"
+model = "nomic-embed-text-v2-moe:latest"
+dimensions = 768
+batch_size = 32
+```
+
+Validate your config:
+
+```bash
+chizu config validate
+```
+
+### Step 3: Index the repository
+
+```bash
+chizu index
+```
+
+This walks the repo, extracts entities and edges, generates LLM summaries, and
+builds the embedding index. On a mid-size repo (~60 files, ~650 entities) with
+local ollama, expect 5-10 minutes for the first run. Re-runs are incremental
+and skip unchanged files.
+
+Output:
+
+```
+Indexed 64 files (64 walked)
+Discovered 4 components
+Inserted 656 entities and 649 edges
+Summaries: 345 generated, 0 skipped, 0 failed
+Embeddings: 345 generated, 0 skipped, 0 failed
+```
+
+### Step 4: Search
+
+```bash
+chizu search "how does authentication work"
+chizu search "deploy to prod" --category deploy
+chizu search "fix the login bug" --format json --limit 5
+```
+
+### Step 5: Onboard an agent
+
+To give a coding agent (Claude Code, Cursor, Aider, etc.) access to chizu's
+knowledge graph, add a section to your `CLAUDE.md` or equivalent agent config:
+
+```markdown
+## Repository map
+
+This repo is indexed with chizu. Before exploring code, use chizu to find
+relevant files:
+
+\`\`\`bash
+# Find entities related to a topic
+chizu search "your question here"
+
+# Get details on a specific entity
+chizu entity "symbol::src/auth.rs::validate_token"
+
+# List entities in a component
+chizu entities --component cargo::crates/core
+
+# Explore edges from an entity
+chizu edges --from "component::cargo::crates/core"
+
+# Get task-specific routes
+chizu routes --task debug
+\`\`\`
+
+Use `chizu search` with `--format json` for structured output that can be
+parsed programmatically. The search pipeline classifies the query into a task
+category (understand, debug, build, test, deploy, configure), retrieves
+candidates from multiple signals, expands graph neighbors, and returns a
+ranked reading plan.
+```
+
+The agent can then run `chizu search` to orient itself before reading files,
+reducing the number of files it needs to explore and improving context
+relevance.
+
+For non-interactive agent pipelines, use JSON output:
+
+```bash
+chizu search "how does the store layer work" --format json | jq '.entries[:3]'
+```
+
+This returns structured data the agent can parse to extract file paths, entity
+IDs, and relevance scores.
+
 ## Architecture
 
 ```text
@@ -164,14 +314,6 @@ provider by name. See [docs/prd.md](docs/prd.md) for configuration design rules.
 Mixed-language monorepos with infrastructure and documentation: Rust workspaces,
 TypeScript/npm workspaces, Terraform roots, Docker deployments, Astro/Hugo
 sites, and combinations thereof.
-
-## Requirements
-
-- **Rust** 1.70+ (to build)
-- **Ollama** or another OpenAI-compatible provider (required for summaries and
-  embeddings during indexing)
-  - Install: https://ollama.com
-  - Pull models: `ollama pull llama3:8b && ollama pull nomic-embed-text-v2-moe:latest`
 
 ## Documentation
 
