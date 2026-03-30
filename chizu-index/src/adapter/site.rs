@@ -2,22 +2,16 @@ use std::path::Path;
 
 use chizu_core::{Edge, EdgeKind, Entity, EntityKind, entity_id};
 
+use super::AdapterFacts;
 use crate::error::Result;
 use crate::walk::WalkedFile;
-
-/// Facts extracted from site detection.
-#[derive(Debug, Default)]
-pub struct SiteFacts {
-    pub entities: Vec<Entity>,
-    pub edges: Vec<Edge>,
-}
 
 /// Detect site roots and emit site entities with edges to related content.
 ///
 /// V1: scans walked files for site root markers, then matches related files
 /// by path proximity. No store query required.
-pub fn index_sites(repo_root: &Path, files: &[WalkedFile]) -> Result<SiteFacts> {
-    let mut facts = SiteFacts::default();
+pub fn index_sites(repo_root: &Path, files: &[WalkedFile]) -> Result<AdapterFacts> {
+    let mut facts = AdapterFacts::default();
     let site_roots = detect_site_roots(files, repo_root);
 
     for (site_path, site_name) in site_roots {

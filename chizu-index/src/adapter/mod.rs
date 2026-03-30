@@ -9,9 +9,18 @@ pub mod site;
 
 use std::path::Path;
 
+use chizu_core::{Edge, Entity};
+
 use crate::error::Result;
 use crate::registry::ComponentRegistry;
 use crate::walk::WalkedFile;
+
+/// Entities and edges returned by any workspace/file adapter.
+#[derive(Debug, Default)]
+pub struct AdapterFacts {
+    pub entities: Vec<Entity>,
+    pub edges: Vec<Edge>,
+}
 
 /// Dispatch a file to the appropriate adapter(s) and return emitted entities/edges.
 pub fn index_file(

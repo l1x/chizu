@@ -3,19 +3,13 @@ use std::path::{Path, PathBuf};
 use cargo_toml::{Dependency, Manifest};
 use chizu_core::{ComponentId, Edge, EdgeKind, Entity, EntityKind};
 
+use super::AdapterFacts;
 use crate::error::{IndexError, Result};
 use crate::registry::ComponentRegistry;
 
-/// Facts extracted from a Cargo workspace.
-#[derive(Debug, Default)]
-pub struct CargoFacts {
-    pub entities: Vec<Entity>,
-    pub edges: Vec<Edge>,
-}
-
 /// Parse Cargo.toml files and emit entities/edges for the workspace.
-pub fn index_cargo_workspace(repo_root: &Path, registry: &ComponentRegistry) -> Result<CargoFacts> {
-    let mut facts = CargoFacts::default();
+pub fn index_cargo_workspace(repo_root: &Path, registry: &ComponentRegistry) -> Result<AdapterFacts> {
+    let mut facts = AdapterFacts::default();
 
     let repo_id = "repo::.".to_string();
     facts.entities.push(

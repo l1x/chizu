@@ -2,20 +2,14 @@ use std::path::{Path, PathBuf};
 
 use chizu_core::{ComponentId, Edge, EdgeKind, Entity, EntityKind};
 
+use super::AdapterFacts;
 use crate::adapter::cargo::normalize_component_path;
 use crate::error::Result;
 use crate::registry::ComponentRegistry;
 
-/// Facts extracted from an npm workspace.
-#[derive(Debug, Default)]
-pub struct NpmFacts {
-    pub entities: Vec<Entity>,
-    pub edges: Vec<Edge>,
-}
-
 /// Parse package.json files and emit entities/edges for the workspace.
-pub fn index_npm_workspace(repo_root: &Path, registry: &ComponentRegistry) -> Result<NpmFacts> {
-    let mut facts = NpmFacts::default();
+pub fn index_npm_workspace(repo_root: &Path, registry: &ComponentRegistry) -> Result<AdapterFacts> {
+    let mut facts = AdapterFacts::default();
     let mut has_workspace = false;
     let mut manifests: Vec<(PathBuf, serde_json::Value)> = Vec::new();
 
