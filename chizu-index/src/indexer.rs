@@ -35,9 +35,21 @@ pub struct IndexStats {
     pub embeddings_failed: usize,
 }
 
-fn insert_entity_routes(store: &ChizuStore, entity: &chizu_core::Entity) -> std::result::Result<(), StoreError> {
-    for route in generate_task_routes(entity) {
-        store.insert_task_route(&route)?;
+fn insert_facts(
+    store: &ChizuStore,
+    facts: &crate::adapter::AdapterFacts,
+    stats: &mut IndexStats,
+) -> std::result::Result<(), StoreError> {
+    for entity in &facts.entities {
+        store.insert_entity(entity)?;
+        stats.entities_inserted += 1;
+        for route in generate_task_routes(entity) {
+            store.insert_task_route(&route)?;
+        }
+    }
+    for edge in &facts.edges {
+        store.insert_edge(edge)?;
+        stats.edges_inserted += 1;
     }
     Ok(())
 }
@@ -92,28 +104,12 @@ impl IndexPipeline {
             info!("  adapter: cargo");
             let cargo_facts = index_cargo_workspace(repo_root, &registry)
                 .map_err(|e| StoreError::Other(e.to_string()))?;
-            for entity in &cargo_facts.entities {
-                store.insert_entity(entity)?;
-                stats.entities_inserted += 1;
-                insert_entity_routes(store, entity)?;
-            }
-            for edge in &cargo_facts.edges {
-                store.insert_edge(edge)?;
-                stats.edges_inserted += 1;
-            }
+            insert_facts(store, &cargo_facts, &mut stats)?;
 
             info!("  adapter: npm");
             let npm_facts = index_npm_workspace(repo_root, &registry)
                 .map_err(|e| StoreError::Other(e.to_string()))?;
-            for entity in &npm_facts.entities {
-                store.insert_entity(entity)?;
-                stats.entities_inserted += 1;
-                insert_entity_routes(store, entity)?;
-            }
-            for edge in &npm_facts.edges {
-                store.insert_edge(edge)?;
-                stats.edges_inserted += 1;
-            }
+            insert_facts(store, &npm_facts, &mut stats)?;
 
             info!("  indexing {} changed files", changed.len());
             for file in &changed {
@@ -122,15 +118,8 @@ impl IndexPipeline {
                 cascade_delete_file(store, &path_str)?;
                 let (entities, edges) = index_file(repo_root, file, &registry)
                     .map_err(|e| StoreError::Other(e.to_string()))?;
-                for entity in &entities {
-                    store.insert_entity(entity)?;
-                    stats.entities_inserted += 1;
-                    insert_entity_routes(store, entity)?;
-                }
-                for edge in &edges {
-                    store.insert_edge(edge)?;
-                    stats.edges_inserted += 1;
-                }
+                let file_facts = crate::adapter::AdapterFacts { entities, edges };
+                insert_facts(store, &file_facts, &mut stats)?;
             }
 
             for file in &files {
@@ -157,16 +146,7 @@ impl IndexPipeline {
             .map_err(|e| StoreError::Other(e.to_string()))?;
         if !site_facts.entities.is_empty() || !site_facts.edges.is_empty() {
             store.in_transaction(|store| {
-                for entity in &site_facts.entities {
-                    store.insert_entity(entity)?;
-                    stats.entities_inserted += 1;
-                    insert_entity_routes(store, entity)?;
-                }
-                for edge in &site_facts.edges {
-                    store.insert_edge(edge)?;
-                    stats.edges_inserted += 1;
-                }
-                Ok(())
+                insert_facts(store, &site_facts, &mut stats)
             })?;
         }
 
