@@ -116,7 +116,7 @@ impl IndexPipeline {
                 let path_str = file.path.to_string_lossy().to_string();
                 info!("    {}", path_str);
                 cascade_delete_file(store, &path_str)?;
-                let (entities, edges) = index_file(repo_root, file, &registry)
+                let (entities, edges) = index_file(repo_root, file)
                     .map_err(|e| StoreError::Other(e.to_string()))?;
                 let file_facts = crate::adapter::AdapterFacts { entities, edges };
                 insert_facts(store, &file_facts, &mut stats)?;

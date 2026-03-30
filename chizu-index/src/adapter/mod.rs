@@ -12,7 +12,6 @@ use std::path::Path;
 use chizu_core::{Edge, Entity};
 
 use crate::error::Result;
-use crate::registry::ComponentRegistry;
 use crate::walk::WalkedFile;
 
 /// Entities and edges returned by any workspace/file adapter.
@@ -26,7 +25,6 @@ pub struct AdapterFacts {
 pub fn index_file(
     repo_root: &Path,
     file: &WalkedFile,
-    _registry: &ComponentRegistry,
 ) -> Result<(Vec<chizu_core::Entity>, Vec<chizu_core::Edge>)> {
     let ext = file.path.extension().and_then(|e| e.to_str()).unwrap_or("");
     let name = file
