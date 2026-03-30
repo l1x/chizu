@@ -57,6 +57,7 @@ impl Provider for OpenAiProvider {
                     {"role": "user", "content": prompt}
                 ],
                 "temperature": 0.2,
+                "response_format": {"type": "json_object"},
             });
             if let Some(tokens) = max_tokens {
                 body["max_tokens"] = serde_json::json!(tokens);
