@@ -82,6 +82,14 @@ impl Config {
             }
         }
 
+        if let Some(b) = self.summary.batch_size {
+            if b == 0 {
+                return Err(ConfigError::InvalidParam(
+                    "summary.batch_size must be > 0".into(),
+                ));
+            }
+        }
+
         if let Some(d) = self.embedding.dimensions {
             if d == 0 {
                 return Err(ConfigError::InvalidParam(
@@ -242,7 +250,9 @@ pub struct SummaryConfig {
     pub max_tokens: Option<u32>,
     /// Temperature for generation
     pub temperature: Option<f64>,
-    /// Number of concurrent LLM calls (default 4)
+    /// Number of entities to include in each summary LLM request
+    pub batch_size: Option<usize>,
+    /// Number of concurrent LLM calls (default 1)
     pub concurrency: Option<usize>,
     /// Only summarize exported (pub) symbols (default true)
     pub exported_only: Option<bool>,
@@ -255,7 +265,8 @@ impl Default for SummaryConfig {
             model: Some("llama3:8b".to_string()),
             max_tokens: Some(512),
             temperature: Some(0.2),
-            concurrency: Some(4),
+            batch_size: Some(4),
+            concurrency: Some(1),
             exported_only: Some(true),
         }
     }
@@ -366,7 +377,12 @@ provider = "nonexistent"
 exclude_patterns = ["**/vendor/**"]
 "#;
         let config = Config::from_toml(toml).unwrap();
-        assert!(config.index.exclude_patterns.contains(&"**/vendor/**".to_string()));
+        assert!(
+            config
+                .index
+                .exclude_patterns
+                .contains(&"**/vendor/**".to_string())
+        );
         // Defaults preserved
         assert_eq!(config.search.default_limit, 15);
     }
@@ -416,6 +432,16 @@ retry_attempts = 5
         let toml = r#"
 [summary]
 temperature = 3.0
+"#;
+        let result = Config::from_toml(toml);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_zero_summary_batch_size_rejected() {
+        let toml = r#"
+[summary]
+batch_size = 0
 "#;
         let result = Config::from_toml(toml);
         assert!(result.is_err());

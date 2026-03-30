@@ -16,6 +16,10 @@ toml = { workspace = true }
 tracing = { workspace = true }
 tree-sitter = { workspace = true }
 tree-sitter-rust = { workspace = true }
+tiktoken-rs = { workspace = true }
+base64 = { workspace = true }
+rustc-hash = { workspace = true }
+ruzstd = { workspace = true }
 
 [dev-dependencies]
 bolero = { workspace = true }

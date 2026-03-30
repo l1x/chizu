@@ -134,6 +134,8 @@ provider = "ollama"
 model = "llama3:8b"
 max_tokens = 512
 temperature = 0.2
+batch_size = 4
+concurrency = 1
 
 [embedding]
 provider = "ollama"
@@ -297,6 +299,8 @@ provider = "ollama"
 model = "llama3:8b"
 max_tokens = 512
 temperature = 0.2
+batch_size = 4
+concurrency = 1
 
 [embedding]
 provider = "ollama"

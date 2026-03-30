@@ -301,10 +301,7 @@ fn cmd_entity(repo: &Path, args: EntityArgs) -> Result<(), Box<dyn std::error::E
     if !outgoing.is_empty() {
         println!("Outgoing Edges:");
         for edge in outgoing {
-            println!(
-                "  {} --{}--> {}",
-                edge.src_id, edge.rel, edge.dst_id
-            );
+            println!("  {} --{}--> {}", edge.src_id, edge.rel, edge.dst_id);
         }
         println!();
     }
@@ -313,10 +310,7 @@ fn cmd_entity(repo: &Path, args: EntityArgs) -> Result<(), Box<dyn std::error::E
     if !incoming.is_empty() {
         println!("Incoming Edges:");
         for edge in incoming {
-            println!(
-                "  {} --{}--> {}",
-                edge.src_id, edge.rel, edge.dst_id
-            );
+            println!("  {} --{}--> {}", edge.src_id, edge.rel, edge.dst_id);
         }
     }
 
@@ -400,7 +394,10 @@ fn cmd_edges(repo: &Path, args: EdgesArgs) -> Result<(), Box<dyn std::error::Err
         }
     }
 
-    println!("{:<40} {:<20} {:<40} {}", "Source", "Rel", "Destination", "Provenance");
+    println!(
+        "{:<40} {:<20} {:<40} {}",
+        "Source", "Rel", "Destination", "Provenance"
+    );
     println!("{}", "-".repeat(120));
     for edge in edges {
         let provenance = edge
@@ -558,24 +555,24 @@ fn cmd_visualize(repo: &Path, args: VisualizeArgs) -> Result<(), Box<dyn std::er
 fn kind_color(kind: chizu_core::EntityKind) -> &'static str {
     use chizu_core::EntityKind::*;
     match kind {
-        Component => "#c87f5a",       // warm copper
-        SourceUnit => "#d4956a",      // light terra cotta
-        Symbol => "#e8a87c",          // peach
-        Test => "#d4735e",            // coral
-        Doc => "#c9a87c",             // sand
-        Feature => "#b8734d",         // burnt sienna
-        Task => "#d49a6a",            // amber
-        Site => "#c48b6a",            // dusty rose
-        Template => "#d4a87a",        // wheat
-        Migration => "#b87d5a",       // bronze
-        Workflow => "#c4956a",        // tawny
-        AgentConfig => "#c9a88c",     // muted tan
-        Bench => "#d4735e",           // coral
-        Containerized => "#b8876a",   // clay
-        InfraRoot => "#a87d5a",       // brown
-        Command => "#d4a06a",         // apricot
-        ContentPage => "#c9a87c",     // sand
-        Spec => "#b89070",            // taupe
+        Component => "#c87f5a",        // warm copper
+        SourceUnit => "#d4956a",       // light terra cotta
+        Symbol => "#e8a87c",           // peach
+        Test => "#d4735e",             // coral
+        Doc => "#c9a87c",              // sand
+        Feature => "#b8734d",          // burnt sienna
+        Task => "#d49a6a",             // amber
+        Site => "#c48b6a",             // dusty rose
+        Template => "#d4a87a",         // wheat
+        Migration => "#b87d5a",        // bronze
+        Workflow => "#c4956a",         // tawny
+        AgentConfig => "#c9a88c",      // muted tan
+        Bench => "#d4735e",            // coral
+        Containerized => "#b8876a",    // clay
+        InfraRoot => "#a87d5a",        // brown
+        Command => "#d4a06a",          // apricot
+        ContentPage => "#c9a87c",      // sand
+        Spec => "#b89070",             // taupe
         Repo | Directory => "#8c7060", // dark wood
     }
 }
@@ -661,23 +658,22 @@ rect[fill] { stroke: #3a3028 !important; stroke-width: 1; }
     }
 
     // Extract viewBox dimensions for border rect
-    let vb_rect = extract_viewbox(&out).map(|(x, y, w, h)| {
-        format!(
-            "<rect x=\"{}\" y=\"{}\" width=\"{}\" height=\"{}\" \
+    let vb_rect = extract_viewbox(&out)
+        .map(|(x, y, w, h)| {
+            format!(
+                "<rect x=\"{}\" y=\"{}\" width=\"{}\" height=\"{}\" \
              fill=\"none\" stroke=\"#3a3028\" stroke-width=\"2\"/>",
-            x, y, w, h
-        )
-    }).unwrap_or_default();
+                x, y, w, h
+            )
+        })
+        .unwrap_or_default();
 
     // Wrap all content after </style> in a <g id="graph"> for pan/zoom
     if let Some(style_end) = out.find("</style>") {
         let after_style = style_end + "</style>".len();
         if let Some(svg_end) = out.rfind("</svg>") {
             let content = out[after_style..svg_end].to_string();
-            let wrapped = format!(
-                "<g id=\"graph\">{}{}</g>{}",
-                vb_rect, content, zoom_js
-            );
+            let wrapped = format!("<g id=\"graph\">{}{}</g>{}", vb_rect, content, zoom_js);
             out.replace_range(after_style..svg_end, &wrapped);
         }
     }
@@ -719,7 +715,10 @@ fn cmd_index(repo: &Path, args: IndexArgs) -> Result<(), Box<dyn std::error::Err
     let provider = build_provider(&config)?;
     let stats = chizu_index::IndexPipeline::run(repo, &store, &config, provider.as_deref())?;
 
-    println!("Indexed {} files ({} walked)", stats.files_indexed, stats.files_walked);
+    println!(
+        "Indexed {} files ({} walked)",
+        stats.files_indexed, stats.files_walked
+    );
     println!("Discovered {} components", stats.components_discovered);
     println!(
         "Inserted {} entities and {} edges",
@@ -740,14 +739,19 @@ fn cmd_index(repo: &Path, args: IndexArgs) -> Result<(), Box<dyn std::error::Err
 
     let failures = stats.summaries_failed + stats.embeddings_failed;
     if failures > 0 {
-        eprintln!("Warning: {} LLM operations failed; index is degraded.", failures);
+        eprintln!(
+            "Warning: {} LLM operations failed; index is degraded.",
+            failures
+        );
     }
 
     store.close()?;
     Ok(())
 }
 
-fn build_provider(config: &chizu_core::Config) -> Result<Option<Box<dyn chizu_core::Provider>>, Box<dyn std::error::Error>> {
+fn build_provider(
+    config: &chizu_core::Config,
+) -> Result<Option<Box<dyn chizu_core::Provider>>, Box<dyn std::error::Error>> {
     let summary_provider = config.summary.provider.as_ref();
     let embedding_provider = config.embedding.provider.as_ref();
 
@@ -768,17 +772,25 @@ fn build_provider(config: &chizu_core::Config) -> Result<Option<Box<dyn chizu_co
         return Ok(None);
     };
 
-    let provider_config = config.providers.get(name)
+    let provider_config = config
+        .providers
+        .get(name)
         .ok_or_else(|| format!("Provider '{}' not found in config", name))?;
 
-    let completion_model = config.summary.model.clone().unwrap_or_else(|| "llama3:8b".to_string());
-    let embedding_model = config.embedding.model.clone().unwrap_or_else(|| "nomic-embed-text-v2-moe:latest".to_string());
+    let completion_model = config
+        .summary
+        .model
+        .clone()
+        .unwrap_or_else(|| "llama3:8b".to_string());
+    let embedding_model = config
+        .embedding
+        .model
+        .clone()
+        .unwrap_or_else(|| "nomic-embed-text-v2-moe:latest".to_string());
 
-    let provider = chizu_core::OpenAiProvider::new(
-        provider_config,
-        completion_model,
-        embedding_model,
-    ).map_err(|e| format!("Failed to create provider: {e}"))?;
+    let provider =
+        chizu_core::OpenAiProvider::new(provider_config, completion_model, embedding_model)
+            .map_err(|e| format!("Failed to create provider: {e}"))?;
 
     Ok(Some(Box::new(provider)))
 }
@@ -803,7 +815,9 @@ fn cmd_search(repo: &Path, args: SearchArgs) -> Result<(), Box<dyn std::error::E
 
     // Warn if embeddings are configured but no provider could be built.
     if config.embedding.provider.is_some() && provider.is_none() {
-        eprintln!("Warning: embeddings are configured but provider is unavailable; semantic search disabled.");
+        eprintln!(
+            "Warning: embeddings are configured but provider is unavailable; semantic search disabled."
+        );
     }
 
     store.close()?;
@@ -820,7 +834,9 @@ fn load_config(repo: &Path) -> Result<chizu_core::Config, Box<dyn std::error::Er
     }
 }
 
-fn open_store(repo: &Path) -> Result<(chizu_core::Config, chizu_core::ChizuStore), Box<dyn std::error::Error>> {
+fn open_store(
+    repo: &Path,
+) -> Result<(chizu_core::Config, chizu_core::ChizuStore), Box<dyn std::error::Error>> {
     let config = load_config(repo)?;
     let store = chizu_core::ChizuStore::open(&repo.join(".chizu"), &config)?;
     Ok((config, store))
@@ -876,6 +892,8 @@ provider = "ollama"
 model = "llama3:8b"
 max_tokens = 512
 temperature = 0.2
+batch_size = 4
+concurrency = 1
 
 [embedding]
 provider = "ollama"
