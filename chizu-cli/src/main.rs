@@ -252,7 +252,7 @@ fn run(cli: Cli) -> Result<(), Box<dyn std::error::Error>> {
 }
 
 fn cmd_entity(repo: &Path, args: EntityArgs) -> Result<(), Box<dyn std::error::Error>> {
-    let (_config, store) = open_store(repo)?;
+    let store = open_store_only(repo)?;
 
     let entity = store
         .get_entity(&args.id)?
@@ -325,7 +325,7 @@ fn cmd_entity(repo: &Path, args: EntityArgs) -> Result<(), Box<dyn std::error::E
 }
 
 fn cmd_entities(repo: &Path, args: EntitiesArgs) -> Result<(), Box<dyn std::error::Error>> {
-    let (_config, store) = open_store(repo)?;
+    let store = open_store_only(repo)?;
 
     let entities = if let Some(ref component_str) = args.component {
         let component_id = chizu_core::ComponentId::parse(component_str)
@@ -355,7 +355,7 @@ fn cmd_entities(repo: &Path, args: EntitiesArgs) -> Result<(), Box<dyn std::erro
 }
 
 fn cmd_routes(repo: &Path, args: RoutesArgs) -> Result<(), Box<dyn std::error::Error>> {
-    let (_config, store) = open_store(repo)?;
+    let store = open_store_only(repo)?;
 
     let routes = if let Some(ref task) = args.task {
         store.get_task_routes(task)?
@@ -379,7 +379,7 @@ fn cmd_routes(repo: &Path, args: RoutesArgs) -> Result<(), Box<dyn std::error::E
 }
 
 fn cmd_edges(repo: &Path, args: EdgesArgs) -> Result<(), Box<dyn std::error::Error>> {
-    let (_config, store) = open_store(repo)?;
+    let store = open_store_only(repo)?;
 
     let mut edges = match (&args.from, &args.to, args.rel) {
         (Some(from), _, _) => store.get_edges_from(from)?,
@@ -422,7 +422,7 @@ fn cmd_edges(repo: &Path, args: EdgesArgs) -> Result<(), Box<dyn std::error::Err
 }
 
 fn cmd_visualize(repo: &Path, args: VisualizeArgs) -> Result<(), Box<dyn std::error::Error>> {
-    let (_config, store) = open_store(repo)?;
+    let store = open_store_only(repo)?;
 
     let kind_filter: Option<Vec<String>> = args
         .kind
@@ -824,6 +824,11 @@ fn open_store(repo: &Path) -> Result<(chizu_core::Config, chizu_core::ChizuStore
     let config = load_config(repo)?;
     let store = chizu_core::ChizuStore::open(&repo.join(".chizu"), &config)?;
     Ok((config, store))
+}
+
+fn open_store_only(repo: &Path) -> Result<chizu_core::ChizuStore, Box<dyn std::error::Error>> {
+    let (_config, store) = open_store(repo)?;
+    Ok(store)
 }
 
 fn cmd_config(repo: &Path, args: ConfigArgs) -> Result<(), Box<dyn std::error::Error>> {
