@@ -17,12 +17,12 @@ pub struct SummaryStats {
 /// Generates summaries for entities using an LLM provider.
 pub struct Summarizer<'a> {
     provider: &'a dyn Provider,
-    _config: &'a SummaryConfig,
+    config: &'a SummaryConfig,
 }
 
 impl<'a> Summarizer<'a> {
     pub fn new(provider: &'a dyn Provider, config: &'a SummaryConfig) -> Self {
-        Self { provider, _config: config }
+        Self { provider, config }
     }
 
     pub fn run(&self, store: &ChizuStore, repo_root: &Path) -> Result<SummaryStats> {
@@ -81,7 +81,7 @@ impl<'a> Summarizer<'a> {
 
         let prompt = build_prompt(entity, &snippet);
         debug!("Summarizing {} ({} chars prompt)", entity.id, prompt.len());
-        let response = self.provider.complete(&prompt)?;
+        let response = self.provider.complete(&prompt, self.config.max_tokens)?;
 
         let summary = parse_summary_response(&entity.id, &response)?;
         let summary = summary.with_source_hash(source_hash);
@@ -169,6 +169,24 @@ fn parse_summary_response(entity_id: &str, response: &str) -> Result<Summary> {
         response.to_string()
     };
 
+    let mut json_str = json_str.trim().to_string();
+
+    // Recover truncated/malformed JSON from LLMs that cut off or confuse
+    // closing delimiters (e.g., `)` instead of `}`).
+    if json_str.starts_with('{') && !json_str.ends_with('}') {
+        // Replace trailing `)` with `}` (common LLM confusion).
+        if json_str.ends_with(')') {
+            json_str.pop();
+            json_str.push('}');
+        }
+        // Append missing closing braces.
+        let opens = json_str.chars().filter(|&c| c == '{').count();
+        let closes = json_str.chars().filter(|&c| c == '}').count();
+        for _ in 0..(opens.saturating_sub(closes)) {
+            json_str.push('}');
+        }
+    }
+
     let json_str = json_str.trim();
     let value: serde_json::Value = serde_json::from_str(json_str).map_err(|e| {
         crate::error::IndexError::Other(format!(
@@ -224,7 +242,7 @@ mod tests {
     }
 
     impl Provider for MockProvider {
-        fn complete(&self, prompt: &str) -> std::result::Result<String, ProviderError> {
+        fn complete(&self, prompt: &str, _max_tokens: Option<u32>) -> std::result::Result<String, ProviderError> {
             let key = blake3::hash(prompt.as_bytes()).to_string();
             self.responses
                 .get(&key)
@@ -296,5 +314,35 @@ mod tests {
         let stats2 = summarizer.run(&store, &repo_root).unwrap();
         assert_eq!(stats2.generated, 0);
         assert_eq!(stats2.skipped, 1);
+    }
+
+    #[test]
+    fn test_parse_truncated_json_paren_instead_of_brace() {
+        // LLM outputs `)` instead of `}` — common confusion.
+        let response = r#"{
+  "short_summary": "Imports the Path module.",
+  "detailed_summary": "Brings in file path functionality.",
+  "keywords": ["std", "Path"])"#;
+        let summary = parse_summary_response("e1", response).unwrap();
+        assert_eq!(summary.short_summary, "Imports the Path module.");
+        assert_eq!(summary.keywords, Some(vec!["std".to_string(), "Path".to_string()]));
+    }
+
+    #[test]
+    fn test_parse_truncated_json_missing_closing_brace() {
+        // LLM output cut off after array — missing `}`.
+        let response = r#"{
+  "short_summary": "A summary.",
+  "keywords": ["a", "b"]"#;
+        let summary = parse_summary_response("e1", response).unwrap();
+        assert_eq!(summary.short_summary, "A summary.");
+        assert_eq!(summary.keywords, Some(vec!["a".to_string(), "b".to_string()]));
+    }
+
+    #[test]
+    fn test_parse_truncated_json_mid_value() {
+        // Truncated inside a string value — unrecoverable.
+        let response = r#"{"short_summary": "Trunca"#;
+        assert!(parse_summary_response("e1", response).is_err());
     }
 }

@@ -209,7 +209,7 @@ mod tests {
     }
 
     impl Provider for MockProvider {
-        fn complete(&self, _prompt: &str) -> std::result::Result<String, ProviderError> {
+        fn complete(&self, _prompt: &str, _max_tokens: Option<u32>) -> std::result::Result<String, ProviderError> {
             unimplemented!()
         }
 

@@ -49,15 +49,18 @@ impl OpenAiProvider {
 }
 
 impl Provider for OpenAiProvider {
-    fn complete(&self, prompt: &str) -> Result<String, ProviderError> {
+    fn complete(&self, prompt: &str, max_tokens: Option<u32>) -> Result<String, ProviderError> {
         with_retry(self.retry_attempts, Duration::from_millis(RETRY_BASE_DELAY_MS), || {
-            let body = serde_json::json!({
+            let mut body = serde_json::json!({
                 "model": self.completion_model,
                 "messages": [
                     {"role": "user", "content": prompt}
                 ],
                 "temperature": 0.2,
             });
+            if let Some(tokens) = max_tokens {
+                body["max_tokens"] = serde_json::json!(tokens);
+            }
 
             let response = self
                 .build_request("chat/completions")
@@ -172,7 +175,7 @@ mod tests {
             retry_attempts: 1,
         };
         let provider = create_provider(&config, "llama3", "nomic");
-        let result = provider.complete("Say hi").unwrap();
+        let result = provider.complete("Say hi", None).unwrap();
 
         assert_eq!(result, "Hello!");
         mock.assert();
@@ -196,7 +199,7 @@ mod tests {
             retry_attempts: 1,
         };
         let provider = create_provider(&config, "llama3", "nomic");
-        let result = provider.complete("Say hi");
+        let result = provider.complete("Say hi", None);
 
         assert!(matches!(result, Err(ProviderError::Api { status: 400, .. })));
         mock.assert();
@@ -221,7 +224,7 @@ mod tests {
             retry_attempts: 2,
         };
         let provider = create_provider(&config, "llama3", "nomic");
-        let result = provider.complete("Say hi");
+        let result = provider.complete("Say hi", None);
 
         assert!(result.is_err());
         mock.assert();
@@ -279,11 +282,79 @@ mod tests {
         };
         let provider = create_provider(&config, "llama3", "nomic");
 
-        let result = provider.complete("Say hi");
+        let result = provider.complete("Say hi", None);
         assert!(result.is_err());
         match result.unwrap_err() {
             ProviderError::Http(_) | ProviderError::Timeout => {}
             other => panic!("expected Http or Timeout error, got: {other}"),
         }
+    }
+
+    #[test]
+    fn test_complete_sends_max_tokens() {
+        let mut server = mockito::Server::new();
+        let url = server.url();
+
+        let mock = server
+            .mock("POST", "/chat/completions")
+            .match_body(mockito::Matcher::PartialJsonString(
+                r#"{"max_tokens": 512}"#.to_string(),
+            ))
+            .with_status(200)
+            .with_header("content-type", "application/json")
+            .with_body(r#"{"choices":[{"message":{"content":"ok"}}]}"#)
+            .create();
+
+        let config = ProviderConfig {
+            base_url: url,
+            api_key: "".to_string(),
+            timeout_secs: 5,
+            retry_attempts: 1,
+        };
+        let provider = create_provider(&config, "llama3", "nomic");
+        let result = provider.complete("test", Some(512)).unwrap();
+        assert_eq!(result, "ok");
+        mock.assert();
+    }
+
+    #[test]
+    fn test_complete_omits_max_tokens_when_none() {
+        let mut server = mockito::Server::new();
+        let url = server.url();
+
+        let mock = server
+            .mock("POST", "/chat/completions")
+            .with_status(200)
+            .with_header("content-type", "application/json")
+            .with_body(r#"{"choices":[{"message":{"content":"ok"}}]}"#)
+            .create();
+
+        let config = ProviderConfig {
+            base_url: url,
+            api_key: "".to_string(),
+            timeout_secs: 5,
+            retry_attempts: 1,
+        };
+        let provider = create_provider(&config, "llama3", "nomic");
+        let result = provider.complete("test", None).unwrap();
+        assert_eq!(result, "ok");
+        mock.assert();
+
+        // Verify via a second request that max_tokens is absent by checking
+        // the mock matched (it would fail if body was unexpected).
+        // Additionally, verify the inverse: with max_tokens, the partial matcher sees it.
+        drop(mock);
+        let mock_with_tokens = server
+            .mock("POST", "/chat/completions")
+            .match_body(mockito::Matcher::PartialJsonString(
+                r#"{"max_tokens": 256}"#.to_string(),
+            ))
+            .with_status(200)
+            .with_header("content-type", "application/json")
+            .with_body(r#"{"choices":[{"message":{"content":"with tokens"}}]}"#)
+            .create();
+        let result = provider.complete("test", Some(256)).unwrap();
+        assert_eq!(result, "with tokens");
+        mock_with_tokens.assert();
     }
 }

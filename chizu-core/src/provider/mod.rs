@@ -32,7 +32,7 @@ impl From<reqwest::Error> for ProviderError {
 /// Abstraction over LLM/embedding providers.
 pub trait Provider: Send + Sync {
     /// Generate a text completion for the given prompt.
-    fn complete(&self, prompt: &str) -> Result<String, ProviderError>;
+    fn complete(&self, prompt: &str, max_tokens: Option<u32>) -> Result<String, ProviderError>;
 
     /// Generate embeddings for a batch of texts.
     fn embed(&self, texts: &[String]) -> Result<Vec<Vec<f32>>, ProviderError>;
