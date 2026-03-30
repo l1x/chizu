@@ -8,6 +8,7 @@ pub mod indexer;
 pub mod ownership;
 pub mod registry;
 pub mod summarizer;
+pub mod task_routes;
 pub mod walk;
 
 pub use error::{IndexError, Result};

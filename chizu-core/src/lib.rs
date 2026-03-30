@@ -9,6 +9,7 @@
 pub mod config;
 pub mod model;
 pub mod provider;
+pub mod query;
 pub mod store;
 
 // Re-export commonly used types
@@ -22,4 +23,5 @@ pub use model::{
 };
 pub use model::{doc_id, entity_id, entity_id_to_usearch_key, source_unit_id, symbol_id, test_id};
 pub use provider::{OpenAiProvider, Provider, ProviderError, with_retry};
+pub use query::{TaskCategory, classify_query};
 pub use store::{ChizuStore, Store, StoreError};

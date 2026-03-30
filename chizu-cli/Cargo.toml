@@ -10,6 +10,7 @@ path = "src/main.rs"
 [dependencies]
 chizu-core = { path = "../chizu-core" }
 chizu-index = { path = "../chizu-index" }
+chizu-query = { path = "../chizu-query" }
 argh = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = "0.3"

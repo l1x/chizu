@@ -13,6 +13,7 @@ use crate::error::Result;
 use crate::ownership::{assign_ownership, discover_all_components};
 use crate::registry::ComponentRegistry;
 use crate::summarizer::Summarizer;
+use crate::task_routes::generate_task_routes;
 use crate::walk::{FileWalker, WalkedFile};
 use chizu_core::Config;
 
@@ -29,6 +30,13 @@ pub struct IndexStats {
     pub embeddings_generated: usize,
     pub embeddings_skipped: usize,
     pub embeddings_failed: usize,
+}
+
+fn insert_entity_routes(store: &ChizuStore, entity: &chizu_core::Entity) -> std::result::Result<(), StoreError> {
+    for route in generate_task_routes(entity) {
+        store.insert_task_route(&route)?;
+    }
+    Ok(())
 }
 
 pub struct IndexPipeline;
@@ -76,6 +84,7 @@ impl IndexPipeline {
             for entity in &cargo_facts.entities {
                 store.insert_entity(entity)?;
                 stats.entities_inserted += 1;
+                insert_entity_routes(store, entity)?;
             }
             for edge in &cargo_facts.edges {
                 store.insert_edge(edge)?;
@@ -87,6 +96,7 @@ impl IndexPipeline {
             for entity in &npm_facts.entities {
                 store.insert_entity(entity)?;
                 stats.entities_inserted += 1;
+                insert_entity_routes(store, entity)?;
             }
             for edge in &npm_facts.edges {
                 store.insert_edge(edge)?;
@@ -101,6 +111,7 @@ impl IndexPipeline {
                 for entity in &entities {
                     store.insert_entity(entity)?;
                     stats.entities_inserted += 1;
+                    insert_entity_routes(store, entity)?;
                 }
                 for edge in &edges {
                     store.insert_edge(edge)?;
@@ -134,6 +145,7 @@ impl IndexPipeline {
                 for entity in &site_facts.entities {
                     store.insert_entity(entity)?;
                     stats.entities_inserted += 1;
+                    insert_entity_routes(store, entity)?;
                 }
                 for edge in &site_facts.edges {
                     store.insert_edge(edge)?;

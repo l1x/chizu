@@ -32,35 +32,6 @@ impl std::fmt::Display for OutputFormat {
     }
 }
 
-#[allow(dead_code)]
-#[derive(Debug, Clone, Copy)]
-enum TaskCategory {
-    Understand,
-    Debug,
-    Build,
-    Test,
-    Deploy,
-    Configure,
-    General,
-}
-
-impl std::str::FromStr for TaskCategory {
-    type Err = String;
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s {
-            "understand" => Ok(Self::Understand),
-            "debug" => Ok(Self::Debug),
-            "build" => Ok(Self::Build),
-            "test" => Ok(Self::Test),
-            "deploy" => Ok(Self::Deploy),
-            "configure" => Ok(Self::Configure),
-            "general" => Ok(Self::General),
-            _ => Err(format!(
-                "unknown category '{s}': expected understand|debug|build|test|deploy|configure|general"
-            )),
-        }
-    }
-}
 
 #[allow(dead_code)]
 #[derive(Debug, Clone, Copy)]
@@ -143,7 +114,7 @@ struct SearchArgs {
 
     /// task category (understand, debug, build, test, deploy, configure, general)
     #[argh(option)]
-    category: Option<TaskCategory>,
+    category: Option<chizu_core::TaskCategory>,
 
     /// output format (text, json)
     #[argh(option, default = "OutputFormat::Text")]
@@ -289,7 +260,7 @@ fn run(cli: Cli) -> Result<(), Box<dyn std::error::Error>> {
 
     match cli.command {
         Command::Index(args) => cmd_index(&cli.repo, args),
-        Command::Search(_args) => not_yet_implemented("search"),
+        Command::Search(args) => cmd_search(&cli.repo, args),
         Command::Entity(_args) => not_yet_implemented("entity"),
         Command::Entities(_args) => not_yet_implemented("entities"),
         Command::Routes(_args) => not_yet_implemented("routes"),
@@ -381,6 +352,36 @@ fn build_provider(config: &chizu_core::Config) -> Result<Option<Box<dyn chizu_co
     ).map_err(|e| format!("Failed to create provider: {e}"))?;
 
     Ok(Some(Box::new(provider)))
+}
+
+fn cmd_search(repo: &Path, args: SearchArgs) -> Result<(), Box<dyn std::error::Error>> {
+    let config = load_config(repo)?;
+    let store = chizu_core::ChizuStore::open(&repo.join(".chizu"), &config)?;
+
+    // Build provider for vector search if embeddings are configured.
+    let provider = build_provider(&config)?;
+
+    let plan = chizu_query::SearchPipeline::run(
+        &store,
+        &args.query,
+        args.category,
+        args.limit,
+        &config,
+        provider.as_deref(),
+    )?;
+
+    match args.format {
+        OutputFormat::Text => println!("{}", plan.to_text()),
+        OutputFormat::Json => println!("{}", plan.to_json()?),
+    }
+
+    // Warn if embeddings are configured but no provider could be built.
+    if config.embedding.provider.is_some() && provider.is_none() {
+        eprintln!("Warning: embeddings are configured but provider is unavailable; semantic search disabled.");
+    }
+
+    store.close()?;
+    Ok(())
 }
 
 fn load_config(repo: &Path) -> Result<chizu_core::Config, Box<dyn std::error::Error>> {

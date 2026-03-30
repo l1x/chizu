@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::path::Path;
 
 use chizu_core::{ChizuStore, Entity, Provider, Store, Summary, SummaryConfig};
-use tracing::{debug, error, warn};
+use tracing::{debug, error};
 
 use crate::error::Result;
 
@@ -64,7 +64,7 @@ impl<'a> Summarizer<'a> {
         let snippet = match extract_snippet(repo_root, path, entity.line_start, entity.line_end, file_cache) {
             Some(s) => s,
             None => {
-                warn!("Could not extract snippet for entity {} at {}", entity.id, path);
+                debug!("No snippet for entity {} at {} — skipping", entity.id, path);
                 return Ok(false);
             }
         };
@@ -80,6 +80,7 @@ impl<'a> Summarizer<'a> {
         }
 
         let prompt = build_prompt(entity, &snippet);
+        debug!("Summarizing {} ({} chars prompt)", entity.id, prompt.len());
         let response = self.provider.complete(&prompt)?;
 
         let summary = parse_summary_response(&entity.id, &response)?;
@@ -89,6 +90,10 @@ impl<'a> Summarizer<'a> {
         Ok(true)
     }
 }
+
+/// Maximum number of lines to include in a snippet sent to the LLM.
+/// Prevents blowing context limits on large functions/structs.
+const MAX_SNIPPET_LINES: usize = 200;
 
 fn extract_snippet(
     repo_root: &Path,
@@ -101,7 +106,7 @@ fn extract_snippet(
 
     let content = file_cache.entry(path.to_string()).or_insert_with(|| {
         std::fs::read_to_string(&full_path).unwrap_or_else(|e| {
-            tracing::warn!("Failed to read {}: {e}", full_path.display());
+            debug!("Failed to read {}: {e}", full_path.display());
             String::new()
         })
     });
@@ -118,7 +123,7 @@ fn extract_snippet(
         return None;
     }
 
-    let actual_end = end.min(lines.len() - 1);
+    let actual_end = end.min(lines.len() - 1).min(start + MAX_SNIPPET_LINES - 1);
     let snippet = lines[start..=actual_end].join("\n");
     Some(snippet)
 }

@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["chizu-cli", "chizu-core", "chizu-index"]
+members = ["chizu-cli", "chizu-core", "chizu-index", "chizu-query"]
 
 [workspace.dependencies]
 argh = "0.1"

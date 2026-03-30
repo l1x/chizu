@@ -129,6 +129,9 @@ pub trait Store {
     /// Delete embedding metadata.
     fn delete_embedding_meta(&self, entity_id: &str) -> Result<()>;
 
+    /// Look up embedding metadata by usearch key.
+    fn get_embedding_meta_by_usearch_key(&self, key: i64) -> Result<Option<EmbeddingMeta>>;
+
     // ── Vector operations ───────────────────────────────────────────────
 
     /// Add a vector to the index.
@@ -319,6 +322,10 @@ impl Store for ChizuStore {
 
     fn delete_embedding_meta(&self, entity_id: &str) -> Result<()> {
         self.sqlite.delete_embedding_meta(entity_id)
+    }
+
+    fn get_embedding_meta_by_usearch_key(&self, key: i64) -> Result<Option<EmbeddingMeta>> {
+        self.sqlite.get_embedding_meta_by_usearch_key(key)
     }
 
     fn add_vector(&self, entity_id: &str, key: i64, vector: &[f32]) -> Result<()> {

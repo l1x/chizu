@@ -119,6 +119,15 @@ impl<'a> Embedder<'a> {
             )));
         }
 
+        for (i, v) in vectors.iter().enumerate() {
+            if v.len() != dimensions as usize {
+                return Err(crate::error::IndexError::Other(format!(
+                    "embedding dimension mismatch for item {}: expected {}, got {}",
+                    i, dimensions, v.len()
+                )));
+            }
+        }
+
         // Compute keys upfront so we can write metadata first.
         let keyed: Vec<_> = batch
             .iter()

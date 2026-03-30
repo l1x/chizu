@@ -51,10 +51,8 @@ impl Config {
 
     /// Validate the configuration.
     pub fn validate(&self) -> Result<(), ConfigError> {
-        // Validate rerank weights sum to 1.0
         self.search.validate_weights()?;
 
-        // Validate that referenced providers exist
         if let Some(ref provider) = self.summary.provider
             && !self.providers.contains_key(provider)
         {
@@ -66,6 +64,40 @@ impl Config {
             return Err(ConfigError::MissingProvider(provider.clone()));
         }
 
+        // Summary/embedding must use the same provider (single-provider constraint).
+        if let (Some(s), Some(e)) = (&self.summary.provider, &self.embedding.provider) {
+            if s != e {
+                return Err(ConfigError::InvalidParam(format!(
+                    "summary provider '{}' and embedding provider '{}' must be the same",
+                    s, e
+                )));
+            }
+        }
+
+        if let Some(t) = self.summary.temperature {
+            if !(0.0..=2.0).contains(&t) {
+                return Err(ConfigError::InvalidParam(format!(
+                    "summary.temperature must be 0.0..2.0, got {t}"
+                )));
+            }
+        }
+
+        if let Some(d) = self.embedding.dimensions {
+            if d == 0 {
+                return Err(ConfigError::InvalidParam(
+                    "embedding.dimensions must be > 0".into(),
+                ));
+            }
+        }
+
+        if let Some(b) = self.embedding.batch_size {
+            if b == 0 {
+                return Err(ConfigError::InvalidParam(
+                    "embedding.batch_size must be > 0".into(),
+                ));
+            }
+        }
+
         Ok(())
     }
 }
@@ -74,17 +106,13 @@ impl Config {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct IndexConfig {
-    /// File patterns to exclude
     pub exclude_patterns: Vec<String>,
-    /// Number of parallel workers (defaults to CPU count)
-    pub parallel_workers: Option<usize>,
 }
 
 impl Default for IndexConfig {
     fn default() -> Self {
         Self {
             exclude_patterns: default_exclude_patterns(),
-            parallel_workers: None,
         }
     }
 }
@@ -263,6 +291,8 @@ pub enum ConfigError {
     InvalidWeights { sum: f64 },
     #[error("missing provider: {0}")]
     MissingProvider(String),
+    #[error("invalid parameter: {0}")]
+    InvalidParam(String),
 }
 
 #[cfg(test)]
@@ -327,10 +357,10 @@ provider = "nonexistent"
     fn test_partial_toml() {
         let toml = r#"
 [index]
-parallel_workers = 8
+exclude_patterns = ["**/vendor/**"]
 "#;
         let config = Config::from_toml(toml).unwrap();
-        assert_eq!(config.index.parallel_workers, Some(8));
+        assert!(config.index.exclude_patterns.contains(&"**/vendor/**".to_string()));
         // Defaults preserved
         assert_eq!(config.search.default_limit, 15);
     }
@@ -373,5 +403,51 @@ retry_attempts = 5
         let custom = config.providers.get("custom").unwrap();
         assert_eq!(custom.base_url, "https://api.example.com/v1");
         assert_eq!(custom.api_key, "secret");
+    }
+
+    #[test]
+    fn test_invalid_temperature() {
+        let toml = r#"
+[summary]
+temperature = 3.0
+"#;
+        let result = Config::from_toml(toml);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_zero_dimensions_rejected() {
+        let toml = r#"
+[embedding]
+dimensions = 0
+"#;
+        let result = Config::from_toml(toml);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_zero_batch_size_rejected() {
+        let toml = r#"
+[embedding]
+batch_size = 0
+"#;
+        let result = Config::from_toml(toml);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_different_providers_rejected() {
+        let toml = r#"
+[providers.a]
+base_url = "http://localhost:1"
+[providers.b]
+base_url = "http://localhost:2"
+[summary]
+provider = "a"
+[embedding]
+provider = "b"
+"#;
+        let result = Config::from_toml(toml);
+        assert!(result.is_err());
     }
 }

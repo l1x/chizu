@@ -252,6 +252,7 @@ dependencies = [
  "argh",
  "chizu-core",
  "chizu-index",
+ "chizu-query",
  "tracing",
  "tracing-subscriber",
 ]
@@ -294,6 +295,18 @@ dependencies = [
  "tracing",
  "tree-sitter",
  "tree-sitter-rust",
+]
+
+[[package]]
+name = "chizu-query"
+version = "0.1.0"
+dependencies = [
+ "chizu-core",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "thiserror",
+ "tracing",
 ]
 
 [[package]]
