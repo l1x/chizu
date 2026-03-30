@@ -93,11 +93,7 @@ fn detect_site_roots(files: &[WalkedFile], repo_root: &Path) -> Vec<(String, Str
 }
 
 fn is_content_page(path: &Path) -> bool {
-    let in_dir = path.components().any(|c| {
-        let s = c.as_os_str();
-        s == "content" || s == "pages" || s == "blog"
-    });
-    in_dir && path.extension().and_then(|e| e.to_str()) == Some("md")
+    super::is_content_dir(path) && path.extension().and_then(|e| e.to_str()) == Some("md")
 }
 
 fn is_template(path: &Path) -> bool {

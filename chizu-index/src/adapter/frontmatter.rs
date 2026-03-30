@@ -8,12 +8,7 @@ pub fn index_frontmatter_file(file: &WalkedFile, repo_root: &std::path::Path) ->
     let path_str = file.path.to_string_lossy();
 
     // Only process .md files in content directories
-    let in_content_dir = file.path.components().any(|c| {
-        let s = c.as_os_str();
-        s == "content" || s == "pages" || s == "blog"
-    });
-
-    if !in_content_dir || file.path.extension().and_then(|e| e.to_str()) != Some("md") {
+    if !super::is_content_dir(&file.path) || file.path.extension().and_then(|e| e.to_str()) != Some("md") {
         return Ok((Vec::new(), Vec::new()));
     }
 

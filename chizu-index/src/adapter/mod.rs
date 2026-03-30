@@ -21,6 +21,14 @@ pub struct AdapterFacts {
     pub edges: Vec<Edge>,
 }
 
+/// Check whether a path has a component matching a known content directory name.
+pub(crate) fn is_content_dir(path: &Path) -> bool {
+    path.components().any(|c| {
+        let s = c.as_os_str();
+        s == "content" || s == "pages" || s == "blog"
+    })
+}
+
 /// Dispatch a file to the appropriate adapter(s) and return emitted entities/edges.
 pub fn index_file(
     repo_root: &Path,
