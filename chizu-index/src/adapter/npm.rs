@@ -10,7 +10,6 @@ use crate::registry::ComponentRegistry;
 /// Parse package.json files and emit entities/edges for the workspace.
 pub fn index_npm_workspace(repo_root: &Path, registry: &ComponentRegistry) -> Result<AdapterFacts> {
     let mut facts = AdapterFacts::default();
-    let mut has_workspace = false;
     let mut manifests: Vec<(PathBuf, serde_json::Value)> = Vec::new();
 
     for (path, comp_id) in registry.all_components() {
@@ -47,10 +46,6 @@ pub fn index_npm_workspace(repo_root: &Path, registry: &ComponentRegistry) -> Re
                 .with_exported(true),
         );
 
-        if rel_path.as_os_str().is_empty() {
-            has_workspace = true;
-        }
-
         let deps = merge_deps(&manifest);
         for dep_name in deps {
             if let Some(target) = registry.resolve_name(dep_name) {
@@ -64,7 +59,7 @@ pub fn index_npm_workspace(repo_root: &Path, registry: &ComponentRegistry) -> Re
     }
 
     // Emit contains edges from repo to all npm components
-    if has_workspace || !manifests.is_empty() {
+    if !manifests.is_empty() {
         for (rel_path, _) in &manifests {
             let comp_path = normalize_component_path(rel_path);
             let comp_id_str = ComponentId::new("npm", &comp_path).to_string();
