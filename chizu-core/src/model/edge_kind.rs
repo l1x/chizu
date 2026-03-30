@@ -62,7 +62,7 @@ impl std::fmt::Display for EdgeKind {
             EdgeKind::Specifies => "specifies",
             EdgeKind::Renders => "renders",
         };
-        write!(f, "{}", s)
+        f.write_str(s)
     }
 }
 

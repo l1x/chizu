@@ -68,7 +68,7 @@ impl std::fmt::Display for EntityKind {
             EntityKind::Workflow => "workflow",
             EntityKind::AgentConfig => "agent_config",
         };
-        write!(f, "{}", s)
+        f.write_str(s)
     }
 }
 
