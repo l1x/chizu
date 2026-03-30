@@ -1,7 +1,10 @@
 use std::collections::HashMap;
 use std::path::Path;
 
+use std::time::Instant;
+
 use chizu_core::{ChizuStore, EntityKind, FileKind, FileRecord, Provider, Store, StoreError};
+use tracing::info;
 
 use crate::adapter::cargo::index_cargo_workspace;
 use crate::adapter::npm::index_npm_workspace;
@@ -49,13 +52,18 @@ impl IndexPipeline {
         provider: Option<&dyn Provider>,
     ) -> Result<IndexStats> {
         let mut stats = IndexStats::default();
+        let pipeline_start = Instant::now();
 
+        info!("step: walking repository");
         let walker = FileWalker::new(repo_root, config)?;
         let mut files = walker.walk()?;
         stats.files_walked = files.len();
+        info!("walked {} files", files.len());
 
+        info!("step: discovering components");
         let registry = discover_all_components(&files, repo_root)?;
         stats.components_discovered = registry.all_components().count();
+        info!("discovered {} components", stats.components_discovered);
 
         assign_ownership(&mut files, &registry);
 
@@ -66,8 +74,10 @@ impl IndexPipeline {
             .collect();
 
         let (changed, deleted) = classify_files(&files, &existing_files);
+        info!("{} changed files, {} deleted files", changed.len(), deleted.len());
 
         // Main transaction: cleanup + workspace adapters + file adapters
+        info!("step: cleanup + workspace adapters + file indexing");
         store.in_transaction(|store| {
             for path in &deleted {
                 cascade_delete_file(store, path)?;
@@ -79,6 +89,7 @@ impl IndexPipeline {
             // Workspace-level facts (cheap to regenerate — delete all, then insert)
             cleanup_workspace_facts(store)?;
 
+            info!("  adapter: cargo");
             let cargo_facts = index_cargo_workspace(repo_root, &registry)
                 .map_err(|e| StoreError::Other(e.to_string()))?;
             for entity in &cargo_facts.entities {
@@ -91,6 +102,7 @@ impl IndexPipeline {
                 stats.edges_inserted += 1;
             }
 
+            info!("  adapter: npm");
             let npm_facts = index_npm_workspace(repo_root, &registry)
                 .map_err(|e| StoreError::Other(e.to_string()))?;
             for entity in &npm_facts.entities {
@@ -103,8 +115,10 @@ impl IndexPipeline {
                 stats.edges_inserted += 1;
             }
 
+            info!("  indexing {} changed files", changed.len());
             for file in &changed {
                 let path_str = file.path.to_string_lossy().to_string();
+                info!("    {}", path_str);
                 cascade_delete_file(store, &path_str)?;
                 let (entities, edges) = index_file(repo_root, file, &registry)
                     .map_err(|e| StoreError::Other(e.to_string()))?;
@@ -138,6 +152,7 @@ impl IndexPipeline {
 
         // Site adapter runs after the main transaction so it can see
         // content pages and templates in the walked files.
+        info!("step: site adapter");
         let site_facts = index_sites(repo_root, &files)
             .map_err(|e| StoreError::Other(e.to_string()))?;
         if !site_facts.entities.is_empty() || !site_facts.edges.is_empty() {
@@ -158,6 +173,7 @@ impl IndexPipeline {
         // Summary generation
         if let Some(provider) = provider {
             if config.summary.provider.is_some() {
+                info!("step: generating summaries");
                 let summary_stats = Summarizer::new(provider, &config.summary).run(store, repo_root)?;
                 stats.summaries_generated = summary_stats.generated;
                 stats.summaries_skipped = summary_stats.skipped;
@@ -166,6 +182,7 @@ impl IndexPipeline {
 
             // Embedding generation
             if config.embedding.provider.is_some() {
+                info!("step: generating embeddings");
                 let embedding_stats = Embedder::new(provider, &config.embedding).run(store)?;
                 stats.embeddings_generated = embedding_stats.generated;
                 stats.embeddings_skipped = embedding_stats.skipped;
@@ -173,6 +190,7 @@ impl IndexPipeline {
             }
         }
 
+        info!("indexing complete in {:.1}s", pipeline_start.elapsed().as_secs_f64());
         Ok(stats)
     }
 }

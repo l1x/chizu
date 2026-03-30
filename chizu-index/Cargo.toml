@@ -1,11 +1,12 @@
 [package]
 name = "chizu-index"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2024"
 
 [dependencies]
 chizu-core = { path = "../chizu-core" }
 blake3 = { workspace = true }
+cargo_toml = { workspace = true }
 globset = { workspace = true }
 ignore = { workspace = true }
 serde = { workspace = true }

@@ -1,6 +1,6 @@
-use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
+use cargo_toml::{Dependency, Manifest};
 use chizu_core::{ComponentId, Edge, EdgeKind, Entity, EntityKind};
 
 use crate::error::{IndexError, Result};
@@ -24,12 +24,12 @@ pub fn index_cargo_workspace(repo_root: &Path, registry: &ComponentRegistry) -> 
             .with_exported(true),
     );
 
-    let mut manifests: Vec<(PathBuf, CargoManifest)> = Vec::new();
+    let mut manifests: Vec<(PathBuf, Manifest)> = Vec::new();
     for (path, _) in registry.all_components() {
         let manifest_path = repo_root.join(path).join("Cargo.toml");
         let content = std::fs::read_to_string(&manifest_path)?;
-        let manifest: CargoManifest =
-            toml::from_str(&content).map_err(|e| IndexError::InvalidManifest {
+        let manifest =
+            Manifest::from_str(&content).map_err(|e| IndexError::InvalidManifest {
                 path: manifest_path.clone(),
                 message: e.to_string(),
             })?;
@@ -55,7 +55,10 @@ pub fn index_cargo_workspace(repo_root: &Path, registry: &ComponentRegistry) -> 
             .edges
             .push(Edge::new(&repo_id, EdgeKind::Contains, &comp_id_str));
 
-        let deps = merge_deps(&manifest.dependencies, &manifest.dev_dependencies);
+        let deps = manifest
+            .dependencies
+            .iter()
+            .chain(manifest.dev_dependencies.iter());
         for (dep_name, dep_value) in deps {
             if let Some(target) =
                 resolve_local_dependency(repo_root, registry, rel_path, dep_name, dep_value)
@@ -68,32 +71,30 @@ pub fn index_cargo_workspace(repo_root: &Path, registry: &ComponentRegistry) -> 
             }
         }
 
-        if let Some(features) = &manifest.features {
-            for (feature_name, enables) in features {
-                let feat_id = feature_id(&comp_path, feature_name);
-                facts.entities.push(
-                    Entity::new(&feat_id, EntityKind::Feature, feature_name)
-                        .with_path(rel_path.to_string_lossy().to_string())
-                        .with_exported(true),
-                );
-                facts.edges.push(Edge::new(
-                    &comp_id_str,
-                    EdgeKind::DeclaresFeature,
-                    &feat_id,
-                ));
+        for (feature_name, enables) in &manifest.features {
+            let feat_id = feature_id(&comp_path, feature_name);
+            facts.entities.push(
+                Entity::new(&feat_id, EntityKind::Feature, feature_name)
+                    .with_path(rel_path.to_string_lossy().to_string())
+                    .with_exported(true),
+            );
+            facts.edges.push(Edge::new(
+                &comp_id_str,
+                EdgeKind::DeclaresFeature,
+                &feat_id,
+            ));
 
-                for enabled in enables {
-                    // Skip dependency features (dep:crate) and cross-crate
-                    // feature enables (dep-name/feature-name). The '/' syntax
-                    // is used by Cargo for external feature references.
-                    if enabled.starts_with("dep:") || enabled.contains('/') {
-                        continue;
-                    }
-                    let enabled_id = feature_id(&comp_path, enabled);
-                    facts
-                        .edges
-                        .push(Edge::new(&feat_id, EdgeKind::FeatureEnables, &enabled_id));
+            for enabled in enables {
+                // Skip dependency features (dep:crate) and cross-crate
+                // feature enables (dep-name/feature-name). The '/' syntax
+                // is used by Cargo for external feature references.
+                if enabled.starts_with("dep:") || enabled.contains('/') {
+                    continue;
                 }
+                let enabled_id = feature_id(&comp_path, enabled);
+                facts
+                    .edges
+                    .push(Edge::new(&feat_id, EdgeKind::FeatureEnables, &enabled_id));
             }
         }
     }
@@ -115,28 +116,21 @@ fn feature_id(component_path: &str, feature_name: &str) -> String {
     format!("feature::{component_path}::{feature_name}")
 }
 
-fn merge_deps<'a>(
-    deps: &'a Option<HashMap<String, CargoDependency>>,
-    dev_deps: &'a Option<HashMap<String, CargoDependency>>,
-) -> impl Iterator<Item = (&'a String, &'a CargoDependency)> {
-    deps.iter()
-        .flat_map(|d| d.iter())
-        .chain(dev_deps.iter().flat_map(|d| d.iter()))
-}
-
 fn resolve_local_dependency(
     repo_root: &Path,
     registry: &ComponentRegistry,
     source_path: &Path,
     dep_name: &str,
-    dep: &CargoDependency,
+    dep: &Dependency,
 ) -> Option<ComponentId> {
-    if let Some(path_str) = dep.path() {
-        let resolved = normalize_path(&repo_root.join(source_path).join(path_str));
-        // strip_prefix fails if the normalized path escapes repo_root
-        // (e.g., via ../../). In that case we treat it as unresolvable.
-        let rel = resolved.strip_prefix(repo_root).ok()?;
-        return registry.component_for_path(rel).cloned();
+    if let Some(detail) = dep.detail() {
+        if let Some(path_str) = &detail.path {
+            let resolved = normalize_path(&repo_root.join(source_path).join(path_str));
+            // strip_prefix fails if the normalized path escapes repo_root
+            // (e.g., via ../../). In that case we treat it as unresolvable.
+            let rel = resolved.strip_prefix(repo_root).ok()?;
+            return registry.component_for_path(rel).cloned();
+        }
     }
     registry.resolve_name(dep_name).cloned()
 }
@@ -154,57 +148,6 @@ fn normalize_path(path: &Path) -> PathBuf {
         }
     }
     result
-}
-
-// ── Cargo TOML deserialization types ────────────────────────────────────
-// Fields that are never read by application logic are still required for
-// correct serde deserialization (especially `#[serde(untagged)]` on
-// CargoDependency, which needs both variants to parse correctly).
-
-#[derive(Debug, serde::Deserialize)]
-struct CargoManifest {
-    package: Option<CargoPackage>,
-    #[allow(dead_code)]
-    workspace: Option<CargoWorkspace>,
-    dependencies: Option<HashMap<String, CargoDependency>>,
-    #[serde(rename = "dev-dependencies")]
-    dev_dependencies: Option<HashMap<String, CargoDependency>>,
-    features: Option<HashMap<String, Vec<String>>>,
-}
-
-#[allow(dead_code)]
-#[derive(Debug, serde::Deserialize)]
-struct CargoPackage {
-    name: String,
-    version: Option<String>,
-}
-
-#[allow(dead_code)]
-#[derive(Debug, serde::Deserialize)]
-struct CargoWorkspace {
-    members: Option<Vec<String>>,
-}
-
-#[allow(dead_code)]
-#[derive(Debug, serde::Deserialize)]
-#[serde(untagged)]
-enum CargoDependency {
-    Simple(String),
-    Detailed {
-        path: Option<String>,
-        version: Option<String>,
-        #[serde(rename = "optional")]
-        optional: Option<bool>,
-    },
-}
-
-impl CargoDependency {
-    fn path(&self) -> Option<&str> {
-        match self {
-            CargoDependency::Simple(_) => None,
-            CargoDependency::Detailed { path, .. } => path.as_deref(),
-        }
-    }
 }
 
 #[cfg(test)]
@@ -323,5 +266,39 @@ foo = { path = "../foo" }
             == "feature::crates/foo::default"
             && e.dst_id == "feature::crates/foo::std"
             && e.rel == EdgeKind::FeatureEnables));
+    }
+
+    #[test]
+    fn cargo_adapter_workspace_inherited_fields() {
+        let tmp = TempDir::new().unwrap();
+        let root = tmp.path();
+
+        fs::create_dir_all(root.join("core")).unwrap();
+        fs::write(
+            root.join("core/Cargo.toml"),
+            r#"[package]
+name = "my-core"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+bytes = { workspace = true }
+serde = { workspace = true, optional = true }
+"#,
+        )
+        .unwrap();
+
+        let mut registry = ComponentRegistry::new();
+        registry.register(PathBuf::from("core"), "my-core".to_string(), "cargo");
+
+        let facts = index_cargo_workspace(root, &registry).unwrap();
+
+        let comp = facts
+            .entities
+            .iter()
+            .find(|e| e.id == "component::cargo::core");
+        assert!(comp.is_some());
+        assert_eq!(comp.unwrap().name, "my-core");
     }
 }

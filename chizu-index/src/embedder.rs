@@ -1,7 +1,9 @@
+use std::time::Instant;
+
 use chizu_core::{
     ChizuStore, EmbeddingConfig, EmbeddingMeta, Provider, Store, entity_id_to_usearch_key,
 };
-use tracing::{debug, error, warn};
+use tracing::{debug, error, info, warn};
 
 use crate::error::Result;
 
@@ -109,7 +111,10 @@ impl<'a> Embedder<'a> {
         batch: &[(String, String)],
     ) -> Result<()> {
         let texts: Vec<String> = batch.iter().map(|(_, t)| t.clone()).collect();
+        info!("  embedding batch of {} items", texts.len());
+        let llm_start = Instant::now();
         let vectors = self.provider.embed(&texts)?;
+        info!("  llm latency: {:.1}ms", llm_start.elapsed().as_secs_f64() * 1000.0);
 
         if vectors.len() != batch.len() {
             return Err(crate::error::IndexError::Other(format!(
@@ -168,7 +173,9 @@ impl<'a> Embedder<'a> {
         entity_id: &str,
         text: &str,
     ) -> Result<()> {
+        let llm_start = Instant::now();
         let vectors = self.provider.embed(&[text.to_string()])?;
+        info!("  llm latency (single): {:.1}ms", llm_start.elapsed().as_secs_f64() * 1000.0);
 
         let vector = vectors.into_iter().next().ok_or_else(|| {
             crate::error::IndexError::Other("empty embedding response".into())

@@ -57,7 +57,7 @@ chizu --repo /path/to/repo routes --task deploy
 ### 4. Visualize
 
 ```bash
-chizu --repo /path/to/repo visualize --legend > graph.svg
+chizu --repo /path/to/repo visualize -o graph.svg
 open graph.svg
 ```
 
@@ -71,7 +71,7 @@ open graph.svg
 | `entities`  | List entities                       | `--component`, `--kind` |
 | `routes`    | List task routes                    | `--task`, `--entity` |
 | `edges`     | List edges                          | `--from`, `--to`, `--rel` |
-| `visualize` | Generate SVG graph                  | `--entity-id`, `--depth`, `--kind`, `--exclude`, `--layout`, `--max-nodes`, `--output`, `--legend` |
+| `visualize` | Generate SVG graph                  | `--entity-id`, `--depth`, `--kind`, `--exclude`, `--max-nodes`, `--output` |
 | `config`    | Initialize or validate config       | subcommands: `init`, `validate` |
 | `guide`     | Interactive usage guide             | none |
 

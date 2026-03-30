@@ -18,6 +18,7 @@ time = { version = "0.3", features = ["formatting"] }
 toml = "0.8"
 tracing = "0.1"
 usearch = "2"
+cargo_toml = "0.22"
 bolero = "0.13"
 bolero-generator = "0.13"
 tempfile = "3"

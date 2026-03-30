@@ -39,7 +39,7 @@ chizu edges --from "component::cargo::chizu-core"
 chizu routes --task debug
 
 # Generate SVG visualization
-chizu visualize --entity-id "component::cargo::." --legend -o graph.svg
+chizu visualize --entity-id "component::cargo::." -o graph.svg
 ```
 
 ## Commands
@@ -52,7 +52,7 @@ chizu visualize --entity-id "component::cargo::." --legend -o graph.svg
 | `entities` | List entities | `--component`, `--kind` |
 | `routes` | List task route assignments | `--task`, `--entity` |
 | `edges` | List edges | `--from`, `--to`, `--rel` |
-| `visualize` | Generate SVG graph | `--entity-id`, `--depth`, `--kind`, `--exclude`, `--layout` (dot/neato/fdp), `--max-nodes`, `-o`, `--legend` |
+| `visualize` | Generate SVG graph | `--entity-id`, `--depth`, `--kind`, `--exclude`, `--max-nodes`, `-o` |
 | `config` | Initialize or validate config | subcommands: `init` (`-f`), `validate` |
 | `guide` | Show usage guide | none |
 

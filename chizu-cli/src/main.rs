@@ -32,27 +32,6 @@ impl std::fmt::Display for OutputFormat {
     }
 }
 
-#[derive(Debug, Clone, Copy)]
-enum LayoutAlgorithm {
-    Dot,
-    Neato,
-    Fdp,
-}
-
-impl std::str::FromStr for LayoutAlgorithm {
-    type Err = String;
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s {
-            "dot" => Ok(Self::Dot),
-            "neato" => Ok(Self::Neato),
-            "fdp" => Ok(Self::Fdp),
-            _ => Err(format!(
-                "unknown layout '{s}': expected 'dot', 'neato', or 'fdp'"
-            )),
-        }
-    }
-}
-
 /// Chizu - Local repository understanding engine
 #[derive(FromArgs, Debug)]
 struct Cli {
@@ -182,10 +161,6 @@ struct VisualizeArgs {
     #[argh(option, default = "2")]
     depth: u32,
 
-    /// layout algorithm (dot, neato, fdp)
-    #[argh(option, default = "LayoutAlgorithm::Dot")]
-    layout: LayoutAlgorithm,
-
     /// maximum number of nodes
     #[argh(option, default = "100")]
     max_nodes: usize,
@@ -197,10 +172,6 @@ struct VisualizeArgs {
     /// exclude entity IDs containing these substrings (comma-separated)
     #[argh(option)]
     exclude: Option<String>,
-
-    /// include a legend in the output
-    #[argh(switch)]
-    legend: bool,
 
     /// output file path
     #[argh(option, short = 'o')]
@@ -248,7 +219,12 @@ struct GuideArgs {}
 fn main() {
     let cli: Cli = argh::from_env();
 
-    tracing_subscriber::fmt::init();
+    tracing_subscriber::fmt()
+        .with_env_filter(
+            tracing_subscriber::EnvFilter::try_from_default_env()
+                .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("chizu_index=info")),
+        )
+        .init();
 
     match run(cli) {
         Ok(()) => std::process::exit(0),
@@ -458,8 +434,10 @@ fn cmd_visualize(repo: &Path, args: VisualizeArgs) -> Result<(), Box<dyn std::er
         .map(|e| e.split(',').map(|s| s.trim().to_string()).collect())
         .unwrap_or_default();
 
-    let mut entity_cache: std::collections::HashMap<String, chizu_core::Entity> = std::collections::HashMap::new();
-    let mut visited_edges: std::collections::HashSet<(String, String, String)> = std::collections::HashSet::new();
+    let mut entity_cache: std::collections::HashMap<String, chizu_core::Entity> =
+        std::collections::HashMap::new();
+    let mut visited_edges: std::collections::HashSet<(String, String, String)> =
+        std::collections::HashSet::new();
     let mut queue: Vec<(String, u32)> = Vec::new();
 
     if let Some(ref start_id) = args.entity_id {
@@ -478,7 +456,9 @@ fn cmd_visualize(repo: &Path, args: VisualizeArgs) -> Result<(), Box<dyn std::er
             break;
         }
 
-        let Some(entity) = store.get_entity(&entity_id)? else { continue };
+        let Some(entity) = store.get_entity(&entity_id)? else {
+            continue;
+        };
 
         if let Some(ref kinds) = kind_filter {
             if !kinds.contains(&entity.kind.to_string()) {
@@ -493,13 +473,21 @@ fn cmd_visualize(repo: &Path, args: VisualizeArgs) -> Result<(), Box<dyn std::er
 
         if depth < args.depth {
             for edge in store.get_edges_from(&entity_id)? {
-                let key = (edge.src_id.clone(), edge.rel.to_string(), edge.dst_id.clone());
+                let key = (
+                    edge.src_id.clone(),
+                    edge.rel.to_string(),
+                    edge.dst_id.clone(),
+                );
                 if visited_edges.insert(key) {
                     queue.push((edge.dst_id.clone(), depth + 1));
                 }
             }
             for edge in store.get_edges_to(&entity_id)? {
-                let key = (edge.src_id.clone(), edge.rel.to_string(), edge.dst_id.clone());
+                let key = (
+                    edge.src_id.clone(),
+                    edge.rel.to_string(),
+                    edge.dst_id.clone(),
+                );
                 if visited_edges.insert(key) {
                     queue.push((edge.src_id.clone(), depth + 1));
                 }
@@ -507,93 +495,60 @@ fn cmd_visualize(repo: &Path, args: VisualizeArgs) -> Result<(), Box<dyn std::er
         }
     }
 
-    let mut dot = String::from("digraph chizu {\n");
-    dot.push_str("  rankdir=LR;\n");
-    dot.push_str("  node [shape=box, style=\"rounded,filled\", fontname=\"Helvetica\"];\n");
-    dot.push_str("  edge [fontname=\"Helvetica\", fontsize=10];\n\n");
+    if entity_cache.is_empty() {
+        println!("No entities to visualize.");
+        store.close()?;
+        return Ok(());
+    }
+
+    // Build layout graph using layout-rs hierarchical layout
+    use layout::backends::svg::SVGWriter;
+    use layout::core::base::Orientation;
+    use layout::core::color::Color;
+    use layout::core::geometry::Point;
+    use layout::core::style::StyleAttr;
+    use layout::std_shapes::shapes::{Arrow, Element, ShapeKind};
+    use layout::topo::layout::VisualGraph;
+
+    let mut vg = VisualGraph::new(Orientation::TopToBottom);
+    let mut handles: std::collections::HashMap<String, layout::adt::dag::NodeHandle> =
+        std::collections::HashMap::new();
 
     for (id, entity) in &entity_cache {
-        let label = format!("{}\\n({})", escape_dot(&entity.name), entity.kind);
-        let color = kind_color(entity.kind);
-        dot.push_str(&format!(
-            "  \"{}\" [label=\"{}\", fillcolor=\"{}\"];\n",
-            escape_dot(id),
-            label,
-            color
-        ));
+        let label = format!("{}\n({})", entity.name, entity.kind);
+        let shape = ShapeKind::new_box(&label);
+        let fill = parse_hex_color(kind_color(entity.kind));
+        let style = StyleAttr::new(Color::new(0x3a3028ff), 1, Some(fill), 6, 12);
+        let longest_line = label.lines().map(|l| l.len()).max().unwrap_or(1);
+        let line_count = label.lines().count();
+        let size = Point::new(
+            longest_line as f64 * 8.0 + 24.0,
+            line_count as f64 * 18.0 + 16.0,
+        );
+        let node = Element::create(shape, style, Orientation::TopToBottom, size);
+        let handle = vg.add_node(node);
+        handles.insert(id.clone(), handle);
     }
 
-    dot.push_str("\n");
-
-    for (src, rel, dst) in &visited_edges {
-        if entity_cache.contains_key(src) && entity_cache.contains_key(dst) {
-            dot.push_str(&format!(
-                "  \"{}\" -> \"{}\" [label=\"{}\"];\n",
-                escape_dot(src),
-                escape_dot(dst),
-                escape_dot(rel)
-            ));
+    for (src_id, rel, dst_id) in &visited_edges {
+        if let (Some(&src_h), Some(&dst_h)) = (handles.get(src_id), handles.get(dst_id)) {
+            let arrow = Arrow::simple(rel);
+            vg.add_edge(arrow, src_h, dst_h);
         }
     }
 
-    if args.legend {
-        dot.push_str("\n  subgraph cluster_legend {\n");
-        dot.push_str("    label=\"Legend\";\n");
-        dot.push_str("    style=filled;\n");
-        dot.push_str("    color=lightgrey;\n");
-        let kinds = [
-            ("Component", kind_color(chizu_core::EntityKind::Component)),
-            ("Symbol", kind_color(chizu_core::EntityKind::Symbol)),
-            ("Test", kind_color(chizu_core::EntityKind::Test)),
-            ("Doc", kind_color(chizu_core::EntityKind::Doc)),
-        ];
-        for (i, (name, color)) in kinds.iter().enumerate() {
-            dot.push_str(&format!(
-                "    legend{} [label=\"{}\", fillcolor=\"{}\", shape=box];\n",
-                i, name, color
-            ));
-        }
-        dot.push_str("  }\n");
-    }
+    let mut svg_backend = SVGWriter::new();
+    vg.do_it(false, false, false, &mut svg_backend);
+    let raw_svg = svg_backend.finalize();
 
-    dot.push_str("}\n");
-
-    // Try to use graphviz dot binary
-    let layout = match args.layout {
-        LayoutAlgorithm::Dot => "dot",
-        LayoutAlgorithm::Neato => "neato",
-        LayoutAlgorithm::Fdp => "fdp",
-    };
-
-    let output = match std::process::Command::new(layout)
-        .arg("-Tsvg")
-        .stdin(std::process::Stdio::piped())
-        .stdout(std::process::Stdio::piped())
-        .stderr(std::process::Stdio::piped())
-        .spawn()
-    {
-        Ok(mut child) => {
-            use std::io::Write;
-            child.stdin.take().unwrap().write_all(dot.as_bytes())?;
-            let result = child.wait_with_output()?;
-            if result.status.success() {
-                result.stdout
-            } else {
-                let err = String::from_utf8_lossy(&result.stderr);
-                return Err(format!("Graphviz {} failed: {}", layout, err).into());
-            }
-        }
-        Err(_) => {
-            println!("{}", dot);
-            return Err("Graphviz not found. Install it to generate SVG, or use the DOT output above.".into());
-        }
-    };
+    // Post-process: dark background, light text, pan/zoom
+    let svg = postprocess_svg(&raw_svg);
 
     if let Some(ref path) = args.output {
-        std::fs::write(path, &output)?;
+        std::fs::write(path, &svg)?;
         println!("Wrote SVG to {}", path.display());
     } else {
-        println!("{}", String::from_utf8_lossy(&output));
+        print!("{}", svg);
     }
 
     store.close()?;
@@ -603,32 +558,145 @@ fn cmd_visualize(repo: &Path, args: VisualizeArgs) -> Result<(), Box<dyn std::er
 fn kind_color(kind: chizu_core::EntityKind) -> &'static str {
     use chizu_core::EntityKind::*;
     match kind {
-        Component => "#a5b4fc",
-        SourceUnit => "#fde047",
-        Symbol => "#86efac",
-        Test => "#fca5a5",
-        Doc => "#c4b5fd",
-        Feature => "#fdba74",
-        Task => "#93c5fd",
-        Site => "#d8b4fe",
-        Template => "#fcd34d",
-        Migration => "#fdba74",
-        Workflow => "#bfdbfe",
-        AgentConfig => "#ddd6fe",
-        Bench => "#fca5a5",
-        Containerized => "#93c5fd",
-        InfraRoot => "#93c5fd",
-        Command => "#86efac",
-        ContentPage => "#c4b5fd",
-        Spec => "#c4b5fd",
-        Repo | Directory => "#e2e8f0",
+        Component => "#c87f5a",       // warm copper
+        SourceUnit => "#d4956a",      // light terra cotta
+        Symbol => "#e8a87c",          // peach
+        Test => "#d4735e",            // coral
+        Doc => "#c9a87c",             // sand
+        Feature => "#b8734d",         // burnt sienna
+        Task => "#d49a6a",            // amber
+        Site => "#c48b6a",            // dusty rose
+        Template => "#d4a87a",        // wheat
+        Migration => "#b87d5a",       // bronze
+        Workflow => "#c4956a",        // tawny
+        AgentConfig => "#c9a88c",     // muted tan
+        Bench => "#d4735e",           // coral
+        Containerized => "#b8876a",   // clay
+        InfraRoot => "#a87d5a",       // brown
+        Command => "#d4a06a",         // apricot
+        ContentPage => "#c9a87c",     // sand
+        Spec => "#b89070",            // taupe
+        Repo | Directory => "#8c7060", // dark wood
     }
 }
 
-fn escape_dot(s: &str) -> String {
-    s.replace('\\', "\\\\")
-        .replace('"', "\\\"")
-        .replace('\n', "\\n")
+fn parse_hex_color(hex: &str) -> layout::core::color::Color {
+    let hex = hex.trim_start_matches('#');
+    let rgb = u32::from_str_radix(hex, 16).unwrap_or(0);
+    // layout-rs Color is RGBA as u32, shift RGB left 8 bits and set alpha=0xFF
+    layout::core::color::Color::new((rgb << 8) | 0xFF)
+}
+
+fn postprocess_svg(raw: &str) -> String {
+    // Wrap graph content in a <g> for pan/zoom, add dark background and styling
+    let dark_style = r##"
+svg { background: #1a1a1a; }
+text { fill: #e0d6cc !important; }
+line, polyline, path { stroke: #7a6a5a !important; }
+polygon { fill: #7a6a5a !important; }
+rect[fill] { stroke: #3a3028 !important; stroke-width: 1; }
+"##;
+
+    let zoom_js = r##"
+<script><![CDATA[
+(function() {
+  var svg = document.querySelector('svg');
+  var g = document.getElementById('graph');
+  if (!g) return;
+  var pt = svg.createSVGPoint();
+  var tx = 0, ty = 0, scale = 1;
+  var dragging = false, startX, startY, startTx, startTy;
+
+  function applyTransform() {
+    g.setAttribute('transform',
+      'translate(' + tx + ',' + ty + ') scale(' + scale + ')');
+  }
+
+  svg.addEventListener('wheel', function(e) {
+    e.preventDefault();
+    pt.x = e.clientX; pt.y = e.clientY;
+    var loc = pt.matrixTransform(svg.getScreenCTM().inverse());
+    var factor = e.deltaY < 0 ? 1.15 : 1 / 1.15;
+    var ns = scale * factor;
+    if (ns < 0.05 || ns > 50) return;
+    tx = loc.x - (loc.x - tx) * factor;
+    ty = loc.y - (loc.y - ty) * factor;
+    scale = ns;
+    applyTransform();
+  });
+
+  svg.addEventListener('mousedown', function(e) {
+    dragging = true;
+    startX = e.clientX; startY = e.clientY;
+    startTx = tx; startTy = ty;
+    svg.style.cursor = 'grabbing';
+  });
+
+  svg.addEventListener('mousemove', function(e) {
+    if (!dragging) return;
+    var ctm = svg.getScreenCTM();
+    tx = startTx + (e.clientX - startX) / ctm.a;
+    ty = startTy + (e.clientY - startY) / ctm.d;
+    applyTransform();
+  });
+
+  svg.addEventListener('mouseup', function() {
+    dragging = false; svg.style.cursor = 'grab';
+  });
+
+  svg.addEventListener('mouseleave', function() {
+    dragging = false; svg.style.cursor = 'default';
+  });
+
+  svg.style.cursor = 'grab';
+})();
+]]></script>
+"##;
+
+    let mut out = raw.to_string();
+
+    // Inject dark-mode styles into the existing <style> block
+    if let Some(pos) = out.find("</style>") {
+        out.insert_str(pos, dark_style);
+    }
+
+    // Extract viewBox dimensions for border rect
+    let vb_rect = extract_viewbox(&out).map(|(x, y, w, h)| {
+        format!(
+            "<rect x=\"{}\" y=\"{}\" width=\"{}\" height=\"{}\" \
+             fill=\"none\" stroke=\"#3a3028\" stroke-width=\"2\"/>",
+            x, y, w, h
+        )
+    }).unwrap_or_default();
+
+    // Wrap all content after </style> in a <g id="graph"> for pan/zoom
+    if let Some(style_end) = out.find("</style>") {
+        let after_style = style_end + "</style>".len();
+        if let Some(svg_end) = out.rfind("</svg>") {
+            let content = out[after_style..svg_end].to_string();
+            let wrapped = format!(
+                "<g id=\"graph\">{}{}</g>{}",
+                vb_rect, content, zoom_js
+            );
+            out.replace_range(after_style..svg_end, &wrapped);
+        }
+    }
+
+    out
+}
+
+fn extract_viewbox(svg: &str) -> Option<(f64, f64, f64, f64)> {
+    let start = svg.find("viewBox=\"")? + "viewBox=\"".len();
+    let end = svg[start..].find('"')? + start;
+    let parts: Vec<f64> = svg[start..end]
+        .split_whitespace()
+        .filter_map(|s| s.parse().ok())
+        .collect();
+    if parts.len() == 4 {
+        Some((parts[0], parts[1], parts[2], parts[3]))
+    } else {
+        None
+    }
 }
 
 fn truncate(s: &str, max_len: usize) -> std::borrow::Cow<'_, str> {

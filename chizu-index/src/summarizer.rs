@@ -1,8 +1,9 @@
 use std::collections::HashMap;
 use std::path::Path;
+use std::time::Instant;
 
 use chizu_core::{ChizuStore, Entity, Provider, Store, Summary, SummaryConfig};
-use tracing::{debug, error};
+use tracing::{debug, error, info};
 
 use crate::error::Result;
 
@@ -80,8 +81,10 @@ impl<'a> Summarizer<'a> {
         }
 
         let prompt = build_prompt(entity, &snippet);
-        debug!("Summarizing {} ({} chars prompt)", entity.id, prompt.len());
+        info!("  summarizing {}", entity.id);
+        let llm_start = Instant::now();
         let response = self.provider.complete(&prompt, self.config.max_tokens)?;
+        info!("  llm latency: {:.1}ms", llm_start.elapsed().as_secs_f64() * 1000.0);
 
         let summary = parse_summary_response(&entity.id, &response)?;
         let summary = summary.with_source_hash(source_hash);
