@@ -1,19 +1,28 @@
 use chizu_core::{ChizuStore, Store, StoreError};
+use chizu_core::store::sqlite::SqliteStore;
+
+/// Remove the usearch vector and embedding metadata for an entity.
+fn remove_entity_vector(
+    store: &ChizuStore,
+    sqlite: &SqliteStore,
+    entity_id: &str,
+) -> Result<(), StoreError> {
+    if let Some(meta) = sqlite.get_embedding_meta(entity_id)? {
+        if let Some(key) = meta.usearch_key {
+            store.remove_vector(key)?;
+        }
+    }
+    sqlite.delete_embedding_meta(entity_id)?;
+    Ok(())
+}
 
 /// Cascade-delete a single entity and all its derived data:
 /// summary, embedding metadata, usearch vector, task routes, and edges from/to it.
 pub fn cascade_delete_entity(store: &ChizuStore, entity_id: &str) -> Result<(), StoreError> {
     let sqlite = store.sqlite();
 
-    // Remove the usearch vector before deleting the metadata that maps to it.
-    if let Some(meta) = sqlite.get_embedding_meta(entity_id)? {
-        if let Some(key) = meta.usearch_key {
-            store.remove_vector(key)?;
-        }
-    }
-
+    remove_entity_vector(store, sqlite, entity_id)?;
     sqlite.delete_summary(entity_id)?;
-    sqlite.delete_embedding_meta(entity_id)?;
     sqlite.delete_entity_task_routes(entity_id)?;
     for edge in sqlite.get_edges_from(entity_id)? {
         sqlite.delete_edge(&edge.src_id, edge.rel, &edge.dst_id)?;
@@ -35,14 +44,8 @@ pub fn cascade_delete_file(store: &ChizuStore, path: &str) -> Result<(), StoreEr
     let entities = sqlite.get_entities_by_path(path)?;
 
     for entity in &entities {
-        // Remove usearch vectors before deleting metadata.
-        if let Some(meta) = sqlite.get_embedding_meta(&entity.id)? {
-            if let Some(key) = meta.usearch_key {
-                store.remove_vector(key)?;
-            }
-        }
+        remove_entity_vector(store, sqlite, &entity.id)?;
         sqlite.delete_summary(&entity.id)?;
-        sqlite.delete_embedding_meta(&entity.id)?;
         sqlite.delete_entity_task_routes(&entity.id)?;
     }
 
