@@ -15,7 +15,7 @@ visualization and navigation.
 ### Installation
 
 ```bash
-cargo install --path crates/chizu
+cargo install --path chizu-cli
 ```
 
 Or from crates.io (when published):
@@ -65,10 +65,10 @@ open graph.svg
 
 | Command     | Description                         | Key flags |
 | ----------- | ----------------------------------- | --------- |
-| `index`     | Extract facts + summarize + embed   | none |
+| `index`     | Extract facts + summarize + embed   | `--force` |
 | `search`    | Full query pipeline -> reading plan | `--limit`, `--category`, `--format`, positional query |
 | `entity`    | Look up a single entity by id       | positional id |
-| `entities`  | List entities                       | `--component` |
+| `entities`  | List entities                       | `--component`, `--kind` |
 | `routes`    | List task routes                    | `--task`, `--entity` |
 | `edges`     | List edges                          | `--from`, `--to`, `--rel` |
 | `visualize` | Generate SVG graph                  | `--entity-id`, `--depth`, `--kind`, `--exclude`, `--layout`, `--max-nodes`, `--output`, `--legend` |
@@ -79,7 +79,7 @@ open graph.svg
 
 ### Prerequisites
 
-1. **Rust toolchain** (1.70+): https://rustup.rs
+1. **Rust toolchain** (1.85+): https://rustup.rs
 2. **Ollama** running locally: https://ollama.com
 3. Pull the required models:
 
