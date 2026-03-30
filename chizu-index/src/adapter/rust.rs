@@ -90,18 +90,13 @@ fn has_attribute(node: tree_sitter::Node, source: &str, attr_name: &str) -> bool
     if node.kind() != "attribute_item" {
         return false;
     }
-    let mut cursor = node.walk();
-    for child in node.children(&mut cursor) {
-        if child.kind() == "attribute" {
-            let mut inner = child.walk();
-            for c in child.children(&mut inner) {
-                if c.kind() == "identifier" && &source[c.byte_range()] == attr_name {
-                    return true;
-                }
-            }
-        }
-    }
-    false
+    let text = &source[node.byte_range()];
+    // Match #[test], #[tokio::test], #[async_std::test], etc.
+    // Also handles #[bench] and path-based variants.
+    text.contains(&format!("::{attr_name}]"))
+        || text.contains(&format!("::{attr_name}("))
+        || text == format!("#[{attr_name}]")
+        || text.starts_with(&format!("#[{attr_name}("))
 }
 
 fn extract_visibility(node: tree_sitter::Node, source: &str) -> Option<Visibility> {
@@ -496,5 +491,50 @@ use std::io;
         // Non-pub use should NOT produce a reexport edge
         assert!(!edges.iter().any(|e| e.rel == EdgeKind::Reexports
             && e.dst_id.contains("io")));
+    }
+
+    #[test]
+    fn rust_adapter_detects_path_based_test_attrs() {
+        let tmp = TempDir::new().unwrap();
+        let root = tmp.path();
+        fs::write(
+            root.join("lib.rs"),
+            r#"
+pub fn real_fn() {}
+
+#[tokio::test]
+async fn tokio_test() {}
+
+#[async_std::test]
+async fn async_std_test() {}
+
+#[test]
+fn plain_test() {}
+"#,
+        )
+        .unwrap();
+
+        let file = WalkedFile {
+            path: std::path::PathBuf::from("lib.rs"),
+            hash: "abc".to_string(),
+            component_id: None,
+        };
+        let (entities, _) = index_rust_file(&file, root).unwrap();
+
+        let symbols: Vec<_> = entities
+            .iter()
+            .filter(|e| e.kind == EntityKind::Symbol)
+            .map(|e| e.name.as_str())
+            .collect();
+        assert_eq!(symbols, vec!["real_fn"], "only real_fn should be a Symbol");
+
+        let tests: Vec<_> = entities
+            .iter()
+            .filter(|e| e.kind == EntityKind::Test)
+            .map(|e| e.name.as_str())
+            .collect();
+        assert!(tests.contains(&"tokio_test"));
+        assert!(tests.contains(&"async_std_test"));
+        assert!(tests.contains(&"plain_test"));
     }
 }

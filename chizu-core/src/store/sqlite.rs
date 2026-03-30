@@ -173,8 +173,9 @@ impl SqliteStore {
     pub fn open(path: &Path) -> Result<Self> {
         let conn = Connection::open(path)?;
 
-        // Enable WAL mode for better concurrency
-        conn.execute_batch("PRAGMA journal_mode = WAL;")?;
+        // Enable WAL mode for better concurrency.
+        // NORMAL sync is safe: the index is regenerable from source.
+        conn.execute_batch("PRAGMA journal_mode = WAL; PRAGMA synchronous = NORMAL;")?;
 
         let store = Self { conn };
         store.migrate()?;

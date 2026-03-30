@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use std::path::Path;
+use std::sync::Mutex;
 use std::time::Instant;
 
 use chizu_core::{ChizuStore, Entity, Provider, Store, Summary, SummaryConfig};
@@ -13,6 +14,13 @@ pub struct SummaryStats {
     pub generated: usize,
     pub skipped: usize,
     pub failed: usize,
+}
+
+/// A work item prepared for LLM summarization.
+struct SummaryWork {
+    entity_id: String,
+    prompt: String,
+    source_hash: String,
 }
 
 /// Generates summaries for entities using an LLM provider.
@@ -35,62 +43,114 @@ impl<'a> Summarizer<'a> {
             return Ok(stats);
         }
 
+        // Phase 1: collect work items (reads files, checks cache — single-threaded)
         let mut file_cache: HashMap<String, String> = HashMap::new();
+        let mut work_items: Vec<SummaryWork> = Vec::new();
 
-        for entity in entities {
-            match self.process_entity(store, repo_root, &mut file_cache, &entity) {
-                Ok(true) => stats.generated += 1,
-                Ok(false) => stats.skipped += 1,
-                Err(e) => {
-                    error!("Failed to summarize entity {}: {}", entity.id, e);
-                    stats.failed += 1;
+        for entity in &entities {
+            let Some(ref path) = entity.path else {
+                stats.skipped += 1;
+                continue;
+            };
+
+            let snippet = match extract_snippet(repo_root, path, entity.line_start, entity.line_end, &mut file_cache) {
+                Some(s) => s,
+                None => {
+                    debug!("No snippet for entity {} at {} — skipping", entity.id, path);
+                    stats.skipped += 1;
+                    continue;
+                }
+            };
+
+            let source_hash = blake3::hash(snippet.as_bytes()).to_string();
+
+            if let Some(existing) = store.get_summary(&entity.id)? {
+                if existing.source_hash.as_ref() == Some(&source_hash) {
+                    debug!("Summary for {} is up to date", entity.id);
+                    stats.skipped += 1;
+                    continue;
                 }
             }
+
+            let prompt = build_prompt(entity, &snippet);
+            work_items.push(SummaryWork {
+                entity_id: entity.id.clone(),
+                prompt,
+                source_hash,
+            });
         }
+
+        if work_items.is_empty() {
+            return Ok(stats);
+        }
+
+        let concurrency = self.config.concurrency.unwrap_or(4).max(1);
+        info!("  {} symbols to summarize (concurrency={})", work_items.len(), concurrency);
+
+        // Phase 2: call LLM in parallel
+        let work_iter = Mutex::new(work_items.iter());
+        let max_tokens = self.config.max_tokens;
+
+        std::thread::scope(|s| {
+            let handles: Vec<_> = (0..concurrency)
+                .map(|_| {
+                    s.spawn(|| {
+                        let mut results = Vec::new();
+                        loop {
+                            let item = {
+                                let mut iter = work_iter.lock().unwrap();
+                                iter.next()
+                            };
+                            let Some(item) = item else { break };
+
+                            info!("  summarizing {}", item.entity_id);
+                            let llm_start = Instant::now();
+                            let result = self.provider.complete(&item.prompt, max_tokens);
+                            let elapsed = llm_start.elapsed().as_secs_f64() * 1000.0;
+                            info!("  llm latency: {:.1}ms ({})", elapsed, item.entity_id);
+
+                            results.push((
+                                item.entity_id.clone(),
+                                item.source_hash.clone(),
+                                result,
+                            ));
+                        }
+                        results
+                    })
+                })
+                .collect();
+
+            // Phase 3: collect results and write to store (single-threaded)
+            for handle in handles {
+                for (entity_id, source_hash, result) in handle.join().unwrap() {
+                    match result {
+                        Ok(response) => {
+                            match parse_summary_response(&entity_id, &response) {
+                                Ok(summary) => {
+                                    let summary = summary.with_source_hash(source_hash);
+                                    if let Err(e) = store.insert_summary(&summary) {
+                                        error!("Failed to store summary for {}: {}", entity_id, e);
+                                        stats.failed += 1;
+                                    } else {
+                                        stats.generated += 1;
+                                    }
+                                }
+                                Err(e) => {
+                                    error!("Failed to parse summary for {}: {}", entity_id, e);
+                                    stats.failed += 1;
+                                }
+                            }
+                        }
+                        Err(e) => {
+                            error!("LLM call failed for {}: {}", entity_id, e);
+                            stats.failed += 1;
+                        }
+                    }
+                }
+            }
+        });
 
         Ok(stats)
-    }
-
-    fn process_entity(
-        &self,
-        store: &ChizuStore,
-        repo_root: &Path,
-        file_cache: &mut HashMap<String, String>,
-        entity: &Entity,
-    ) -> Result<bool> {
-        let Some(ref path) = entity.path else {
-            return Ok(false);
-        };
-
-        let snippet = match extract_snippet(repo_root, path, entity.line_start, entity.line_end, file_cache) {
-            Some(s) => s,
-            None => {
-                debug!("No snippet for entity {} at {} — skipping", entity.id, path);
-                return Ok(false);
-            }
-        };
-
-        let source_hash = blake3::hash(snippet.as_bytes()).to_string();
-
-        // Skip re-summarization if the source hasn't changed.
-        if let Some(existing) = store.get_summary(&entity.id)? {
-            if existing.source_hash.as_ref() == Some(&source_hash) {
-                debug!("Summary for {} is up to date", entity.id);
-                return Ok(false);
-            }
-        }
-
-        let prompt = build_prompt(entity, &snippet);
-        info!("  summarizing {}", entity.id);
-        let llm_start = Instant::now();
-        let response = self.provider.complete(&prompt, self.config.max_tokens)?;
-        info!("  llm latency: {:.1}ms", llm_start.elapsed().as_secs_f64() * 1000.0);
-
-        let summary = parse_summary_response(&entity.id, &response)?;
-        let summary = summary.with_source_hash(source_hash);
-        store.insert_summary(&summary)?;
-
-        Ok(true)
     }
 }
 

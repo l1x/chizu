@@ -242,6 +242,8 @@ pub struct SummaryConfig {
     pub max_tokens: Option<u32>,
     /// Temperature for generation
     pub temperature: Option<f64>,
+    /// Number of concurrent LLM calls (default 4)
+    pub concurrency: Option<usize>,
 }
 
 impl Default for SummaryConfig {
@@ -251,6 +253,7 @@ impl Default for SummaryConfig {
             model: Some("llama3:8b".to_string()),
             max_tokens: Some(512),
             temperature: Some(0.2),
+            concurrency: Some(4),
         }
     }
 }
