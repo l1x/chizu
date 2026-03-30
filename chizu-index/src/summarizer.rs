@@ -36,7 +36,13 @@ impl<'a> Summarizer<'a> {
 
     pub fn run(&self, store: &ChizuStore, repo_root: &Path) -> Result<SummaryStats> {
         let mut stats = SummaryStats::default();
-        let entities = store.get_entities_by_kind(chizu_core::EntityKind::Symbol)?;
+        let all_entities = store.get_entities_by_kind(chizu_core::EntityKind::Symbol)?;
+        let exported_only = self.config.exported_only.unwrap_or(true);
+        let entities: Vec<_> = if exported_only {
+            all_entities.into_iter().filter(|e| e.exported).collect()
+        } else {
+            all_entities
+        };
 
         if entities.is_empty() {
             debug!("No symbols to summarize");
@@ -354,7 +360,8 @@ mod tests {
 
         let entity = Entity::new("symbol::src/lib.rs::foo", EntityKind::Symbol, "foo")
             .with_path("src/lib.rs")
-            .with_lines(1, 1);
+            .with_lines(1, 1)
+            .with_exported(true);
         store.insert_entity(&entity).unwrap();
 
         let provider = MockProvider {

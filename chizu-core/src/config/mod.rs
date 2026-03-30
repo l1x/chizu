@@ -244,6 +244,8 @@ pub struct SummaryConfig {
     pub temperature: Option<f64>,
     /// Number of concurrent LLM calls (default 4)
     pub concurrency: Option<usize>,
+    /// Only summarize exported (pub) symbols (default true)
+    pub exported_only: Option<bool>,
 }
 
 impl Default for SummaryConfig {
@@ -254,6 +256,7 @@ impl Default for SummaryConfig {
             max_tokens: Some(512),
             temperature: Some(0.2),
             concurrency: Some(4),
+            exported_only: Some(true),
         }
     }
 }
