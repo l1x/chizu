@@ -1,3 +1,4 @@
+use super::edge_kind::EdgeKind;
 use super::entity_kind::EntityKind;
 use super::id::ComponentId;
 
@@ -191,7 +192,7 @@ impl Entity {
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct Edge {
     pub src_id: String,
-    pub rel: super::edge_kind::EdgeKind,
+    pub rel: EdgeKind,
     pub dst_id: String,
     pub provenance_path: Option<String>,
     pub provenance_line: Option<u32>,
@@ -200,7 +201,7 @@ pub struct Edge {
 impl Edge {
     pub fn new(
         src_id: impl Into<String>,
-        rel: super::edge_kind::EdgeKind,
+        rel: EdgeKind,
         dst_id: impl Into<String>,
     ) -> Self {
         Self {
@@ -351,7 +352,7 @@ fn now_rfc3339() -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::super::edge_kind::EdgeKind;
+    use super::EdgeKind;
     use super::super::entity_kind::EntityKind;
     use super::*;
 
