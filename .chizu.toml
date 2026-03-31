@@ -1,0 +1,18 @@
+[providers.ollama]
+base_url = "http://localhost:11434/v1"
+timeout_secs = 120
+retry_attempts = 3
+
+[summary]
+provider = "ollama"
+model = "llama3:8b"
+max_tokens = 128
+temperature = 0.2
+batch_size = 4
+concurrency = 1
+
+[embedding]
+provider = "ollama"
+model = "nomic-embed-text-v2-moe:latest"
+dimensions = 768
+batch_size = 32
