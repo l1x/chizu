@@ -73,7 +73,8 @@ fn cli_search_returns_valid_json() {
     );
 
     let stdout = String::from_utf8_lossy(&search_output.stdout);
-    let json: serde_json::Value = serde_json::from_str(&stdout).expect("search output should be valid JSON");
+    let json: serde_json::Value =
+        serde_json::from_str(&stdout).expect("search output should be valid JSON");
     assert!(json.get("entries").is_some());
 }
 
@@ -270,4 +271,41 @@ fn cli_visualize_outputs_svg() {
     } else {
         panic!("visualize failed unexpectedly: {}", stderr);
     }
+}
+
+#[test]
+fn cli_visualize_outputs_interactive_html() {
+    let (_temp, repo) = create_fixture_repo();
+
+    let index_output = Command::new(chizu_bin())
+        .arg("--repo")
+        .arg(&repo)
+        .arg("index")
+        .output()
+        .unwrap();
+    assert!(index_output.status.success());
+
+    let output_path = repo.join("graph.html");
+    let viz_output = Command::new(chizu_bin())
+        .arg("--repo")
+        .arg(&repo)
+        .arg("visualize")
+        .arg("--interactive")
+        .arg("--depth")
+        .arg("3")
+        .arg("--output")
+        .arg(&output_path)
+        .output()
+        .unwrap();
+
+    assert!(
+        viz_output.status.success(),
+        "interactive visualize failed: {}",
+        String::from_utf8_lossy(&viz_output.stderr)
+    );
+
+    let html = std::fs::read_to_string(&output_path).unwrap();
+    assert!(html.contains("<!DOCTYPE html>"));
+    assert!(html.contains("chizu-data"));
+    assert!(html.contains("tree explorer"));
 }

@@ -2,6 +2,8 @@
 //!
 //! Usage: chizu [--repo <path>] <command>
 
+mod visualize;
+
 use argh::FromArgs;
 use chizu_core::Store;
 use std::path::{Path, PathBuf};
@@ -149,7 +151,7 @@ struct EdgesArgs {
     rel: Option<chizu_core::EdgeKind>,
 }
 
-/// Generate graph visualization (SVG)
+/// Generate graph visualization (SVG or interactive HTML)
 #[derive(FromArgs, Debug)]
 #[argh(subcommand, name = "visualize")]
 struct VisualizeArgs {
@@ -172,6 +174,10 @@ struct VisualizeArgs {
     /// exclude entity IDs containing these substrings (comma-separated)
     #[argh(option)]
     exclude: Option<String>,
+
+    /// emit an interactive HTML tree explorer instead of a static SVG
+    #[argh(switch)]
+    interactive: bool,
 
     /// output file path
     #[argh(option, short = 'o')]
@@ -435,17 +441,19 @@ fn cmd_visualize(repo: &Path, args: VisualizeArgs) -> Result<(), Box<dyn std::er
         std::collections::HashMap::new();
     let mut visited_edges: std::collections::HashSet<(String, String, String)> =
         std::collections::HashSet::new();
-    let mut queue: Vec<(String, u32)> = Vec::new();
+    let mut queue: std::collections::VecDeque<(String, u32)> = std::collections::VecDeque::new();
 
     if let Some(ref start_id) = args.entity_id {
-        queue.push((start_id.clone(), 0));
+        queue.push_back((start_id.clone(), 0));
+    } else if store.get_entity("repo::.")?.is_some() {
+        queue.push_back(("repo::.".to_string(), 0));
     } else {
         for entity in store.get_all_entities()? {
-            queue.push((entity.id, 0));
+            queue.push_back((entity.id, 0));
         }
     }
 
-    while let Some((entity_id, depth)) = queue.pop() {
+    while let Some((entity_id, depth)) = queue.pop_front() {
         if entity_cache.contains_key(&entity_id) {
             continue;
         }
@@ -476,7 +484,7 @@ fn cmd_visualize(repo: &Path, args: VisualizeArgs) -> Result<(), Box<dyn std::er
                     edge.dst_id.clone(),
                 );
                 if visited_edges.insert(key) {
-                    queue.push((edge.dst_id.clone(), depth + 1));
+                    queue.push_back((edge.dst_id.clone(), depth + 1));
                 }
             }
             for edge in store.get_edges_to(&entity_id)? {
@@ -486,7 +494,7 @@ fn cmd_visualize(repo: &Path, args: VisualizeArgs) -> Result<(), Box<dyn std::er
                     edge.dst_id.clone(),
                 );
                 if visited_edges.insert(key) {
-                    queue.push((edge.src_id.clone(), depth + 1));
+                    queue.push_back((edge.src_id.clone(), depth + 1));
                 }
             }
         }
@@ -498,201 +506,36 @@ fn cmd_visualize(repo: &Path, args: VisualizeArgs) -> Result<(), Box<dyn std::er
         return Ok(());
     }
 
-    // Build layout graph using layout-rs hierarchical layout
-    use layout::backends::svg::SVGWriter;
-    use layout::core::base::Orientation;
-    use layout::core::color::Color;
-    use layout::core::geometry::Point;
-    use layout::core::style::StyleAttr;
-    use layout::std_shapes::shapes::{Arrow, Element, ShapeKind};
-    use layout::topo::layout::VisualGraph;
-
-    let mut vg = VisualGraph::new(Orientation::TopToBottom);
-    let mut handles: std::collections::HashMap<String, layout::adt::dag::NodeHandle> =
-        std::collections::HashMap::new();
-
-    for (id, entity) in &entity_cache {
-        let label = format!("{}\n({})", entity.name, entity.kind);
-        let shape = ShapeKind::new_box(&label);
-        let fill = parse_hex_color(kind_color(entity.kind));
-        let style = StyleAttr::new(Color::new(0x3a3028ff), 1, Some(fill), 6, 12);
-        let longest_line = label.lines().map(|l| l.len()).max().unwrap_or(1);
-        let line_count = label.lines().count();
-        let size = Point::new(
-            longest_line as f64 * 8.0 + 24.0,
-            line_count as f64 * 18.0 + 16.0,
-        );
-        let node = Element::create(shape, style, Orientation::TopToBottom, size);
-        let handle = vg.add_node(node);
-        handles.insert(id.clone(), handle);
-    }
-
-    for (src_id, rel, dst_id) in &visited_edges {
-        if let (Some(&src_h), Some(&dst_h)) = (handles.get(src_id), handles.get(dst_id)) {
-            let arrow = Arrow::simple(rel);
-            vg.add_edge(arrow, src_h, dst_h);
+    let selected_ids: std::collections::HashSet<String> = entity_cache.keys().cloned().collect();
+    let mut render_edges: std::collections::HashSet<(String, String, String)> =
+        std::collections::HashSet::new();
+    for entity_id in &selected_ids {
+        for edge in store.get_edges_from(entity_id)? {
+            if selected_ids.contains(&edge.dst_id) {
+                render_edges.insert((
+                    edge.src_id.clone(),
+                    edge.rel.to_string(),
+                    edge.dst_id.clone(),
+                ));
+            }
         }
     }
 
-    let mut svg_backend = SVGWriter::new();
-    vg.do_it(false, false, false, &mut svg_backend);
-    let raw_svg = svg_backend.finalize();
-
-    // Post-process: dark background, light text, pan/zoom
-    let svg = postprocess_svg(&raw_svg);
+    let output_text = if args.interactive {
+        visualize::render_focus_graph_html(&entity_cache, &render_edges, args.entity_id.as_deref())
+    } else {
+        visualize::render_focus_graph_svg(&entity_cache, &render_edges, args.entity_id.as_deref())
+    };
 
     if let Some(ref path) = args.output {
-        std::fs::write(path, &svg)?;
-        println!("Wrote SVG to {}", path.display());
+        std::fs::write(path, &output_text)?;
+        println!("Wrote visualization to {}", path.display());
     } else {
-        print!("{}", svg);
+        print!("{}", output_text);
     }
 
     store.close()?;
     Ok(())
-}
-
-fn kind_color(kind: chizu_core::EntityKind) -> &'static str {
-    use chizu_core::EntityKind::*;
-    match kind {
-        Component => "#c87f5a",        // warm copper
-        SourceUnit => "#d4956a",       // light terra cotta
-        Symbol => "#e8a87c",           // peach
-        Test => "#d4735e",             // coral
-        Doc => "#c9a87c",              // sand
-        Feature => "#b8734d",          // burnt sienna
-        Task => "#d49a6a",             // amber
-        Site => "#c48b6a",             // dusty rose
-        Template => "#d4a87a",         // wheat
-        Migration => "#b87d5a",        // bronze
-        Workflow => "#c4956a",         // tawny
-        AgentConfig => "#c9a88c",      // muted tan
-        Bench => "#d4735e",            // coral
-        Containerized => "#b8876a",    // clay
-        InfraRoot => "#a87d5a",        // brown
-        Command => "#d4a06a",          // apricot
-        ContentPage => "#c9a87c",      // sand
-        Spec => "#b89070",             // taupe
-        Repo | Directory => "#8c7060", // dark wood
-    }
-}
-
-fn parse_hex_color(hex: &str) -> layout::core::color::Color {
-    let hex = hex.trim_start_matches('#');
-    let rgb = u32::from_str_radix(hex, 16).unwrap_or(0);
-    // layout-rs Color is RGBA as u32, shift RGB left 8 bits and set alpha=0xFF
-    layout::core::color::Color::new((rgb << 8) | 0xFF)
-}
-
-fn postprocess_svg(raw: &str) -> String {
-    // Wrap graph content in a <g> for pan/zoom, add dark background and styling
-    let dark_style = r##"
-svg { background: #1a1a1a; }
-text { fill: #e0d6cc !important; }
-line, polyline, path { stroke: #7a6a5a !important; }
-polygon { fill: #7a6a5a !important; }
-rect[fill] { stroke: #3a3028 !important; stroke-width: 1; }
-"##;
-
-    let zoom_js = r##"
-<script><![CDATA[
-(function() {
-  var svg = document.querySelector('svg');
-  var g = document.getElementById('graph');
-  if (!g) return;
-  var pt = svg.createSVGPoint();
-  var tx = 0, ty = 0, scale = 1;
-  var dragging = false, startX, startY, startTx, startTy;
-
-  function applyTransform() {
-    g.setAttribute('transform',
-      'translate(' + tx + ',' + ty + ') scale(' + scale + ')');
-  }
-
-  svg.addEventListener('wheel', function(e) {
-    e.preventDefault();
-    pt.x = e.clientX; pt.y = e.clientY;
-    var loc = pt.matrixTransform(svg.getScreenCTM().inverse());
-    var factor = e.deltaY < 0 ? 1.15 : 1 / 1.15;
-    var ns = scale * factor;
-    if (ns < 0.05 || ns > 50) return;
-    tx = loc.x - (loc.x - tx) * factor;
-    ty = loc.y - (loc.y - ty) * factor;
-    scale = ns;
-    applyTransform();
-  });
-
-  svg.addEventListener('mousedown', function(e) {
-    dragging = true;
-    startX = e.clientX; startY = e.clientY;
-    startTx = tx; startTy = ty;
-    svg.style.cursor = 'grabbing';
-  });
-
-  svg.addEventListener('mousemove', function(e) {
-    if (!dragging) return;
-    var ctm = svg.getScreenCTM();
-    tx = startTx + (e.clientX - startX) / ctm.a;
-    ty = startTy + (e.clientY - startY) / ctm.d;
-    applyTransform();
-  });
-
-  svg.addEventListener('mouseup', function() {
-    dragging = false; svg.style.cursor = 'grab';
-  });
-
-  svg.addEventListener('mouseleave', function() {
-    dragging = false; svg.style.cursor = 'default';
-  });
-
-  svg.style.cursor = 'grab';
-})();
-]]></script>
-"##;
-
-    let mut out = raw.to_string();
-
-    // Inject dark-mode styles into the existing <style> block
-    if let Some(pos) = out.find("</style>") {
-        out.insert_str(pos, dark_style);
-    }
-
-    // Extract viewBox dimensions for border rect
-    let vb_rect = extract_viewbox(&out)
-        .map(|(x, y, w, h)| {
-            format!(
-                "<rect x=\"{}\" y=\"{}\" width=\"{}\" height=\"{}\" \
-             fill=\"none\" stroke=\"#3a3028\" stroke-width=\"2\"/>",
-                x, y, w, h
-            )
-        })
-        .unwrap_or_default();
-
-    // Wrap all content after </style> in a <g id="graph"> for pan/zoom
-    if let Some(style_end) = out.find("</style>") {
-        let after_style = style_end + "</style>".len();
-        if let Some(svg_end) = out.rfind("</svg>") {
-            let content = out[after_style..svg_end].to_string();
-            let wrapped = format!("<g id=\"graph\">{}{}</g>{}", vb_rect, content, zoom_js);
-            out.replace_range(after_style..svg_end, &wrapped);
-        }
-    }
-
-    out
-}
-
-fn extract_viewbox(svg: &str) -> Option<(f64, f64, f64, f64)> {
-    let start = svg.find("viewBox=\"")? + "viewBox=\"".len();
-    let end = svg[start..].find('"')? + start;
-    let parts: Vec<f64> = svg[start..end]
-        .split_whitespace()
-        .filter_map(|s| s.parse().ok())
-        .collect();
-    if parts.len() == 4 {
-        Some((parts[0], parts[1], parts[2], parts[3]))
-    } else {
-        None
-    }
 }
 
 fn truncate(s: &str, max_len: usize) -> std::borrow::Cow<'_, str> {
@@ -943,7 +786,7 @@ COMMANDS:
     entities    List entities with optional filters
     routes      List task route assignments
     edges       List edges/relationships
-    visualize   Generate SVG graph visualization
+    visualize   Generate SVG graph visualization or interactive HTML tree
     config      Initialize or validate configuration
     guide       Show this help message
 
@@ -962,6 +805,9 @@ EXAMPLES:
 
     # Generate visualization
     chizu visualize --entity-id "component::cargo::." --output graph.svg
+
+    # Generate interactive visualization
+    chizu visualize --interactive --output graph.html
 
 For more information, see the documentation at:
     https://github.com/l1x/chizu
