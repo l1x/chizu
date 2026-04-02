@@ -105,11 +105,21 @@ mod tests {
     fn test_pipeline_end_to_end() {
         let (store, _temp) = create_test_store();
 
-        store.insert_entity(&Entity::new("a", EntityKind::Symbol, "auth_handler")).unwrap();
-        store.insert_entity(&Entity::new("b", EntityKind::Symbol, "helper")).unwrap();
-        store.insert_task_route(&TaskRoute::new("debug", "a", 80)).unwrap();
-        store.insert_summary(&Summary::new("a", "Handles authentication")).unwrap();
-        store.insert_edge(&Edge::new("a", EdgeKind::Defines, "b")).unwrap();
+        store
+            .insert_entity(&Entity::new("a", EntityKind::Symbol, "auth_handler"))
+            .unwrap();
+        store
+            .insert_entity(&Entity::new("b", EntityKind::Symbol, "helper"))
+            .unwrap();
+        store
+            .insert_task_route(&TaskRoute::new("debug", "a", 80))
+            .unwrap();
+        store
+            .insert_summary(&Summary::new("a", "Handles authentication"))
+            .unwrap();
+        store
+            .insert_edge(&Edge::new("a", EdgeKind::Defines, "b"))
+            .unwrap();
 
         let config = Config::default();
         let plan = SearchPipeline::run(&store, "auth debug", None, 5, &config, None).unwrap();
@@ -128,8 +138,12 @@ mod tests {
 
         for i in 0..10 {
             let id = format!("e{}", i);
-            store.insert_entity(&Entity::new(&id, EntityKind::Symbol, &id)).unwrap();
-            store.insert_summary(&Summary::new(&id, "common term")).unwrap();
+            store
+                .insert_entity(&Entity::new(&id, EntityKind::Symbol, &id))
+                .unwrap();
+            store
+                .insert_summary(&Summary::new(&id, "common term"))
+                .unwrap();
         }
 
         let config = Config::default();

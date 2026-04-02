@@ -2,8 +2,8 @@ use std::collections::HashSet;
 
 use chizu_core::Store;
 
-use crate::retrieval::Candidate;
 use crate::error::Result;
+use crate::retrieval::Candidate;
 
 /// Expand seed candidates with 1-hop graph neighbors.
 ///
@@ -19,7 +19,8 @@ pub fn expand(store: &dyn Store, candidates: &mut Vec<Candidate>, limit: usize) 
         .map(|c| c.entity.id.clone())
         .collect();
 
-    let mut existing_ids: HashSet<String> = candidates.iter().map(|c| c.entity.id.clone()).collect();
+    let mut existing_ids: HashSet<String> =
+        candidates.iter().map(|c| c.entity.id.clone()).collect();
 
     for seed_id in seed_ids {
         let mut neighbors = Vec::new();
@@ -58,10 +59,8 @@ pub fn expand(store: &dyn Store, candidates: &mut Vec<Candidate>, limit: usize) 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use chizu_core::{
-        ChizuStore, Config, Edge, EdgeKind, Entity, EntityKind, Store,
-    };
     use crate::retrieval::Candidate;
+    use chizu_core::{ChizuStore, Config, Edge, EdgeKind, Entity, EntityKind, Store};
     use tempfile::TempDir;
 
     fn create_test_store() -> (ChizuStore, TempDir) {
@@ -75,11 +74,21 @@ mod tests {
     fn test_expansion_adds_neighbors() {
         let (store, _temp) = create_test_store();
 
-        store.insert_entity(&Entity::new("a", EntityKind::Symbol, "a")).unwrap();
-        store.insert_entity(&Entity::new("b", EntityKind::Symbol, "b")).unwrap();
-        store.insert_entity(&Entity::new("c", EntityKind::Symbol, "c")).unwrap();
-        store.insert_edge(&Edge::new("a", EdgeKind::Defines, "b")).unwrap();
-        store.insert_edge(&Edge::new("c", EdgeKind::Defines, "a")).unwrap();
+        store
+            .insert_entity(&Entity::new("a", EntityKind::Symbol, "a"))
+            .unwrap();
+        store
+            .insert_entity(&Entity::new("b", EntityKind::Symbol, "b"))
+            .unwrap();
+        store
+            .insert_entity(&Entity::new("c", EntityKind::Symbol, "c"))
+            .unwrap();
+        store
+            .insert_edge(&Edge::new("a", EdgeKind::Defines, "b"))
+            .unwrap();
+        store
+            .insert_edge(&Edge::new("c", EdgeKind::Defines, "a"))
+            .unwrap();
 
         let mut candidates = vec![Candidate {
             entity: Entity::new("a", EntityKind::Symbol, "a"),
@@ -108,11 +117,17 @@ mod tests {
     fn test_expansion_caps_at_5_per_seed() {
         let (store, _temp) = create_test_store();
 
-        store.insert_entity(&Entity::new("seed", EntityKind::Symbol, "seed")).unwrap();
+        store
+            .insert_entity(&Entity::new("seed", EntityKind::Symbol, "seed"))
+            .unwrap();
         for i in 0..10 {
             let id = format!("n{}", i);
-            store.insert_entity(&Entity::new(&id, EntityKind::Symbol, &id)).unwrap();
-            store.insert_edge(&Edge::new("seed", EdgeKind::Defines, &id)).unwrap();
+            store
+                .insert_entity(&Entity::new(&id, EntityKind::Symbol, &id))
+                .unwrap();
+            store
+                .insert_edge(&Edge::new("seed", EdgeKind::Defines, &id))
+                .unwrap();
         }
 
         let mut candidates = vec![Candidate {
@@ -136,11 +151,21 @@ mod tests {
     fn test_expansion_does_not_expand_context() {
         let (store, _temp) = create_test_store();
 
-        store.insert_entity(&Entity::new("seed", EntityKind::Symbol, "seed")).unwrap();
-        store.insert_entity(&Entity::new("ctx", EntityKind::Symbol, "ctx")).unwrap();
-        store.insert_entity(&Entity::new("far", EntityKind::Symbol, "far")).unwrap();
-        store.insert_edge(&Edge::new("seed", EdgeKind::Defines, "ctx")).unwrap();
-        store.insert_edge(&Edge::new("ctx", EdgeKind::Defines, "far")).unwrap();
+        store
+            .insert_entity(&Entity::new("seed", EntityKind::Symbol, "seed"))
+            .unwrap();
+        store
+            .insert_entity(&Entity::new("ctx", EntityKind::Symbol, "ctx"))
+            .unwrap();
+        store
+            .insert_entity(&Entity::new("far", EntityKind::Symbol, "far"))
+            .unwrap();
+        store
+            .insert_edge(&Edge::new("seed", EdgeKind::Defines, "ctx"))
+            .unwrap();
+        store
+            .insert_edge(&Edge::new("ctx", EdgeKind::Defines, "far"))
+            .unwrap();
 
         let mut candidates = vec![
             Candidate {

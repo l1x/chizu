@@ -1,6 +1,4 @@
-use chizu_core::{
-    ChizuStore, Config, Provider, ProviderError, Store,
-};
+use chizu_core::{ChizuStore, Config, Provider, ProviderError, Store};
 use chizu_index::IndexPipeline;
 use tempfile::TempDir;
 
@@ -10,7 +8,11 @@ struct MockProvider {
 }
 
 impl Provider for MockProvider {
-    fn complete(&self, _prompt: &str, _max_tokens: Option<u32>) -> std::result::Result<String, ProviderError> {
+    fn complete(
+        &self,
+        _prompt: &str,
+        _max_tokens: Option<u32>,
+    ) -> std::result::Result<String, ProviderError> {
         Ok(self.summary_response.clone())
     }
 
@@ -70,13 +72,22 @@ edition = "2021"
         .iter()
         .find(|s| s.entity_id.contains("::add"))
         .expect("summary for add function should exist");
-    assert_eq!(add_summary.short_summary, "Adds two numbers");
-    assert_eq!(add_summary.detailed_summary, Some("A simple addition function.".to_string()));
-    assert_eq!(add_summary.keywords, Some(vec!["math".to_string(), "addition".to_string()]));
+    assert_eq!(add_summary.short_summary, "Adds two numbers.");
+    assert_eq!(
+        add_summary.detailed_summary,
+        Some("A simple addition function.".to_string())
+    );
+    assert_eq!(
+        add_summary.keywords,
+        Some(vec!["math".to_string(), "addition".to_string()])
+    );
     assert!(add_summary.source_hash.is_some());
 
     // Verify embeddings table
-    let meta = store.get_embedding_meta(&add_summary.entity_id).unwrap().unwrap();
+    let meta = store
+        .get_embedding_meta(&add_summary.entity_id)
+        .unwrap()
+        .unwrap();
     assert_eq!(meta.model, "test-embed");
     assert_eq!(meta.dimensions, 4);
     assert!(meta.usearch_key.is_some());
@@ -86,7 +97,10 @@ edition = "2021"
     assert!(!results.is_empty());
     let found_key = results[0].0;
     let expected_key = meta.usearch_key.unwrap();
-    assert_eq!(found_key, expected_key, "vector search should return the key for the 'add' entity");
+    assert_eq!(
+        found_key, expected_key,
+        "vector search should return the key for the 'add' entity"
+    );
 
     store.close().unwrap();
 }

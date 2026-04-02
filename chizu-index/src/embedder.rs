@@ -114,7 +114,10 @@ impl<'a> Embedder<'a> {
         info!("  embedding batch of {} items", texts.len());
         let llm_start = Instant::now();
         let vectors = self.provider.embed(&texts)?;
-        info!("  llm latency: {:.1}ms", llm_start.elapsed().as_secs_f64() * 1000.0);
+        info!(
+            "  llm latency: {:.1}ms",
+            llm_start.elapsed().as_secs_f64() * 1000.0
+        );
 
         if vectors.len() != batch.len() {
             return Err(crate::error::IndexError::Other(format!(
@@ -128,7 +131,9 @@ impl<'a> Embedder<'a> {
             if v.len() != dimensions as usize {
                 return Err(crate::error::IndexError::Other(format!(
                     "embedding dimension mismatch for item {}: expected {}, got {}",
-                    i, dimensions, v.len()
+                    i,
+                    dimensions,
+                    v.len()
                 )));
             }
         }
@@ -175,11 +180,15 @@ impl<'a> Embedder<'a> {
     ) -> Result<()> {
         let llm_start = Instant::now();
         let vectors = self.provider.embed(&[text.to_string()])?;
-        info!("  llm latency (single): {:.1}ms", llm_start.elapsed().as_secs_f64() * 1000.0);
+        info!(
+            "  llm latency (single): {:.1}ms",
+            llm_start.elapsed().as_secs_f64() * 1000.0
+        );
 
-        let vector = vectors.into_iter().next().ok_or_else(|| {
-            crate::error::IndexError::Other("empty embedding response".into())
-        })?;
+        let vector = vectors
+            .into_iter()
+            .next()
+            .ok_or_else(|| crate::error::IndexError::Other("empty embedding response".into()))?;
 
         let key = entity_id_to_usearch_key(entity_id);
         let meta = EmbeddingMeta::new(entity_id, model, dimensions).with_usearch_key(key);
@@ -216,7 +225,11 @@ mod tests {
     }
 
     impl Provider for MockProvider {
-        fn complete(&self, _prompt: &str, _max_tokens: Option<u32>) -> std::result::Result<String, ProviderError> {
+        fn complete(
+            &self,
+            _prompt: &str,
+            _max_tokens: Option<u32>,
+        ) -> std::result::Result<String, ProviderError> {
             unimplemented!()
         }
 

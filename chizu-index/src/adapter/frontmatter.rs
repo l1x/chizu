@@ -4,11 +4,16 @@ use crate::error::Result;
 use crate::walk::WalkedFile;
 
 /// Index a markdown file with frontmatter as a content page.
-pub fn index_frontmatter_file(file: &WalkedFile, repo_root: &std::path::Path) -> Result<(Vec<Entity>, Vec<Edge>)> {
+pub fn index_frontmatter_file(
+    file: &WalkedFile,
+    repo_root: &std::path::Path,
+) -> Result<(Vec<Entity>, Vec<Edge>)> {
     let path_str = file.path.to_string_lossy();
 
     // Only process .md files in content directories
-    if !super::is_content_dir(&file.path) || file.path.extension().and_then(|e| e.to_str()) != Some("md") {
+    if !super::is_content_dir(&file.path)
+        || file.path.extension().and_then(|e| e.to_str()) != Some("md")
+    {
         return Ok((Vec::new(), Vec::new()));
     }
 
@@ -27,9 +32,12 @@ pub fn index_frontmatter_file(file: &WalkedFile, repo_root: &std::path::Path) ->
         .and_then(|n| n.to_str())
         .unwrap_or("page");
 
-    let entity = Entity::new(&id, EntityKind::ContentPage, name)
+    let mut entity = Entity::new(&id, EntityKind::ContentPage, name)
         .with_path(path_str.as_ref())
         .with_exported(true);
+    if let Some(component_id) = file.component_id.as_ref() {
+        entity = entity.with_component(component_id.clone());
+    }
 
     Ok((vec![entity], Vec::new()))
 }

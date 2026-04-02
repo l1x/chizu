@@ -79,13 +79,7 @@ impl TaskCategory {
                 "migration",
             ],
             TaskCategory::Test => &["test", "bench", "source_unit", "spec"],
-            TaskCategory::Deploy => &[
-                "containerized",
-                "infra_root",
-                "task",
-                "command",
-                "site",
-            ],
+            TaskCategory::Deploy => &["containerized", "infra_root", "task", "command", "site"],
             TaskCategory::Configure => &[
                 "component",
                 "feature",
@@ -108,7 +102,10 @@ pub fn classify_query(query: &str) -> TaskCategory {
 
     let lower = query.to_lowercase();
     for token in lower.split_whitespace() {
-        if matches!(token, "debug" | "fix" | "bug" | "error" | "panic" | "crash" | "trace") {
+        if matches!(
+            token,
+            "debug" | "fix" | "bug" | "error" | "panic" | "crash" | "trace"
+        ) {
             scores[0] += 1;
         }
         if matches!(token, "build" | "implement" | "add" | "create" | "write") {
@@ -123,7 +120,10 @@ pub fn classify_query(query: &str) -> TaskCategory {
         if matches!(token, "configure" | "setup" | "settings" | "env" | "config") {
             scores[4] += 1;
         }
-        if matches!(token, "understand" | "how" | "what" | "architecture" | "design" | "overview") {
+        if matches!(
+            token,
+            "understand" | "how" | "what" | "architecture" | "design" | "overview"
+        ) {
             scores[5] += 1;
         }
     }
@@ -153,8 +153,14 @@ mod tests {
 
     #[test]
     fn test_classify_understand() {
-        assert_eq!(classify_query("how does routing work"), TaskCategory::Understand);
-        assert_eq!(classify_query("architecture overview"), TaskCategory::Understand);
+        assert_eq!(
+            classify_query("how does routing work"),
+            TaskCategory::Understand
+        );
+        assert_eq!(
+            classify_query("architecture overview"),
+            TaskCategory::Understand
+        );
     }
 
     #[test]

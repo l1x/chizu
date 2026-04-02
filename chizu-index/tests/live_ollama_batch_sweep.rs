@@ -136,9 +136,18 @@ fn live_ollama_sampled_summary_batch_sweep() {
 
 fn run_live(repo_root: &Path, batch_size: usize) -> LiveRun {
     let mut config = Config::default();
-    config.index.exclude_patterns.push("**/.chizu/**".to_string());
-    config.index.exclude_patterns.push("**/.claude/**".to_string());
-    config.index.exclude_patterns.push("**/.crush/**".to_string());
+    config
+        .index
+        .exclude_patterns
+        .push("**/.chizu/**".to_string());
+    config
+        .index
+        .exclude_patterns
+        .push("**/.claude/**".to_string());
+    config
+        .index
+        .exclude_patterns
+        .push("**/.crush/**".to_string());
     config.summary.provider = Some("ollama".to_string());
     config.summary.model = Some("llama3:8b".to_string());
     config.summary.batch_size = Some(batch_size);
@@ -234,9 +243,18 @@ fn run_live_sample(repo_root: &Path, sample_entities: &[Entity], batch_size: usi
 
 fn prepare_symbol_sample(repo_root: &Path, sample_size: usize) -> Vec<Entity> {
     let mut config = Config::default();
-    config.index.exclude_patterns.push("**/.chizu/**".to_string());
-    config.index.exclude_patterns.push("**/.claude/**".to_string());
-    config.index.exclude_patterns.push("**/.crush/**".to_string());
+    config
+        .index
+        .exclude_patterns
+        .push("**/.chizu/**".to_string());
+    config
+        .index
+        .exclude_patterns
+        .push("**/.claude/**".to_string());
+    config
+        .index
+        .exclude_patterns
+        .push("**/.crush/**".to_string());
     config.summary.provider = None;
     config.embedding.provider = None;
 

@@ -4,7 +4,10 @@ use crate::error::Result;
 use crate::walk::WalkedFile;
 
 /// Index a mise.toml file and extract tasks.
-pub fn index_mise_file(file: &WalkedFile, repo_root: &std::path::Path) -> Result<(Vec<Entity>, Vec<Edge>)> {
+pub fn index_mise_file(
+    file: &WalkedFile,
+    repo_root: &std::path::Path,
+) -> Result<(Vec<Entity>, Vec<Edge>)> {
     let mut entities = Vec::new();
     let mut edges = Vec::new();
     let path_str = file.path.to_string_lossy();
@@ -16,11 +19,13 @@ pub fn index_mise_file(file: &WalkedFile, repo_root: &std::path::Path) -> Result
     if let Some(tasks) = manifest.get("tasks").and_then(|t| t.as_table()) {
         for (task_name, _) in tasks {
             let id = entity_id("task", &format!("{}::{}", path_str, task_name));
-            entities.push(
-                Entity::new(&id, EntityKind::Task, task_name)
-                    .with_path(path_str.as_ref())
-                    .with_exported(true),
-            );
+            let mut entity = Entity::new(&id, EntityKind::Task, task_name)
+                .with_path(path_str.as_ref())
+                .with_exported(true);
+            if let Some(component_id) = file.component_id.as_ref() {
+                entity = entity.with_component(component_id.clone());
+            }
+            entities.push(entity);
             edges.push(Edge::new("repo::.", EdgeKind::OwnsTask, &id));
         }
     }

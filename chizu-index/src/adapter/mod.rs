@@ -35,11 +35,7 @@ pub fn index_file(
     file: &WalkedFile,
 ) -> Result<(Vec<chizu_core::Entity>, Vec<chizu_core::Edge>)> {
     let ext = file.path.extension().and_then(|e| e.to_str()).unwrap_or("");
-    let name = file
-        .path
-        .file_name()
-        .and_then(|n| n.to_str())
-        .unwrap_or("");
+    let name = file.path.file_name().and_then(|n| n.to_str()).unwrap_or("");
 
     if ext == "rs" {
         return rust::index_rust_file(file, repo_root);

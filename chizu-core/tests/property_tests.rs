@@ -164,7 +164,10 @@ fn component_id_new_always_parseable() {
         .for_each(|(ecosystem, path)| {
             let id = ComponentId::new(ecosystem, path);
             let parsed = ComponentId::parse(id.as_str());
-            assert!(parsed.is_some(), "ComponentId::new result must be parseable");
+            assert!(
+                parsed.is_some(),
+                "ComponentId::new result must be parseable"
+            );
             assert_eq!(parsed.unwrap(), id);
         });
 }
@@ -258,12 +261,14 @@ fn open_temp_store() -> (tempfile::TempDir, chizu_core::ChizuStore) {
 #[test]
 fn store_entity_insert_get_roundtrip() {
     check!()
-        .with_generator((0..ALL_ENTITY_KINDS.len(), bolero::generator::produce::<bool>()))
+        .with_generator((
+            0..ALL_ENTITY_KINDS.len(),
+            bolero::generator::produce::<bool>(),
+        ))
         .for_each(|(kind_idx, exported)| {
             let kind = ALL_ENTITY_KINDS[*kind_idx];
             let (_dir, store) = open_temp_store();
-            let entity =
-                Entity::new("test::prop::1", kind, "prop_entity").with_exported(*exported);
+            let entity = Entity::new("test::prop::1", kind, "prop_entity").with_exported(*exported);
             store.insert_entity(&entity).unwrap();
             let retrieved = store.get_entity("test::prop::1").unwrap().unwrap();
             assert_eq!(entity.kind, retrieved.kind);
@@ -375,20 +380,16 @@ fn fuzz_config_from_toml_no_panic() {
 
 #[test]
 fn fuzz_entity_json_deser_no_panic() {
-    check!()
-        .with_type::<Vec<u8>>()
-        .for_each(|bytes: &Vec<u8>| {
-            let _ = serde_json::from_slice::<Entity>(bytes);
-        });
+    check!().with_type::<Vec<u8>>().for_each(|bytes: &Vec<u8>| {
+        let _ = serde_json::from_slice::<Entity>(bytes);
+    });
 }
 
 #[test]
 fn fuzz_edge_json_deser_no_panic() {
-    check!()
-        .with_type::<Vec<u8>>()
-        .for_each(|bytes: &Vec<u8>| {
-            let _ = serde_json::from_slice::<Edge>(bytes);
-        });
+    check!().with_type::<Vec<u8>>().for_each(|bytes: &Vec<u8>| {
+        let _ = serde_json::from_slice::<Edge>(bytes);
+    });
 }
 
 // ── Config TOML roundtrip ────────────────────────────────────────────
@@ -410,13 +411,11 @@ fn config_default_roundtrip_through_toml() {
 
 #[test]
 fn blake3_hash_is_deterministic() {
-    check!()
-        .with_type::<Vec<u8>>()
-        .for_each(|data: &Vec<u8>| {
-            let h1 = blake3::hash(data);
-            let h2 = blake3::hash(data);
-            assert_eq!(h1, h2);
-        });
+    check!().with_type::<Vec<u8>>().for_each(|data: &Vec<u8>| {
+        let h1 = blake3::hash(data);
+        let h2 = blake3::hash(data);
+        assert_eq!(h1, h2);
+    });
 }
 
 #[test]

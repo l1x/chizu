@@ -61,9 +61,7 @@ pub fn discover_npm_components(
         let content = std::fs::read_to_string(&abs_path)?;
         let manifest: serde_json::Value = serde_json::from_str(&content)?;
 
-        let package_name = manifest
-            .get("name")
-            .and_then(|n| n.as_str());
+        let package_name = manifest.get("name").and_then(|n| n.as_str());
 
         let name = match package_name {
             Some(n) => n.to_string(),
@@ -81,8 +79,12 @@ pub fn discover_npm_components(
                     // Try to read the member's package.json to get its name
                     let member_pkg = repo_root.join(&resolved).join("package.json");
                     if let Ok(member_content) = std::fs::read_to_string(member_pkg) {
-                        if let Ok(member_manifest) = serde_json::from_str::<serde_json::Value>(&member_content) {
-                            if let Some(member_name) = member_manifest.get("name").and_then(|n| n.as_str()) {
+                        if let Ok(member_manifest) =
+                            serde_json::from_str::<serde_json::Value>(&member_content)
+                        {
+                            if let Some(member_name) =
+                                member_manifest.get("name").and_then(|n| n.as_str())
+                            {
                                 registry.register(resolved, member_name.to_string(), "npm");
                             }
                         }
@@ -201,16 +203,8 @@ version = "0.1.0"
 }"#,
         )
         .unwrap();
-        fs::write(
-            root.join("packages/foo/package.json"),
-            r#"{"name": "foo"}"#,
-        )
-        .unwrap();
-        fs::write(
-            root.join("packages/bar/package.json"),
-            r#"{"name": "bar"}"#,
-        )
-        .unwrap();
+        fs::write(root.join("packages/foo/package.json"), r#"{"name": "foo"}"#).unwrap();
+        fs::write(root.join("packages/bar/package.json"), r#"{"name": "bar"}"#).unwrap();
 
         let config = Config::default();
         let walker = FileWalker::new(root, &config).unwrap();
@@ -247,11 +241,7 @@ version = "0.1.0"
 "#,
         )
         .unwrap();
-        fs::write(
-            root.join("packages/web/package.json"),
-            r#"{"name": "web"}"#,
-        )
-        .unwrap();
+        fs::write(root.join("packages/web/package.json"), r#"{"name": "web"}"#).unwrap();
 
         let config = Config::default();
         let walker = FileWalker::new(root, &config).unwrap();

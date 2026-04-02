@@ -15,6 +15,8 @@ pub struct Config {
     pub summary: SummaryConfig,
     /// Embedding configuration
     pub embedding: EmbeddingConfig,
+    /// Visualization configuration
+    pub visualize: VisualizeConfig,
 }
 
 impl Default for Config {
@@ -25,6 +27,7 @@ impl Default for Config {
             providers: default_providers(),
             summary: SummaryConfig::default(),
             embedding: EmbeddingConfig::default(),
+            visualize: VisualizeConfig::default(),
         }
     }
 }
@@ -104,6 +107,14 @@ impl Config {
                     "embedding.batch_size must be > 0".into(),
                 ));
             }
+        }
+
+        if let Some(template) = &self.visualize.editor_link
+            && template.trim().is_empty()
+        {
+            return Err(ConfigError::InvalidParam(
+                "visualize.editor_link must not be empty".into(),
+            ));
         }
 
         Ok(())
@@ -297,6 +308,15 @@ impl Default for EmbeddingConfig {
     }
 }
 
+/// Visualization configuration
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+#[serde(default)]
+pub struct VisualizeConfig {
+    /// Optional editor URL template for "Open in editor" links.
+    /// Available placeholders: {abs_path}, {repo_path}, {line}, {column}, {entity_id}
+    pub editor_link: Option<String>,
+}
+
 /// Configuration errors
 #[derive(Debug, thiserror::Error)]
 pub enum ConfigError {
@@ -401,6 +421,7 @@ exclude_patterns = ["**/vendor/**"]
         );
         assert!(parsed.providers.contains_key("ollama"));
         assert_eq!(parsed.embedding.dimensions, original.embedding.dimensions);
+        assert_eq!(parsed.visualize.editor_link, original.visualize.editor_link);
     }
 
     #[test]
@@ -478,6 +499,29 @@ base_url = "http://localhost:2"
 provider = "a"
 [embedding]
 provider = "b"
+"#;
+        let result = Config::from_toml(toml);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_visualize_editor_link_config() {
+        let toml = r#"
+[visualize]
+editor_link = "vscode://file/{abs_path}:{line}:{column}"
+"#;
+        let config = Config::from_toml(toml).unwrap();
+        assert_eq!(
+            config.visualize.editor_link,
+            Some("vscode://file/{abs_path}:{line}:{column}".to_string())
+        );
+    }
+
+    #[test]
+    fn test_empty_visualize_editor_link_rejected() {
+        let toml = r#"
+[visualize]
+editor_link = "   "
 "#;
         let result = Config::from_toml(toml);
         assert!(result.is_err());

@@ -1,5 +1,6 @@
 use chizu_core::{
-    Edge, EdgeKind, Entity, EntityKind, Visibility, entity_id, source_unit_id, symbol_id, test_id,
+    ComponentId, Edge, EdgeKind, Entity, EntityKind, Visibility, entity_id, source_unit_id,
+    symbol_id, test_id,
 };
 use tree_sitter::Parser;
 
@@ -27,12 +28,21 @@ pub fn index_rust_file(
         .ok_or_else(|| IndexError::Other("failed to parse rust file".into()))?;
 
     let su_id = source_unit_id(&path_str);
-    entities.push(
+    let source_unit = apply_component(
         Entity::new(&su_id, EntityKind::SourceUnit, path_str.as_ref())
             .with_path(path_str.as_ref())
             .with_language("rust")
             .with_exported(true),
+        file.component_id.as_ref(),
     );
+    entities.push(source_unit);
+    if let Some(component_id) = file.component_id.as_ref() {
+        edges.push(Edge::new(
+            component_id.to_string(),
+            EdgeKind::Contains,
+            &su_id,
+        ));
+    }
 
     let test_names = collect_attributed_fns(tree.root_node(), &source, "test");
     let bench_names = collect_attributed_fns(tree.root_node(), &source, "bench");
@@ -42,6 +52,7 @@ pub fn index_rust_file(
         &source,
         &path_str,
         &su_id,
+        file.component_id.as_ref(),
         &test_names,
         &bench_names,
         &mut entities,
@@ -121,6 +132,7 @@ fn extract_items(
     source: &str,
     path_str: &str,
     source_unit_id: &str,
+    component_id: Option<&ComponentId>,
     test_names: &std::collections::HashSet<String>,
     bench_names: &std::collections::HashSet<String>,
     entities: &mut Vec<Entity>,
@@ -135,9 +147,12 @@ fn extract_items(
 
                 if test_names.contains(&name) {
                     let id = test_id(path_str, &name);
-                    let mut e = Entity::new(&id, EntityKind::Test, &name)
-                        .with_path(path_str)
-                        .with_language("rust");
+                    let mut e = apply_component(
+                        Entity::new(&id, EntityKind::Test, &name)
+                            .with_path(path_str)
+                            .with_language("rust"),
+                        component_id,
+                    );
                     if let Some(v) = vis {
                         e = e.with_visibility(v);
                     }
@@ -145,9 +160,12 @@ fn extract_items(
                     edges.push(Edge::new(source_unit_id, EdgeKind::TestedBy, &id));
                 } else if bench_names.contains(&name) {
                     let id = entity_id("bench", &format!("{path_str}::{name}"));
-                    let mut e = Entity::new(&id, EntityKind::Bench, &name)
-                        .with_path(path_str)
-                        .with_language("rust");
+                    let mut e = apply_component(
+                        Entity::new(&id, EntityKind::Bench, &name)
+                            .with_path(path_str)
+                            .with_language("rust"),
+                        component_id,
+                    );
                     if let Some(v) = vis {
                         e = e.with_visibility(v);
                     }
@@ -155,10 +173,13 @@ fn extract_items(
                     edges.push(Edge::new(source_unit_id, EdgeKind::BenchmarkedBy, &id));
                 } else {
                     let id = symbol_id(path_str, &name);
-                    let mut e = Entity::new(&id, EntityKind::Symbol, &name)
-                        .with_path(path_str)
-                        .with_language("rust")
-                        .with_exported(exported);
+                    let mut e = apply_component(
+                        Entity::new(&id, EntityKind::Symbol, &name)
+                            .with_path(path_str)
+                            .with_language("rust")
+                            .with_exported(exported),
+                        component_id,
+                    );
                     if let Some(v) = vis {
                         e = e.with_visibility(v);
                     }
@@ -173,10 +194,13 @@ fn extract_items(
                 let vis = extract_visibility(node, source);
                 let exported = vis == Some(Visibility::Public);
                 let id = symbol_id(path_str, &name);
-                let mut e = Entity::new(&id, EntityKind::Symbol, &name)
-                    .with_path(path_str)
-                    .with_language("rust")
-                    .with_exported(exported);
+                let mut e = apply_component(
+                    Entity::new(&id, EntityKind::Symbol, &name)
+                        .with_path(path_str)
+                        .with_language("rust")
+                        .with_exported(exported),
+                    component_id,
+                );
                 if let Some(v) = vis {
                     e = e.with_visibility(v);
                 }
@@ -196,6 +220,7 @@ fn extract_items(
                         source,
                         path_str,
                         source_unit_id,
+                        component_id,
                         test_names,
                         bench_names,
                         entities,
@@ -224,6 +249,7 @@ fn extract_items(
                     source,
                     path_str,
                     source_unit_id,
+                    component_id,
                     test_names,
                     bench_names,
                     entities,
@@ -234,12 +260,14 @@ fn extract_items(
     }
 }
 
-fn extract_impl(
-    node: tree_sitter::Node,
-    source: &str,
-    path_str: &str,
-    edges: &mut Vec<Edge>,
-) {
+fn apply_component(mut entity: Entity, component_id: Option<&ComponentId>) -> Entity {
+    if let Some(component_id) = component_id {
+        entity = entity.with_component(component_id.clone());
+    }
+    entity
+}
+
+fn extract_impl(node: tree_sitter::Node, source: &str, path_str: &str, edges: &mut Vec<Edge>) {
     // Look for `impl Trait for Type` pattern
     let mut cursor = node.walk();
     let children: Vec<_> = node.children(&mut cursor).collect();
@@ -285,7 +313,12 @@ fn extract_impl(
 
 /// Extract the target name from a use declaration like `pub use foo::Bar;`
 fn extract_use_target(text: &str) -> Option<&str> {
-    let text = text.trim().strip_prefix("pub")?.trim().strip_prefix("use")?.trim();
+    let text = text
+        .trim()
+        .strip_prefix("pub")?
+        .trim()
+        .strip_prefix("use")?
+        .trim();
     let text = text.strip_suffix(';').unwrap_or(text).trim();
     // Handle `foo::Bar` → "Bar", `foo::*` → None, `foo::{A, B}` → None
     if text.contains('{') || text.ends_with('*') {
@@ -297,6 +330,7 @@ fn extract_use_target(text: &str) -> Option<&str> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use chizu_core::ComponentId;
     use std::fs;
     use tempfile::TempDir;
 
@@ -367,6 +401,44 @@ fn test_helper() {
     }
 
     #[test]
+    fn rust_adapter_propagates_component_and_contains_source_unit() {
+        let tmp = TempDir::new().unwrap();
+        let root = tmp.path();
+        fs::write(root.join("lib.rs"), "pub fn helper() {}").unwrap();
+
+        let file = WalkedFile {
+            path: std::path::PathBuf::from("lib.rs"),
+            hash: "abc".to_string(),
+            component_id: Some(ComponentId::new("cargo", "crate")),
+        };
+        let (entities, edges) = index_rust_file(&file, root).unwrap();
+
+        let source_unit = entities
+            .iter()
+            .find(|e| e.kind == EntityKind::SourceUnit)
+            .unwrap();
+        assert_eq!(
+            source_unit.component_id,
+            Some(ComponentId::new("cargo", "crate"))
+        );
+
+        let symbol = entities
+            .iter()
+            .find(|e| e.kind == EntityKind::Symbol && e.name == "helper")
+            .unwrap();
+        assert_eq!(
+            symbol.component_id,
+            Some(ComponentId::new("cargo", "crate"))
+        );
+
+        assert!(edges.iter().any(|e| {
+            e.src_id == "component::cargo::crate"
+                && e.rel == EdgeKind::Contains
+                && e.dst_id == "source_unit::lib.rs"
+        }));
+    }
+
+    #[test]
     fn rust_adapter_extracts_visibility() {
         let tmp = TempDir::new().unwrap();
         let root = tmp.path();
@@ -424,15 +496,21 @@ fn not_a_bench() {}
         };
         let (entities, edges) = index_rust_file(&file, root).unwrap();
 
-        assert!(entities
-            .iter()
-            .any(|e| e.kind == EntityKind::Bench && e.name == "bench_sort"));
-        assert!(entities
-            .iter()
-            .any(|e| e.kind == EntityKind::Symbol && e.name == "not_a_bench"));
-        assert!(edges
-            .iter()
-            .any(|e| e.rel == EdgeKind::BenchmarkedBy && e.dst_id.contains("bench_sort")));
+        assert!(
+            entities
+                .iter()
+                .any(|e| e.kind == EntityKind::Bench && e.name == "bench_sort")
+        );
+        assert!(
+            entities
+                .iter()
+                .any(|e| e.kind == EntityKind::Symbol && e.name == "not_a_bench")
+        );
+        assert!(
+            edges
+                .iter()
+                .any(|e| e.rel == EdgeKind::BenchmarkedBy && e.dst_id.contains("bench_sort"))
+        );
     }
 
     #[test]
@@ -489,8 +567,11 @@ use std::io;
                 && e.dst_id == "symbol::lib.rs::Widget"
         }));
         // Non-pub use should NOT produce a reexport edge
-        assert!(!edges.iter().any(|e| e.rel == EdgeKind::Reexports
-            && e.dst_id.contains("io")));
+        assert!(
+            !edges
+                .iter()
+                .any(|e| e.rel == EdgeKind::Reexports && e.dst_id.contains("io"))
+        );
     }
 
     #[test]

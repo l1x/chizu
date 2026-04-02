@@ -16,11 +16,13 @@ pub fn index_doc_file(file: &WalkedFile) -> Result<(Vec<Entity>, Vec<Edge>)> {
         .and_then(|n| n.to_str())
         .unwrap_or(&path_str);
 
-    entities.push(
-        Entity::new(&id, EntityKind::Doc, name)
-            .with_path(path_str.as_ref())
-            .with_exported(true),
-    );
+    let mut entity = Entity::new(&id, EntityKind::Doc, name)
+        .with_path(path_str.as_ref())
+        .with_exported(true);
+    if let Some(component_id) = file.component_id.as_ref() {
+        entity = entity.with_component(component_id.clone());
+    }
+    entities.push(entity);
 
     let src = file
         .component_id
@@ -48,6 +50,10 @@ mod tests {
         let (entities, edges) = index_doc_file(&file).unwrap();
         assert_eq!(entities[0].id, "doc::crates/core/README.md");
         assert_eq!(entities[0].kind, EntityKind::Doc);
+        assert_eq!(
+            entities[0].component_id,
+            Some(ComponentId::new("cargo", "crates/core"))
+        );
         assert_eq!(edges.len(), 1);
         assert_eq!(edges[0].src_id, "component::cargo::crates/core");
         assert_eq!(edges[0].rel, EdgeKind::DocumentedBy);

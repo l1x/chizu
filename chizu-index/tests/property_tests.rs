@@ -28,8 +28,7 @@ fn registry_component_for_path_returns_only_registered_components() {
                 }
                 let path = PathBuf::from(format!("crates/{}/{}", i, dir));
                 registry.register(path, name.clone(), "cargo");
-                registered_ids
-                    .push(ComponentId::new("cargo", &format!("crates/{}/{}", i, dir)));
+                registered_ids.push(ComponentId::new("cargo", &format!("crates/{}/{}", i, dir)));
             }
 
             if let Some(found) = registry.component_for_path(Path::new(&query_path)) {
@@ -72,29 +71,23 @@ fn registry_resolve_name_returns_only_registered_names() {
 #[test]
 fn registry_longest_prefix_wins() {
     // Given two nested components, a file deep inside should match the more specific one.
-    check!()
-        .with_type::<String>()
-        .for_each(|filename| {
-            let mut registry = ComponentRegistry::new();
-            registry.register(PathBuf::from("crates"), "parent".to_string(), "cargo");
-            registry.register(
-                PathBuf::from("crates/child"),
-                "child".to_string(),
-                "cargo",
+    check!().with_type::<String>().for_each(|filename| {
+        let mut registry = ComponentRegistry::new();
+        registry.register(PathBuf::from("crates"), "parent".to_string(), "cargo");
+        registry.register(PathBuf::from("crates/child"), "child".to_string(), "cargo");
+
+        let child_id = ComponentId::new("cargo", "crates/child");
+
+        // Any file under crates/child/ must resolve to the child component
+        let deep_path = PathBuf::from("crates/child").join(&filename);
+        if let Some(found) = registry.component_for_path(&deep_path) {
+            assert_eq!(
+                *found, child_id,
+                "File {:?} should match child, not parent",
+                deep_path
             );
-
-            let child_id = ComponentId::new("cargo", "crates/child");
-
-            // Any file under crates/child/ must resolve to the child component
-            let deep_path = PathBuf::from("crates/child").join(&filename);
-            if let Some(found) = registry.component_for_path(&deep_path) {
-                assert_eq!(
-                    *found, child_id,
-                    "File {:?} should match child, not parent",
-                    deep_path
-                );
-            }
-        });
+        }
+    });
 }
 
 #[test]
@@ -290,8 +283,10 @@ fn classify_all_new_files_are_changed() {
                 .collect();
 
             // Deduplicate by path (HashMap in classify_files will keep last)
-            let unique_paths: std::collections::HashSet<String> =
-                current.iter().map(|f| f.path.to_string_lossy().to_string()).collect();
+            let unique_paths: std::collections::HashSet<String> = current
+                .iter()
+                .map(|f| f.path.to_string_lossy().to_string())
+                .collect();
 
             let (changed, deleted) = classify_files(&current, &existing);
             assert_eq!(changed.len(), unique_paths.len());

@@ -425,7 +425,8 @@ fn cmd_edges(repo: &Path, args: EdgesArgs) -> Result<(), Box<dyn std::error::Err
 }
 
 fn cmd_visualize(repo: &Path, args: VisualizeArgs) -> Result<(), Box<dyn std::error::Error>> {
-    let store = open_store_only(repo)?;
+    let (config, store) = open_store(repo)?;
+    let repo_root = repo.canonicalize().unwrap_or_else(|_| repo.to_path_buf());
 
     let kind_filter: Option<Vec<String>> = args
         .kind
@@ -522,7 +523,20 @@ fn cmd_visualize(repo: &Path, args: VisualizeArgs) -> Result<(), Box<dyn std::er
     }
 
     let output_text = if args.interactive {
-        visualize::render_focus_graph_html(&entity_cache, &render_edges, args.entity_id.as_deref())
+        let mut summary_cache = std::collections::HashMap::new();
+        for entity_id in &selected_ids {
+            if let Some(summary) = store.get_summary(entity_id)? {
+                summary_cache.insert(entity_id.clone(), summary);
+            }
+        }
+        visualize::render_focus_graph_html(
+            &entity_cache,
+            &summary_cache,
+            &render_edges,
+            &repo_root,
+            config.visualize.editor_link.as_deref(),
+            args.entity_id.as_deref(),
+        )
     } else {
         visualize::render_focus_graph_svg(&entity_cache, &render_edges, args.entity_id.as_deref())
     };
@@ -743,6 +757,10 @@ provider = "ollama"
 model = "nomic-embed-text-v2-moe:latest"
 dimensions = 768
 batch_size = 32
+
+[visualize]
+# Example:
+# editor_link = "vscode://file/{abs_path}:{line}:{column}"
 "#;
 
             std::fs::write(&config_path, toml)?;

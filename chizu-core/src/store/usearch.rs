@@ -22,6 +22,9 @@ pub struct UsearchIndex {
 }
 
 impl UsearchIndex {
+    const INITIAL_CAPACITY: usize = 10_000;
+    const MIN_GROWTH_STEP: usize = 1_024;
+
     /// Open an existing index or create a new one.
     pub fn open_or_create(path: &Path, dimensions: usize) -> Result<Self> {
         if path.exists() {
@@ -33,7 +36,7 @@ impl UsearchIndex {
 
     pub fn create(path: &Path, dimensions: usize) -> Result<Self> {
         let index = Index::new(&Self::index_options(dimensions)).usearch("create index")?;
-        index.reserve(10000).usearch("reserve")?;
+        index.reserve(Self::INITIAL_CAPACITY).usearch("reserve")?;
 
         Ok(Self {
             index,
@@ -48,6 +51,16 @@ impl UsearchIndex {
             .to_str()
             .ok_or_else(|| StoreError::Other("invalid path".into()))?;
         index.load(path_str).usearch("load index")?;
+        let size = index.size();
+        let target_capacity = size
+            .saturating_mul(2)
+            .max(size.saturating_add(Self::MIN_GROWTH_STEP))
+            .max(Self::INITIAL_CAPACITY);
+        if index.capacity() < target_capacity {
+            index
+                .reserve(target_capacity)
+                .usearch("reserve headroom after load")?;
+        }
 
         Ok(Self {
             index,
@@ -93,6 +106,9 @@ impl UsearchIndex {
                 self.dimensions,
                 vector.len()
             )));
+        }
+        if !self.index.contains(key as u64) {
+            self.ensure_capacity_for_insert(1)?;
         }
         self.index.add(key as u64, vector).usearch("add vector")?;
         Ok(())
@@ -148,6 +164,24 @@ impl UsearchIndex {
 
     pub fn close(&self) -> Result<()> {
         self.save()
+    }
+
+    fn ensure_capacity_for_insert(&self, additional: usize) -> Result<()> {
+        let required = self.index.size().saturating_add(additional);
+        if required <= self.index.capacity() {
+            return Ok(());
+        }
+
+        let target_capacity = self
+            .index
+            .capacity()
+            .saturating_mul(2)
+            .max(required)
+            .max(required.saturating_add(Self::MIN_GROWTH_STEP))
+            .max(Self::INITIAL_CAPACITY);
+        self.index
+            .reserve(target_capacity)
+            .usearch("reserve capacity for insert")
     }
 }
 
@@ -229,6 +263,26 @@ mod tests {
 
         let index = UsearchIndex::open_or_create(&index_path, 4).unwrap();
         assert!(index.contains(1));
+    }
+
+    #[test]
+    fn test_add_after_load_grows_capacity() {
+        let temp_dir = TempDir::new().unwrap();
+        let index_path = temp_dir.path().join("growth.usearch");
+
+        {
+            let index = UsearchIndex::create(&index_path, 4).unwrap();
+            for key in 0..4 {
+                index.add(key, &[1.0, 0.0, 0.0, 0.0]).unwrap();
+            }
+            index.save().unwrap();
+        }
+
+        let index = UsearchIndex::open(&index_path, 4).unwrap();
+        let starting_size = index.len();
+        index.add(99, &[0.0, 1.0, 0.0, 0.0]).unwrap();
+        assert_eq!(index.len(), starting_size + 1);
+        assert!(index.contains(99));
     }
 
     #[test]

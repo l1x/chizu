@@ -146,11 +146,13 @@ pub fn scan_file(file: &WalkedFile) -> Result<(Vec<Entity>, Vec<Edge>)> {
             .and_then(|n| n.to_str())
             .unwrap_or(&path_str);
         let id = entity_id(rule.id_prefix, &path_str);
-        entities.push(
-            Entity::new(&id, rule.entity_kind, name)
-                .with_path(path_str.as_ref())
-                .with_exported(true),
-        );
+        let mut entity = Entity::new(&id, rule.entity_kind, name)
+            .with_path(path_str.as_ref())
+            .with_exported(true);
+        if let Some(component_id) = file.component_id.as_ref() {
+            entity = entity.with_component(component_id.clone());
+        }
+        entities.push(entity);
 
         if let Some((rel, src)) = rule.edge {
             edges.push(Edge::new(src, rel, &id));

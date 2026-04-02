@@ -105,8 +105,10 @@ pub fn retrieve(
                     let entry = candidates
                         .entry(entity.id.clone())
                         .or_insert_with(|| Candidate::from_entity(entity.clone()));
-                    entry.name_match_score = (name_hits as f64 / tokens.len() as f64).max(entry.name_match_score);
-                    entry.path_match_score = (path_hits as f64 / tokens.len() as f64).max(entry.path_match_score);
+                    entry.name_match_score =
+                        (name_hits as f64 / tokens.len() as f64).max(entry.name_match_score);
+                    entry.path_match_score =
+                        (path_hits as f64 / tokens.len() as f64).max(entry.path_match_score);
                 }
             }
         }
@@ -170,7 +172,11 @@ fn keyword_search(store: &dyn Store, tokens: &[String]) -> Result<HashMap<String
         let text = format!(
             "{} {}",
             summary.short_summary,
-            summary.keywords.as_ref().map(|k| k.join(" ")).unwrap_or_default()
+            summary
+                .keywords
+                .as_ref()
+                .map(|k| k.join(" "))
+                .unwrap_or_default()
         )
         .to_lowercase();
 
@@ -187,7 +193,8 @@ fn keyword_search(store: &dyn Store, tokens: &[String]) -> Result<HashMap<String
 mod tests {
     use super::*;
     use chizu_core::{
-        ChizuStore, Config, Entity, EntityKind, Provider, ProviderError, Store, Summary, TaskRoute, entity_id_to_usearch_key,
+        ChizuStore, Config, Entity, EntityKind, Provider, ProviderError, Store, Summary, TaskRoute,
+        entity_id_to_usearch_key,
     };
     use tempfile::TempDir;
 
@@ -196,7 +203,11 @@ mod tests {
     }
 
     impl Provider for MockProvider {
-        fn complete(&self, _prompt: &str, _max_tokens: Option<u32>) -> std::result::Result<String, ProviderError> {
+        fn complete(
+            &self,
+            _prompt: &str,
+            _max_tokens: Option<u32>,
+        ) -> std::result::Result<String, ProviderError> {
             unimplemented!()
         }
         fn embed(&self, _texts: &[String]) -> std::result::Result<Vec<Vec<f32>>, ProviderError> {
@@ -218,11 +229,19 @@ mod tests {
 
         let entity = Entity::new("symbol::src/lib.rs::foo", EntityKind::Symbol, "foo");
         store.insert_entity(&entity).unwrap();
-        store.insert_task_route(&TaskRoute::new("debug", "symbol::src/lib.rs::foo", 80)).unwrap();
-        store.insert_summary(&Summary::new("symbol::src/lib.rs::foo", "A function that handles auth")).unwrap();
+        store
+            .insert_task_route(&TaskRoute::new("debug", "symbol::src/lib.rs::foo", 80))
+            .unwrap();
+        store
+            .insert_summary(&Summary::new(
+                "symbol::src/lib.rs::foo",
+                "A function that handles auth",
+            ))
+            .unwrap();
 
         let config = Config::default();
-        let candidates = retrieve(&store, "auth debug", TaskCategory::Debug, &config, None).unwrap();
+        let candidates =
+            retrieve(&store, "auth debug", TaskCategory::Debug, &config, None).unwrap();
 
         assert_eq!(candidates.len(), 1);
         let c = &candidates[0];
@@ -238,11 +257,20 @@ mod tests {
 
         let entity = Entity::new("symbol::src/lib.rs::bar", EntityKind::Symbol, "bar");
         store.insert_entity(&entity).unwrap();
-        store.insert_summary(&Summary::new("symbol::src/lib.rs::bar", "summary")).unwrap();
+        store
+            .insert_summary(&Summary::new("symbol::src/lib.rs::bar", "summary"))
+            .unwrap();
 
         let key = entity_id_to_usearch_key("symbol::src/lib.rs::bar");
-        store.add_vector("symbol::src/lib.rs::bar", key, &[1.0, 0.0, 0.0, 0.0]).unwrap();
-        store.insert_embedding_meta(&chizu_core::EmbeddingMeta::new("symbol::src/lib.rs::bar", "test", 4).with_usearch_key(key)).unwrap();
+        store
+            .add_vector("symbol::src/lib.rs::bar", key, &[1.0, 0.0, 0.0, 0.0])
+            .unwrap();
+        store
+            .insert_embedding_meta(
+                &chizu_core::EmbeddingMeta::new("symbol::src/lib.rs::bar", "test", 4)
+                    .with_usearch_key(key),
+            )
+            .unwrap();
 
         let provider = MockProvider {
             vector: vec![1.0, 0.0, 0.0, 0.0],
@@ -252,7 +280,14 @@ mod tests {
         config.embedding.dimensions = Some(4);
         config.search.default_limit = 5;
 
-        let candidates = retrieve(&store, "query", TaskCategory::General, &config, Some(&provider)).unwrap();
+        let candidates = retrieve(
+            &store,
+            "query",
+            TaskCategory::General,
+            &config,
+            Some(&provider),
+        )
+        .unwrap();
 
         assert_eq!(candidates.len(), 1);
         assert!(candidates[0].vector_score > 0.0);

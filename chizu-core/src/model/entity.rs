@@ -199,11 +199,7 @@ pub struct Edge {
 }
 
 impl Edge {
-    pub fn new(
-        src_id: impl Into<String>,
-        rel: EdgeKind,
-        dst_id: impl Into<String>,
-    ) -> Self {
+    pub fn new(src_id: impl Into<String>, rel: EdgeKind, dst_id: impl Into<String>) -> Self {
         Self {
             src_id: src_id.into(),
             rel,
@@ -352,8 +348,8 @@ fn now_rfc3339() -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::EdgeKind;
     use super::super::entity_kind::EntityKind;
+    use super::EdgeKind;
     use super::*;
 
     #[test]

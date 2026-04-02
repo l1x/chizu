@@ -112,11 +112,7 @@ mod tests {
         .unwrap();
 
         fs::create_dir_all(root.join("packages/bar")).unwrap();
-        fs::write(
-            root.join("packages/bar/package.json"),
-            r#"{"name": "bar"}"#,
-        )
-        .unwrap();
+        fs::write(root.join("packages/bar/package.json"), r#"{"name": "bar"}"#).unwrap();
 
         let mut registry = ComponentRegistry::new();
         registry.register(PathBuf::from(""), "root-pkg".to_string(), "npm");
@@ -126,8 +122,18 @@ mod tests {
         let facts = index_npm_workspace(root, &registry).unwrap();
 
         assert!(facts.entities.iter().any(|e| e.id == "component::npm::."));
-        assert!(facts.entities.iter().any(|e| e.id == "component::npm::packages/foo"));
-        assert!(facts.entities.iter().any(|e| e.id == "component::npm::packages/bar"));
+        assert!(
+            facts
+                .entities
+                .iter()
+                .any(|e| e.id == "component::npm::packages/foo")
+        );
+        assert!(
+            facts
+                .entities
+                .iter()
+                .any(|e| e.id == "component::npm::packages/bar")
+        );
 
         assert!(facts.edges.iter().any(|e| {
             e.src_id == "component::npm::packages/foo"
@@ -136,7 +142,9 @@ mod tests {
         }));
 
         assert!(facts.edges.iter().any(|e| {
-            e.src_id == "repo::." && e.rel == EdgeKind::Contains && e.dst_id == "component::npm::packages/foo"
+            e.src_id == "repo::."
+                && e.rel == EdgeKind::Contains
+                && e.dst_id == "component::npm::packages/foo"
         }));
     }
 }

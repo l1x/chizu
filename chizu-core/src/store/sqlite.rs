@@ -327,10 +327,9 @@ impl SqliteStore {
     }
 
     pub fn delete_entities_by_path(&self, path: &str) -> Result<usize> {
-        let count = self.conn.execute(
-            "DELETE FROM entities WHERE path = ?1",
-            [path],
-        )?;
+        let count = self
+            .conn
+            .execute("DELETE FROM entities WHERE path = ?1", [path])?;
         Ok(count)
     }
 
@@ -403,10 +402,9 @@ impl SqliteStore {
     }
 
     pub fn delete_edges_by_provenance_path(&self, path: &str) -> Result<usize> {
-        let count = self.conn.execute(
-            "DELETE FROM edges WHERE provenance_path = ?1",
-            [path],
-        )?;
+        let count = self
+            .conn
+            .execute("DELETE FROM edges WHERE provenance_path = ?1", [path])?;
         Ok(count)
     }
 

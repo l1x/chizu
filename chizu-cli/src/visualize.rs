@@ -1,7 +1,8 @@
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::fmt::Write;
+use std::path::Path;
 
-use chizu_core::{Entity, EntityKind};
+use chizu_core::{Entity, EntityKind, Summary};
 
 const HORIZONTAL_GAP: f64 = 122.0;
 const ORPHAN_GAP: f64 = 102.0;
@@ -309,7 +310,10 @@ svg {
 
 pub fn render_focus_graph_html(
     entity_cache: &HashMap<String, Entity>,
+    summary_cache: &HashMap<String, Summary>,
     visited_edges: &HashSet<(String, String, String)>,
+    repo_root: &Path,
+    editor_link_template: Option<&str>,
     requested_focus_id: Option<&str>,
 ) -> String {
     let mut edges: Vec<_> = visited_edges
@@ -347,6 +351,7 @@ pub fn render_focus_graph_html(
         "nodes": entities
             .into_iter()
             .map(|entity| {
+                let summary = summary_cache.get(&entity.id);
                 serde_json::json!({
                     "id": entity.id,
                     "name": entity.name,
@@ -359,6 +364,9 @@ pub fn render_focus_graph_html(
                     "line_end": entity.line_end,
                     "visibility": entity.visibility.map(|visibility| visibility.to_string()),
                     "exported": entity.exported,
+                    "summary_short": summary.map(|summary| summary.short_summary.as_str()),
+                    "summary_detailed": summary.and_then(|summary| summary.detailed_summary.as_deref()),
+                    "editor_url": editor_link_for_entity(repo_root, entity, editor_link_template),
                 })
             })
             .collect::<Vec<_>>(),
@@ -389,18 +397,83 @@ pub fn render_focus_graph_html(
     :root {
       --bg: #f6f4ee;
       --bg-deep: #efebe3;
+      --bg-accent: rgba(139, 154, 154, 0.08);
+      --grid-overlay: rgba(126, 141, 145, 0.09);
       --panel: rgba(255, 253, 248, 0.88);
       --panel-strong: rgba(255, 253, 248, 0.96);
+      --surface: rgba(255, 253, 248, 0.96);
+      --surface-strong: rgba(255, 253, 248, 0.99);
+      --surface-hover: rgba(236, 240, 238, 0.72);
       --ink: #223136;
       --muted: #6f7d80;
       --line: rgba(105, 125, 128, 0.24);
+      --line-soft: rgba(105, 125, 128, 0.14);
+      --line-faint: rgba(105, 125, 128, 0.10);
       --line-strong: rgba(98, 122, 126, 0.42);
+      --button-bg: rgba(255, 253, 248, 0.82);
+      --button-bg-hover: rgba(255, 253, 248, 0.96);
+      --button-border: rgba(91, 111, 116, 0.18);
+      --button-border-strong: rgba(91, 111, 116, 0.36);
+      --crumb-bg: rgba(227, 233, 231, 0.8);
+      --crumb-active: rgba(90, 118, 125, 0.18);
+      --pill-bg: rgba(231, 236, 234, 0.88);
+      --pill-strong: rgba(233, 238, 236, 0.9);
+      --card-bg: rgba(255, 254, 251, 0.94);
+      --card-border: rgba(91, 111, 116, 0.16);
+      --card-border-strong: rgba(90, 118, 125, 0.28);
+      --card-shadow-strong: 0 18px 32px rgba(125, 134, 124, 0.12);
+      --root-card-shadow: 0 24px 42px rgba(124, 130, 119, 0.12);
+      --stage-glow: rgba(210, 220, 218, 0.6);
+      --stage-surface: rgba(255, 253, 248, 0.74);
+      --stage-overlay: rgba(255, 255, 255, 0.42);
+      --stage-grid: rgba(153, 167, 168, 0.06);
+      --stage-border: rgba(111, 131, 132, 0.12);
+      --mark-bg: rgba(216, 198, 130, 0.34);
       --shadow: 0 22px 50px rgba(124, 128, 118, 0.12);
       --shadow-soft: 0 14px 30px rgba(124, 128, 118, 0.08);
       --radius: 28px;
       --radius-small: 18px;
       --sans: "SF Pro Display", "Segoe UI", "Helvetica Neue", Arial, sans-serif;
       --serif: "Iowan Old Style", "Palatino Linotype", "Book Antiqua", Georgia, serif;
+    }
+
+    :root[data-theme="dark"] {
+      --bg: #0b1219;
+      --bg-deep: #081018;
+      --bg-accent: rgba(86, 112, 129, 0.18);
+      --grid-overlay: rgba(86, 112, 129, 0.12);
+      --panel: rgba(12, 20, 29, 0.88);
+      --panel-strong: rgba(14, 23, 33, 0.96);
+      --surface: rgba(16, 24, 34, 0.96);
+      --surface-strong: rgba(15, 23, 32, 0.99);
+      --surface-hover: rgba(37, 49, 61, 0.88);
+      --ink: #ecf4f6;
+      --muted: #9db0b8;
+      --line: rgba(111, 136, 152, 0.24);
+      --line-soft: rgba(111, 136, 152, 0.14);
+      --line-faint: rgba(111, 136, 152, 0.10);
+      --line-strong: rgba(162, 191, 207, 0.34);
+      --button-bg: rgba(17, 26, 36, 0.82);
+      --button-bg-hover: rgba(20, 31, 43, 0.96);
+      --button-border: rgba(111, 136, 152, 0.22);
+      --button-border-strong: rgba(162, 191, 207, 0.34);
+      --crumb-bg: rgba(27, 38, 49, 0.86);
+      --crumb-active: rgba(92, 128, 150, 0.24);
+      --pill-bg: rgba(29, 40, 51, 0.92);
+      --pill-strong: rgba(31, 43, 55, 0.94);
+      --card-bg: rgba(16, 24, 34, 0.95);
+      --card-border: rgba(111, 136, 152, 0.16);
+      --card-border-strong: rgba(162, 191, 207, 0.30);
+      --card-shadow-strong: 0 18px 32px rgba(0, 0, 0, 0.28);
+      --root-card-shadow: 0 24px 42px rgba(0, 0, 0, 0.32);
+      --stage-glow: rgba(42, 62, 79, 0.58);
+      --stage-surface: rgba(13, 20, 29, 0.82);
+      --stage-overlay: rgba(255, 255, 255, 0.03);
+      --stage-grid: rgba(90, 115, 132, 0.08);
+      --stage-border: rgba(111, 136, 152, 0.18);
+      --mark-bg: rgba(205, 172, 84, 0.34);
+      --shadow: 0 24px 56px rgba(0, 0, 0, 0.34);
+      --shadow-soft: 0 16px 34px rgba(0, 0, 0, 0.26);
     }
 
     * {
@@ -412,7 +485,7 @@ pub fn render_focus_graph_html(
       margin: 0;
       min-height: 100%;
       background:
-        linear-gradient(135deg, rgba(139, 154, 154, 0.08), transparent 45%),
+        linear-gradient(135deg, var(--bg-accent), transparent 45%),
         linear-gradient(180deg, var(--bg) 0%, var(--bg-deep) 100%);
       color: var(--ink);
       font-family: var(--sans);
@@ -423,7 +496,7 @@ pub fn render_focus_graph_html(
       position: fixed;
       inset: 0;
       background:
-        linear-gradient(135deg, rgba(126, 141, 145, 0.09) 0, rgba(126, 141, 145, 0.09) 1px, transparent 1px, transparent 120px);
+        linear-gradient(135deg, var(--grid-overlay) 0, var(--grid-overlay) 1px, transparent 1px, transparent 120px);
       opacity: 0.22;
       pointer-events: none;
     }
@@ -487,9 +560,135 @@ pub fn render_focus_graph_html(
       padding-top: 8px;
     }
 
-    .toolbar button {
-      border: 1px solid rgba(91, 111, 116, 0.18);
-      background: rgba(255, 253, 248, 0.82);
+    .search-shell {
+      position: relative;
+      min-width: min(360px, 100%);
+      flex: 1 1 320px;
+      max-width: 460px;
+    }
+
+    .search-shell::before {
+      content: "⌕";
+      position: absolute;
+      left: 14px;
+      top: 50%;
+      transform: translateY(-50%);
+      color: var(--muted);
+      font-size: 14px;
+      z-index: 1;
+      pointer-events: none;
+    }
+
+    .search-input {
+      appearance: none;
+      -webkit-appearance: none;
+      width: 100%;
+      border: 1px solid var(--button-border);
+      background: var(--surface);
+      color: var(--ink);
+      border-radius: 16px;
+      padding: 13px 16px 13px 38px;
+      box-shadow: 0 10px 24px rgba(122, 130, 122, 0.06);
+      outline: none;
+    }
+
+    .search-input:focus {
+      border-color: var(--button-border-strong);
+      box-shadow: 0 12px 28px rgba(122, 130, 122, 0.10);
+    }
+
+    .search-input::-webkit-search-decoration,
+    .search-input::-webkit-search-cancel-button,
+    .search-input::-webkit-search-results-button,
+    .search-input::-webkit-search-results-decoration {
+      -webkit-appearance: none;
+      appearance: none;
+      display: none;
+    }
+
+    .search-results {
+      position: absolute;
+      top: calc(100% + 8px);
+      right: 0;
+      width: 100%;
+      max-height: 420px;
+      overflow: auto;
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      background: var(--surface-strong);
+      box-shadow: 0 24px 44px rgba(122, 130, 122, 0.10);
+      display: block;
+      z-index: 20;
+    }
+
+    .search-results[hidden] {
+      display: none;
+    }
+
+    .search-results-header {
+      padding: 10px 14px;
+      border-bottom: 1px solid var(--line-soft);
+      color: var(--muted);
+      font-size: 12px;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+
+    .search-result {
+      appearance: none;
+      -webkit-appearance: none;
+      display: block;
+      width: 100%;
+      border: 0;
+      border-bottom: 1px solid var(--line-faint);
+      border-radius: 0;
+      background: transparent;
+      padding: 12px 14px;
+      text-align: left;
+      cursor: pointer;
+      color: var(--ink);
+      box-shadow: none;
+      transition: background 120ms ease;
+    }
+
+    .search-result:last-child {
+      border-bottom: 0;
+    }
+
+    .search-result:hover,
+    .search-result.active {
+      background: var(--surface-hover);
+    }
+
+    .search-result-title {
+      font-weight: 600;
+      line-height: 1.3;
+      font-size: 15px;
+    }
+
+    .search-result-meta,
+    .search-result-copy {
+      margin-top: 4px;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.5;
+    }
+
+    .search-result-copy {
+      margin-top: 6px;
+      font-size: 13px;
+    }
+
+    .search-result mark {
+      background: var(--mark-bg);
+      color: inherit;
+      padding: 0 1px;
+      border-radius: 3px;
+    }
+
+    .toolbar > button {
+      border: 1px solid var(--button-border);
+      background: var(--button-bg);
       color: var(--ink);
       border-radius: 999px;
       padding: 12px 18px;
@@ -498,10 +697,10 @@ pub fn render_focus_graph_html(
       box-shadow: 0 10px 24px rgba(122, 130, 122, 0.08);
     }
 
-    .toolbar button:hover {
+    .toolbar > button:hover {
       transform: translateY(-1px);
-      border-color: rgba(91, 111, 116, 0.36);
-      background: rgba(255, 253, 248, 0.96);
+      border-color: var(--button-border-strong);
+      background: var(--button-bg-hover);
     }
 
     .workspace {
@@ -536,7 +735,7 @@ pub fn render_focus_graph_html(
 
     .crumb {
       border: 0;
-      background: rgba(227, 233, 231, 0.8);
+      background: var(--crumb-bg);
       color: var(--ink);
       border-radius: 999px;
       padding: 8px 12px;
@@ -545,7 +744,7 @@ pub fn render_focus_graph_html(
     }
 
     .crumb.active {
-      background: rgba(90, 118, 125, 0.18);
+      background: var(--crumb-active);
     }
 
     .inspector-card h2 {
@@ -571,10 +770,37 @@ pub fn render_focus_graph_html(
       line-height: 1.7;
     }
 
+    .inspector-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 16px;
+    }
+
+    .action-link {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      padding: 10px 14px;
+      border-radius: 999px;
+      border: 1px solid var(--button-border);
+      background: var(--button-bg-hover);
+      color: var(--ink);
+      text-decoration: none;
+      font-size: 13px;
+      box-shadow: 0 10px 20px rgba(122, 130, 122, 0.08);
+    }
+
+    .action-link:hover {
+      border-color: var(--button-border-strong);
+      background: var(--surface-strong);
+    }
+
     .inspector-section {
       margin-top: 22px;
       padding-top: 18px;
-      border-top: 1px solid rgba(105, 125, 128, 0.14);
+      border-top: 1px solid var(--line-soft);
     }
 
     .section-title {
@@ -622,7 +848,7 @@ pub fn render_focus_graph_html(
       gap: 6px;
       padding: 8px 11px;
       border-radius: 999px;
-      background: rgba(231, 236, 234, 0.88);
+      background: var(--pill-bg);
       color: var(--ink);
       font-size: 12px;
       line-height: 1;
@@ -656,9 +882,9 @@ pub fn render_focus_graph_html(
       min-height: calc(100vh - 180px);
       border-radius: calc(var(--radius) - 8px);
       background:
-        radial-gradient(circle at top, rgba(210, 220, 218, 0.6), transparent 56%),
-        rgba(255, 253, 248, 0.74);
-      border: 1px solid rgba(111, 131, 132, 0.12);
+        radial-gradient(circle at top, var(--stage-glow), transparent 56%),
+        var(--stage-surface);
+      border: 1px solid var(--stage-border);
       overflow: hidden;
       padding: 34px 30px 30px;
     }
@@ -668,8 +894,8 @@ pub fn render_focus_graph_html(
       position: absolute;
       inset: 0;
       background:
-        linear-gradient(180deg, rgba(255, 255, 255, 0.42), transparent 30%),
-        linear-gradient(135deg, rgba(153, 167, 168, 0.06) 0, rgba(153, 167, 168, 0.06) 1px, transparent 1px, transparent 72px);
+        linear-gradient(180deg, var(--stage-overlay), transparent 30%),
+        linear-gradient(135deg, var(--stage-grid) 0, var(--stage-grid) 1px, transparent 1px, transparent 72px);
       pointer-events: none;
     }
 
@@ -687,7 +913,7 @@ pub fn render_focus_graph_html(
       z-index: 1;
       display: flex;
       justify-content: center;
-      margin-bottom: 38px;
+      margin-bottom: 28px;
     }
 
     .children-grid {
@@ -701,9 +927,9 @@ pub fn render_focus_graph_html(
 
     .node-card {
       position: relative;
-      border: 1px solid rgba(91, 111, 116, 0.16);
+      border: 1px solid var(--card-border);
       border-radius: 24px;
-      background: rgba(255, 254, 251, 0.94);
+      background: var(--card-bg);
       box-shadow: var(--shadow-soft);
       text-align: left;
       padding: 18px 18px 16px;
@@ -715,15 +941,20 @@ pub fn render_focus_graph_html(
 
     .node-card:hover {
       transform: translateY(-2px);
-      border-color: rgba(90, 118, 125, 0.28);
-      box-shadow: 0 18px 32px rgba(125, 134, 124, 0.12);
+      border-color: var(--card-border-strong);
+      box-shadow: var(--card-shadow-strong);
     }
 
     .node-card.root-card {
-      max-width: min(720px, 100%);
-      padding: 24px 26px 22px;
+      max-width: min(640px, 100%);
+      padding: 20px 22px 18px;
       border-radius: 28px;
-      box-shadow: 0 24px 42px rgba(124, 130, 119, 0.12);
+      box-shadow: var(--root-card-shadow);
+    }
+
+    .node-card.root-card.compact-root {
+      max-width: min(560px, 100%);
+      padding: 18px 20px 16px;
     }
 
     .card-topline {
@@ -757,7 +988,7 @@ pub fn render_focus_graph_html(
     .child-count {
       padding: 7px 10px;
       border-radius: 999px;
-      background: rgba(230, 235, 233, 0.86);
+      background: var(--pill-bg);
       color: var(--muted);
       font-size: 12px;
       line-height: 1;
@@ -775,6 +1006,26 @@ pub fn render_focus_graph_html(
     .root-card h2 {
       font-size: clamp(28px, 4vw, 44px);
       line-height: 0.98;
+    }
+
+    .root-card.compact-root h2 {
+      font-size: clamp(24px, 3.4vw, 36px);
+    }
+
+    .root-card.compact-root .card-topline {
+      margin-bottom: 10px;
+    }
+
+    .root-card.compact-root .card-subtitle,
+    .root-card.compact-root .card-path {
+      margin-top: 8px;
+      font-size: 13px;
+      line-height: 1.45;
+    }
+
+    .root-card.compact-root .card-pills {
+      margin-top: 12px;
+      gap: 6px;
     }
 
     .node-card h3 {
@@ -805,7 +1056,7 @@ pub fn render_focus_graph_html(
     .card-pill {
       padding: 7px 10px;
       border-radius: 999px;
-      background: rgba(233, 238, 236, 0.9);
+      background: var(--pill-strong);
       color: var(--ink);
       font-size: 12px;
       line-height: 1;
@@ -858,8 +1109,20 @@ pub fn render_focus_graph_html(
         <p id="view-subtitle">Walk the structural tree and reuse the full canvas at each level.</p>
       </div>
       <div class="toolbar">
+        <div class="search-shell">
+          <input
+            id="search-input"
+            class="search-input"
+            type="search"
+            placeholder="Search visible nodes by name, path, or summary"
+            autocomplete="off"
+            spellcheck="false"
+          />
+          <div class="search-results" id="search-results" hidden></div>
+        </div>
         <button type="button" id="overview-btn">Overview</button>
         <button type="button" id="up-btn">Up One Level</button>
+        <button type="button" id="theme-btn">Dark Theme</button>
       </div>
     </header>
     <div class="workspace">
@@ -912,6 +1175,8 @@ pub fn render_focus_graph_html(
       const rootCard = document.getElementById("root-card");
       const childrenGrid = document.getElementById("children-grid");
       const emptyState = document.getElementById("empty-state");
+      const searchInput = document.getElementById("search-input");
+      const searchResults = document.getElementById("search-results");
       const breadcrumbsEl = document.getElementById("breadcrumbs");
       const inspectorEl = document.getElementById("inspector-panel");
       const titleEl = document.getElementById("view-title");
@@ -919,6 +1184,26 @@ pub fn render_focus_graph_html(
       const captionEl = document.getElementById("focus-caption");
       const upButton = document.getElementById("up-btn");
       const overviewButton = document.getElementById("overview-btn");
+      const themeButton = document.getElementById("theme-btn");
+      const rootEl = document.documentElement;
+      const themeStorageKey = "chizu-theme";
+
+      function updateThemeButton(theme) {
+        themeButton.textContent = theme === "dark" ? "Light Theme" : "Dark Theme";
+        themeButton.setAttribute("aria-pressed", theme === "dark" ? "true" : "false");
+      }
+
+      function applyTheme(theme, persist = false) {
+        rootEl.dataset.theme = theme;
+        updateThemeButton(theme);
+        if (persist) {
+          localStorage.setItem(themeStorageKey, theme);
+        }
+      }
+
+      const storedTheme = localStorage.getItem(themeStorageKey);
+      const initialTheme = storedTheme || (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+      applyTheme(initialTheme);
 
       function structuralPriority(edge) {
         const src = nodeById.get(edge.src_id);
@@ -1053,19 +1338,120 @@ pub fn render_focus_graph_html(
         return trail;
       }
 
-      function infoCopy(node) {
+      function fallbackSummary(node) {
         switch (node.kind) {
           case "repo":
             return "Repository overview. Select a component to reuse the full canvas for its files, or a document for narrative context.";
           case "component":
-            return "Component view. The stage is now using the available space for source units owned by this component.";
+            return "Component node in the structural tree.";
           case "source_unit":
-            return "File view. Structural children here come from defines, tested_by, and benchmarked_by edges.";
+            return "Source file in the structural tree.";
           case "doc":
-            return "Documentation node. It stays in the tree as context, but it does not expand into source structure.";
+            return "Documentation node linked into the tree.";
           default:
-            return "Leaf view. Use the breadcrumb trail or the up button to move back out through the tree.";
+            return "Leaf node in the structural tree.";
         }
+      }
+
+      function shortCopy(node) {
+        return node.summary_short || fallbackSummary(node);
+      }
+
+      function inspectorCopy(node) {
+        return node.summary_detailed || node.summary_short || fallbackSummary(node);
+      }
+
+      function searchableText(node) {
+        return [
+          node.display_name,
+          node.name,
+          node.path,
+          node.id,
+          node.summary_short,
+          node.summary_detailed,
+          node.component_id,
+        ]
+          .filter(Boolean)
+          .join(" ")
+          .toLowerCase();
+      }
+
+      function escapeRegExp(value) {
+        return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      }
+
+      function highlightMatches(text, query) {
+        const value = String(text || "");
+        const normalized = query.trim();
+        if (!normalized) return escapeHtml(value);
+        const terms = normalized
+          .split(/\s+/)
+          .filter(Boolean)
+          .sort((left, right) => right.length - left.length);
+        if (!terms.length) return escapeHtml(value);
+        const pattern = terms.map(escapeRegExp).join("|");
+        const regex = new RegExp(`(${pattern})`, "ig");
+        return escapeHtml(value).replace(regex, "<mark>$1</mark>");
+      }
+
+      function searchResultsFor(query) {
+        const normalized = query.trim().toLowerCase();
+        if (!normalized) return [];
+        const terms = normalized.split(/\s+/).filter(Boolean);
+        return data.nodes
+          .map((node) => {
+            const haystack = searchableText(node);
+            if (!terms.every((term) => haystack.includes(term))) return null;
+            const title = (node.display_name || node.name || node.id).toLowerCase();
+            const path = (node.path || "").toLowerCase();
+            const summary = ((node.summary_short || "") + " " + (node.summary_detailed || "")).toLowerCase();
+            let score = 0;
+            if (title.startsWith(normalized)) score += 120;
+            if (path.startsWith(normalized)) score += 95;
+            if (node.id.toLowerCase().startsWith(normalized)) score += 80;
+            if (title.includes(normalized)) score += 36;
+            if (path.includes(normalized)) score += 24;
+            if (summary.includes(normalized)) score += 12;
+            score -= kindOrder(node.kind) * 2;
+            return { node, score };
+          })
+          .filter(Boolean)
+          .sort((left, right) => {
+            if (right.score !== left.score) return right.score - left.score;
+            return (left.node.display_name || left.node.name || left.node.id)
+              .localeCompare(right.node.display_name || right.node.name || right.node.id);
+          })
+          .slice(0, 12);
+      }
+
+      function renderSearchResults(query) {
+        const matches = searchResultsFor(query);
+        if (!matches.length) {
+          searchResults.hidden = true;
+          searchResults.innerHTML = "";
+          return;
+        }
+
+        searchResults.innerHTML = `
+          <div class="search-results-header">${matches.length} result${matches.length === 1 ? "" : "s"} in this view</div>
+          ${matches
+          .map(({ node }) => {
+            const title = highlightMatches(node.display_name || node.name || node.id, query);
+            const meta = highlightMatches([readableKind(node.kind), node.path].filter(Boolean).join(" · "), query);
+            const copy = highlightMatches(node.summary_short || fallbackSummary(node), query);
+            return `
+              <button type="button" class="search-result" data-node-id="${escapeHtml(node.id)}">
+                <div class="search-result-title">${title}</div>
+                <div class="search-result-meta">${meta}</div>
+                <div class="search-result-copy">${copy}</div>
+              </button>
+            `;
+          })
+          .join("")}
+        `;
+        const first = searchResults.querySelector(".search-result");
+        if (first) first.classList.add("active");
+        searchResults.hidden = false;
       }
 
       function statsFor(nodeId) {
@@ -1114,7 +1500,7 @@ pub fn render_focus_graph_html(
         const childIds = childrenFor(nodeId);
         const titleTag = options.root ? "h2" : "h3";
         const title = escapeHtml(node.display_name || node.name || node.id);
-        const subtitle = escapeHtml(infoCopy(node));
+        const subtitle = escapeHtml(shortCopy(node));
         const path = node.path ? `<div class="card-path">${escapeHtml(node.path)}</div>` : "";
         const lines = lineRange(node);
         const linesPill = lines ? `<span class="card-pill">${escapeHtml(lines)}</span>` : "";
@@ -1159,12 +1545,20 @@ pub fn render_focus_graph_html(
           compactCount("tests", metrics.test),
           compactCount("benches", metrics.bench),
         ].filter(Boolean).join("");
+        const actions = node.editor_url
+          ? `
+            <div class="inspector-actions">
+              <a class="action-link" href="${escapeHtml(node.editor_url)}" target="_blank" rel="noreferrer">Open in editor</a>
+            </div>
+          `
+          : "";
 
         return `
           <section class="inspector-card">
             <h2>${escapeHtml(node.display_name || node.name || node.id)}</h2>
             <div class="kind-line">${escapeHtml(readableKind(node.kind))}</div>
-            <div class="inspector-copy">${escapeHtml(infoCopy(node))}</div>
+            <div class="inspector-copy">${escapeHtml(inspectorCopy(node))}</div>
+            ${actions}
             <div class="inspector-section">
               <div class="section-title">Scope</div>
               <div class="pill-row">
@@ -1221,6 +1615,26 @@ pub fn render_focus_graph_html(
       const homeId = nodeById.has(data.home_id) ? data.home_id : initialId;
       let currentId = initialId;
 
+      function searchButtons() {
+        return [...searchResults.querySelectorAll(".search-result")];
+      }
+
+      function setActiveSearchResult(index) {
+        const buttons = searchButtons();
+        buttons.forEach((button, buttonIndex) => {
+          button.classList.toggle("active", buttonIndex === index);
+        });
+        const active = buttons[index];
+        if (active) {
+          active.scrollIntoView({ block: "nearest" });
+        }
+      }
+
+      function focusNode(nodeId) {
+        currentId = nodeId;
+        render();
+      }
+
       function render() {
         const node = nodeById.get(currentId);
         if (!node) return;
@@ -1230,7 +1644,7 @@ pub fn render_focus_graph_html(
         const title = node.display_name || node.name || node.id;
 
         titleEl.textContent = title;
-        subtitleEl.textContent = infoCopy(node);
+        subtitleEl.textContent = shortCopy(node);
         captionEl.textContent = captionFor(currentId, childIds);
         overviewButton.disabled = currentId === homeId;
         upButton.disabled = !parentOf(currentId);
@@ -1264,17 +1678,68 @@ pub fn render_focus_graph_html(
         requestAnimationFrame(drawLinks);
       }
 
+      searchInput.addEventListener("input", () => {
+        renderSearchResults(searchInput.value);
+      });
+
+      searchInput.addEventListener("focus", () => {
+        if (searchInput.value.trim()) {
+          renderSearchResults(searchInput.value);
+        }
+      });
+
+      searchInput.addEventListener("keydown", (event) => {
+        if (event.key === "Escape") {
+          searchResults.hidden = true;
+          return;
+        }
+        const buttons = searchButtons();
+        const activeIndex = buttons.findIndex((button) => button.classList.contains("active"));
+        if (event.key === "ArrowDown") {
+          if (!buttons.length) return;
+          event.preventDefault();
+          const nextIndex = activeIndex < 0 ? 0 : Math.min(activeIndex + 1, buttons.length - 1);
+          setActiveSearchResult(nextIndex);
+          return;
+        }
+        if (event.key === "ArrowUp") {
+          if (!buttons.length) return;
+          event.preventDefault();
+          const nextIndex = activeIndex <= 0 ? 0 : activeIndex - 1;
+          setActiveSearchResult(nextIndex);
+          return;
+        }
+        if (event.key !== "Enter") return;
+        const target = activeIndex >= 0 ? buttons[activeIndex] : buttons[0];
+        if (!target) return;
+        event.preventDefault();
+        focusNode(target.dataset.nodeId);
+        searchResults.hidden = true;
+      });
+
       document.addEventListener("click", (event) => {
         const target = event.target.closest("[data-node-id]");
         if (target && nodeById.has(target.dataset.nodeId)) {
-          currentId = target.dataset.nodeId;
-          render();
+          focusNode(target.dataset.nodeId);
+          if (target.classList.contains("search-result")) {
+            searchResults.hidden = true;
+          }
           return;
+        }
+
+        if (!event.target.closest(".search-shell")) {
+          searchResults.hidden = true;
         }
 
         if (event.target === overviewButton) {
           currentId = homeId;
           render();
+          return;
+        }
+
+        if (event.target === themeButton) {
+          const nextTheme = rootEl.dataset.theme === "dark" ? "light" : "dark";
+          applyTheme(nextTheme, true);
           return;
         }
 
@@ -2339,6 +2804,32 @@ fn cubic_midpoint(
     )
 }
 
+fn editor_link_for_entity(
+    repo_root: &Path,
+    entity: &Entity,
+    template: Option<&str>,
+) -> Option<String> {
+    let template = template?;
+    let repo_path = entity.path.as_deref().unwrap_or(".");
+    let abs_path = if repo_path == "." {
+        repo_root.to_path_buf()
+    } else {
+        repo_root.join(repo_path)
+    };
+    let abs_path = abs_path.to_string_lossy();
+    let line = entity.line_start.unwrap_or(1).to_string();
+    let column = "1".to_string();
+
+    Some(
+        template
+            .replace("{abs_path}", abs_path.as_ref())
+            .replace("{repo_path}", repo_path)
+            .replace("{line}", &line)
+            .replace("{column}", &column)
+            .replace("{entity_id}", &entity.id),
+    )
+}
+
 fn display_name(entity: &Entity) -> String {
     if entity.kind == EntityKind::Repo {
         return "Repository".to_string();
@@ -2542,6 +3033,13 @@ mod tests {
             (component.id.clone(), component),
             (source_unit.id.clone(), source_unit),
         ]);
+        let summary_cache = HashMap::from([(
+            "component::cargo::fixture".to_string(),
+            Summary::new(
+                "component::cargo::fixture",
+                "Core fixture component for the example repository.",
+            ),
+        )]);
         let visited_edges = HashSet::from([
             (
                 "repo::.".to_string(),
@@ -2555,10 +3053,22 @@ mod tests {
             ),
         ]);
 
-        let html = render_focus_graph_html(&entity_cache, &visited_edges, Some("repo::."));
+        let html = render_focus_graph_html(
+            &entity_cache,
+            &summary_cache,
+            &visited_edges,
+            Path::new("/tmp/fixture-repo"),
+            Some("vscode://file/{abs_path}:{line}:{column}"),
+            Some("repo::."),
+        );
         assert!(html.contains("<!DOCTYPE html>"));
         assert!(html.contains("tree explorer"));
         assert!(html.contains("chizu-data"));
+        assert!(html.contains("search-input"));
+        assert!(html.contains("theme-btn"));
+        assert!(html.contains("chizu-theme"));
         assert!(html.contains("source_unit::src/lib.rs"));
+        assert!(html.contains("Core fixture component for the example repository."));
+        assert!(html.contains("vscode://file//tmp/fixture-repo/src/lib.rs:1:1"));
     }
 }

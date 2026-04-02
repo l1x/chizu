@@ -39,11 +39,7 @@ pub trait Provider: Send + Sync {
 }
 
 /// Retry a closure with exponential backoff.
-pub fn with_retry<T, F>(
-    attempts: u32,
-    base_delay: Duration,
-    mut f: F,
-) -> Result<T, ProviderError>
+pub fn with_retry<T, F>(attempts: u32, base_delay: Duration, mut f: F) -> Result<T, ProviderError>
 where
     F: FnMut() -> Result<T, ProviderError>,
 {

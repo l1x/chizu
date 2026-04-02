@@ -39,18 +39,24 @@ fn test_helper() {
     IndexPipeline::run(root, &store, &config, None).unwrap();
 
     // Verify entities exist
-    assert!(store
-        .get_entity("symbol::src/lib.rs::helper")
-        .unwrap()
-        .is_some());
-    assert!(store
-        .get_entity("test::src/lib.rs::test_helper")
-        .unwrap()
-        .is_some());
-    assert!(!store
-        .get_edges_from("source_unit::src/lib.rs")
-        .unwrap()
-        .is_empty());
+    assert!(
+        store
+            .get_entity("symbol::src/lib.rs::helper")
+            .unwrap()
+            .is_some()
+    );
+    assert!(
+        store
+            .get_entity("test::src/lib.rs::test_helper")
+            .unwrap()
+            .is_some()
+    );
+    assert!(
+        !store
+            .get_edges_from("source_unit::src/lib.rs")
+            .unwrap()
+            .is_empty()
+    );
 
     // Delete lib.rs
     fs::remove_file(root.join("src/lib.rs")).unwrap();
@@ -59,26 +65,29 @@ fn test_helper() {
     IndexPipeline::run(root, &store, &config, None).unwrap();
 
     // Verify all traces are gone
-    assert!(store
-        .get_entity("symbol::src/lib.rs::helper")
-        .unwrap()
-        .is_none());
-    assert!(store
-        .get_entity("test::src/lib.rs::test_helper")
-        .unwrap()
-        .is_none());
-    assert!(store
-        .get_edges_from("source_unit::src/lib.rs")
-        .unwrap()
-        .is_empty());
+    assert!(
+        store
+            .get_entity("symbol::src/lib.rs::helper")
+            .unwrap()
+            .is_none()
+    );
+    assert!(
+        store
+            .get_entity("test::src/lib.rs::test_helper")
+            .unwrap()
+            .is_none()
+    );
+    assert!(
+        store
+            .get_edges_from("source_unit::src/lib.rs")
+            .unwrap()
+            .is_empty()
+    );
     assert!(store.get_file("src/lib.rs").unwrap().is_none());
 
     // Repo and component should still exist
     assert!(store.get_entity("repo::.").unwrap().is_some());
-    assert!(store
-        .get_entity("component::cargo::.")
-        .unwrap()
-        .is_some());
+    assert!(store.get_entity("component::cargo::.").unwrap().is_some());
 
     store.close().unwrap();
 }

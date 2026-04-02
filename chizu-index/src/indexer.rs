@@ -7,9 +7,9 @@ use chizu_core::{ChizuStore, EntityKind, FileKind, FileRecord, Provider, Store, 
 use tracing::info;
 
 use crate::adapter::cargo::index_cargo_workspace;
+use crate::adapter::index_file;
 use crate::adapter::npm::index_npm_workspace;
 use crate::adapter::site::index_sites;
-use crate::adapter::index_file;
 use crate::cleanup::cascade_delete_file;
 use crate::embedder::Embedder;
 use crate::error::Result;
@@ -86,7 +86,11 @@ impl IndexPipeline {
             .collect();
 
         let (changed, deleted) = classify_files(&files, &existing_files);
-        info!("{} changed files, {} deleted files", changed.len(), deleted.len());
+        info!(
+            "{} changed files, {} deleted files",
+            changed.len(),
+            deleted.len()
+        );
 
         // Main transaction: cleanup + workspace adapters + file adapters
         info!("step: cleanup + workspace adapters + file indexing");
@@ -116,19 +120,16 @@ impl IndexPipeline {
                 let path_str = file.path.to_string_lossy().to_string();
                 info!("    {}", path_str);
                 cascade_delete_file(store, &path_str)?;
-                let (entities, edges) = index_file(repo_root, file)
-                    .map_err(|e| StoreError::Other(e.to_string()))?;
+                let (entities, edges) =
+                    index_file(repo_root, file).map_err(|e| StoreError::Other(e.to_string()))?;
                 let file_facts = crate::adapter::AdapterFacts { entities, edges };
                 insert_facts(store, &file_facts, &mut stats)?;
             }
 
             for file in &files {
                 let kind = classify_file(&file.path);
-                let mut record = FileRecord::new(
-                    file.path.to_string_lossy().to_string(),
-                    kind,
-                    &file.hash,
-                );
+                let mut record =
+                    FileRecord::new(file.path.to_string_lossy().to_string(), kind, &file.hash);
                 if let Some(ref comp_id) = file.component_id {
                     record = record.with_component(comp_id.clone());
                 }
@@ -142,19 +143,18 @@ impl IndexPipeline {
         // Site adapter runs after the main transaction so it can see
         // content pages and templates in the walked files.
         info!("step: site adapter");
-        let site_facts = index_sites(repo_root, &files)
-            .map_err(|e| StoreError::Other(e.to_string()))?;
+        let site_facts =
+            index_sites(repo_root, &files).map_err(|e| StoreError::Other(e.to_string()))?;
         if !site_facts.entities.is_empty() || !site_facts.edges.is_empty() {
-            store.in_transaction(|store| {
-                insert_facts(store, &site_facts, &mut stats)
-            })?;
+            store.in_transaction(|store| insert_facts(store, &site_facts, &mut stats))?;
         }
 
         // Summary generation
         if let Some(provider) = provider {
             if config.summary.provider.is_some() {
                 info!("step: generating summaries");
-                let summary_stats = Summarizer::new(provider, &config.summary).run(store, repo_root)?;
+                let summary_stats =
+                    Summarizer::new(provider, &config.summary).run(store, repo_root)?;
                 stats.summaries_generated = summary_stats.generated;
                 stats.summaries_skipped = summary_stats.skipped;
                 stats.summaries_failed = summary_stats.failed;
@@ -170,7 +170,10 @@ impl IndexPipeline {
             }
         }
 
-        info!("indexing complete in {:.1}s", pipeline_start.elapsed().as_secs_f64());
+        info!(
+            "indexing complete in {:.1}s",
+            pipeline_start.elapsed().as_secs_f64()
+        );
         Ok(stats)
     }
 }
@@ -225,7 +228,9 @@ fn cleanup_orphaned_components(
     let components = sqlite.get_entities_by_kind(EntityKind::Component)?;
     for comp in components {
         if comp.id.starts_with(&prefix) {
-            let still_exists = registry.all_components().any(|(_, id)| id.as_str() == comp.id);
+            let still_exists = registry
+                .all_components()
+                .any(|(_, id)| id.as_str() == comp.id);
             if !still_exists {
                 if let Some(ref cid) = comp.component_id {
                     let owned = sqlite.get_entities_by_component(cid)?;
@@ -317,10 +322,7 @@ mod tests {
 
     #[test]
     fn classify_config_yaml() {
-        assert_eq!(
-            classify_file(Path::new(".chizu.toml")),
-            FileKind::Config
-        );
+        assert_eq!(classify_file(Path::new(".chizu.toml")), FileKind::Config);
     }
 
     #[test]

@@ -20,11 +20,7 @@ edition = "2021"
     )
     .unwrap();
     fs::create_dir_all(root.join("src")).unwrap();
-    fs::write(
-        root.join("src/lib.rs"),
-        "pub fn one() -> i32 { 1 }\n",
-    )
-    .unwrap();
+    fs::write(root.join("src/lib.rs"), "pub fn one() -> i32 { 1 }\n").unwrap();
     fs::write(root.join("src/main.rs"), "fn main() {}\n").unwrap();
 
     let config = Config::default();

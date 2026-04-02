@@ -50,46 +50,50 @@ impl OpenAiProvider {
 
 impl Provider for OpenAiProvider {
     fn complete(&self, prompt: &str, max_tokens: Option<u32>) -> Result<String, ProviderError> {
-        with_retry(self.retry_attempts, Duration::from_millis(RETRY_BASE_DELAY_MS), || {
-            let mut body = serde_json::json!({
-                "model": self.completion_model,
-                "messages": [
-                    {"role": "user", "content": prompt}
-                ],
-                "temperature": 0.2,
-                "response_format": {"type": "json_object"},
-            });
-            if let Some(tokens) = max_tokens {
-                body["max_tokens"] = serde_json::json!(tokens);
-            }
-
-            let response = self
-                .build_request("chat/completions")
-                .json(&body)
-                .send()
-                .map_err(ProviderError::from)?;
-
-            let status = response.status();
-            let text = response.text().map_err(ProviderError::from)?;
-
-            if !status.is_success() {
-                return Err(ProviderError::Api {
-                    status: status.as_u16(),
-                    message: text,
+        with_retry(
+            self.retry_attempts,
+            Duration::from_millis(RETRY_BASE_DELAY_MS),
+            || {
+                let mut body = serde_json::json!({
+                    "model": self.completion_model,
+                    "messages": [
+                        {"role": "user", "content": prompt}
+                    ],
+                    "temperature": 0.2,
+                    "response_format": {"type": "json_object"},
                 });
-            }
+                if let Some(tokens) = max_tokens {
+                    body["max_tokens"] = serde_json::json!(tokens);
+                }
 
-            let json: serde_json::Value = serde_json::from_str(&text)?;
-            let content = json
-                .get("choices")
-                .and_then(|c| c.get(0))
-                .and_then(|c| c.get("message"))
-                .and_then(|m| m.get("content"))
-                .and_then(|c| c.as_str())
-                .ok_or_else(|| ProviderError::Other("missing completion content".into()))?;
+                let response = self
+                    .build_request("chat/completions")
+                    .json(&body)
+                    .send()
+                    .map_err(ProviderError::from)?;
 
-            Ok(content.trim().to_string())
-        })
+                let status = response.status();
+                let text = response.text().map_err(ProviderError::from)?;
+
+                if !status.is_success() {
+                    return Err(ProviderError::Api {
+                        status: status.as_u16(),
+                        message: text,
+                    });
+                }
+
+                let json: serde_json::Value = serde_json::from_str(&text)?;
+                let content = json
+                    .get("choices")
+                    .and_then(|c| c.get(0))
+                    .and_then(|c| c.get("message"))
+                    .and_then(|m| m.get("content"))
+                    .and_then(|c| c.as_str())
+                    .ok_or_else(|| ProviderError::Other("missing completion content".into()))?;
+
+                Ok(content.trim().to_string())
+            },
+        )
     }
 
     fn embed(&self, texts: &[String]) -> Result<Vec<Vec<f32>>, ProviderError> {
@@ -97,49 +101,57 @@ impl Provider for OpenAiProvider {
             return Ok(Vec::new());
         }
 
-        with_retry(self.retry_attempts, Duration::from_millis(RETRY_BASE_DELAY_MS), || {
-            let body = serde_json::json!({
-                "model": self.embedding_model,
-                "input": texts,
-            });
-
-            let response = self
-                .build_request("embeddings")
-                .json(&body)
-                .send()
-                .map_err(ProviderError::from)?;
-
-            let status = response.status();
-            let text = response.text().map_err(ProviderError::from)?;
-
-            if !status.is_success() {
-                return Err(ProviderError::Api {
-                    status: status.as_u16(),
-                    message: text,
+        with_retry(
+            self.retry_attempts,
+            Duration::from_millis(RETRY_BASE_DELAY_MS),
+            || {
+                let body = serde_json::json!({
+                    "model": self.embedding_model,
+                    "input": texts,
                 });
-            }
 
-            let json: serde_json::Value = serde_json::from_str(&text)?;
-            let data = json
-                .get("data")
-                .and_then(|d| d.as_array())
-                .ok_or_else(|| ProviderError::Other("missing embedding data".into()))?;
+                let response = self
+                    .build_request("embeddings")
+                    .json(&body)
+                    .send()
+                    .map_err(ProviderError::from)?;
 
-            let mut vectors = Vec::with_capacity(data.len());
-            for item in data {
-                let embedding = item
-                    .get("embedding")
-                    .and_then(|e| e.as_array())
-                    .ok_or_else(|| ProviderError::Other("missing embedding vector".into()))?;
-                let vector: Vec<f32> = embedding
-                    .iter()
-                    .map(|v| v.as_f64().map(|f| f as f32).ok_or_else(|| ProviderError::Other("invalid embedding value".into())))
-                    .collect::<Result<Vec<_>, _>>()?;
-                vectors.push(vector);
-            }
+                let status = response.status();
+                let text = response.text().map_err(ProviderError::from)?;
 
-            Ok(vectors)
-        })
+                if !status.is_success() {
+                    return Err(ProviderError::Api {
+                        status: status.as_u16(),
+                        message: text,
+                    });
+                }
+
+                let json: serde_json::Value = serde_json::from_str(&text)?;
+                let data = json
+                    .get("data")
+                    .and_then(|d| d.as_array())
+                    .ok_or_else(|| ProviderError::Other("missing embedding data".into()))?;
+
+                let mut vectors = Vec::with_capacity(data.len());
+                for item in data {
+                    let embedding = item
+                        .get("embedding")
+                        .and_then(|e| e.as_array())
+                        .ok_or_else(|| ProviderError::Other("missing embedding vector".into()))?;
+                    let vector: Vec<f32> = embedding
+                        .iter()
+                        .map(|v| {
+                            v.as_f64().map(|f| f as f32).ok_or_else(|| {
+                                ProviderError::Other("invalid embedding value".into())
+                            })
+                        })
+                        .collect::<Result<Vec<_>, _>>()?;
+                    vectors.push(vector);
+                }
+
+                Ok(vectors)
+            },
+        )
     }
 }
 
@@ -148,7 +160,11 @@ mod tests {
     use super::*;
     use crate::config::ProviderConfig;
 
-    fn create_provider(config: &ProviderConfig, completion_model: &str, embedding_model: &str) -> OpenAiProvider {
+    fn create_provider(
+        config: &ProviderConfig,
+        completion_model: &str,
+        embedding_model: &str,
+    ) -> OpenAiProvider {
         OpenAiProvider::new(
             config,
             completion_model.to_string(),
@@ -202,7 +218,10 @@ mod tests {
         let provider = create_provider(&config, "llama3", "nomic");
         let result = provider.complete("Say hi", None);
 
-        assert!(matches!(result, Err(ProviderError::Api { status: 400, .. })));
+        assert!(matches!(
+            result,
+            Err(ProviderError::Api { status: 400, .. })
+        ));
         mock.assert();
     }
 

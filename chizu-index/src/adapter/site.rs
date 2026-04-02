@@ -31,19 +31,25 @@ pub fn index_sites(repo_root: &Path, files: &[WalkedFile]) -> Result<AdapterFact
             // Content pages under site root
             if is_content_page(rel) {
                 let page_id = entity_id("content_page", &rel.to_string_lossy());
-                facts.edges.push(Edge::new(&site_id, EdgeKind::Contains, &page_id));
+                facts
+                    .edges
+                    .push(Edge::new(&site_id, EdgeKind::Contains, &page_id));
             }
 
             // Templates under site root
             if is_template(rel) {
                 let tpl_id = entity_id("template", &rel.to_string_lossy());
-                facts.edges.push(Edge::new(&tpl_id, EdgeKind::Renders, &site_id));
+                facts
+                    .edges
+                    .push(Edge::new(&tpl_id, EdgeKind::Renders, &site_id));
             }
 
             // Infra roots under site root or at repo root
             if is_infra_root(rel) {
                 let infra_id = entity_id("infra_root", &rel.to_string_lossy());
-                facts.edges.push(Edge::new(&site_id, EdgeKind::Deploys, &infra_id));
+                facts
+                    .edges
+                    .push(Edge::new(&site_id, EdgeKind::Deploys, &infra_id));
             }
         }
     }
@@ -144,13 +150,19 @@ mod tests {
 
         assert!(facts.entities.iter().any(|e| e.id == "site::."));
         assert!(facts.edges.iter().any(|e| {
-            e.src_id == "site::." && e.rel == EdgeKind::Contains && e.dst_id == "content_page::src/pages/index.md"
+            e.src_id == "site::."
+                && e.rel == EdgeKind::Contains
+                && e.dst_id == "content_page::src/pages/index.md"
         }));
         assert!(facts.edges.iter().any(|e| {
-            e.src_id == "template::src/layouts/Base.astro" && e.rel == EdgeKind::Renders && e.dst_id == "site::."
+            e.src_id == "template::src/layouts/Base.astro"
+                && e.rel == EdgeKind::Renders
+                && e.dst_id == "site::."
         }));
         assert!(facts.edges.iter().any(|e| {
-            e.src_id == "site::." && e.rel == EdgeKind::Deploys && e.dst_id == "infra_root::infra/main.tf"
+            e.src_id == "site::."
+                && e.rel == EdgeKind::Deploys
+                && e.dst_id == "infra_root::infra/main.tf"
         }));
     }
 }

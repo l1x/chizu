@@ -8,7 +8,10 @@ use crate::error::{IndexError, Result};
 use crate::registry::ComponentRegistry;
 
 /// Parse Cargo.toml files and emit entities/edges for the workspace.
-pub fn index_cargo_workspace(repo_root: &Path, registry: &ComponentRegistry) -> Result<AdapterFacts> {
+pub fn index_cargo_workspace(
+    repo_root: &Path,
+    registry: &ComponentRegistry,
+) -> Result<AdapterFacts> {
     let mut facts = AdapterFacts::default();
 
     let repo_id = "repo::.".to_string();
@@ -22,11 +25,10 @@ pub fn index_cargo_workspace(repo_root: &Path, registry: &ComponentRegistry) -> 
     for (path, _) in registry.all_components() {
         let manifest_path = repo_root.join(path).join("Cargo.toml");
         let content = std::fs::read_to_string(&manifest_path)?;
-        let manifest =
-            Manifest::from_str(&content).map_err(|e| IndexError::InvalidManifest {
-                path: manifest_path.clone(),
-                message: e.to_string(),
-            })?;
+        let manifest = Manifest::from_str(&content).map_err(|e| IndexError::InvalidManifest {
+            path: manifest_path.clone(),
+            message: e.to_string(),
+        })?;
         manifests.push((path.clone(), manifest));
     }
 
@@ -72,11 +74,9 @@ pub fn index_cargo_workspace(repo_root: &Path, registry: &ComponentRegistry) -> 
                     .with_path(rel_path.to_string_lossy().to_string())
                     .with_exported(true),
             );
-            facts.edges.push(Edge::new(
-                &comp_id_str,
-                EdgeKind::DeclaresFeature,
-                &feat_id,
-            ));
+            facts
+                .edges
+                .push(Edge::new(&comp_id_str, EdgeKind::DeclaresFeature, &feat_id));
 
             for enabled in enables {
                 // Skip dependency features (dep:crate) and cross-crate
@@ -178,10 +178,12 @@ version = "0.1.0"
             .find(|e| e.id == "component::cargo::.");
         assert!(comp.is_some());
         assert_eq!(comp.unwrap().name, "my-app");
-        assert!(facts
-            .edges
-            .iter()
-            .any(|e| e.src_id == "repo::." && e.dst_id == "component::cargo::."));
+        assert!(
+            facts
+                .edges
+                .iter()
+                .any(|e| e.src_id == "repo::." && e.dst_id == "component::cargo::.")
+        );
     }
 
     #[test]
@@ -237,29 +239,45 @@ foo = { path = "../foo" }
             .collect();
         assert_eq!(comps.len(), 2);
 
-        assert!(facts.edges.iter().any(|e| e.src_id
-            == "component::cargo::crates/bar"
-            && e.dst_id == "component::cargo::crates/foo"
-            && e.rel == EdgeKind::DependsOn));
+        assert!(
+            facts
+                .edges
+                .iter()
+                .any(|e| e.src_id == "component::cargo::crates/bar"
+                    && e.dst_id == "component::cargo::crates/foo"
+                    && e.rel == EdgeKind::DependsOn)
+        );
 
-        assert!(facts
-            .entities
-            .iter()
-            .any(|e| e.id == "feature::crates/foo::std"));
-        assert!(facts
-            .entities
-            .iter()
-            .any(|e| e.id == "feature::crates/foo::default"));
+        assert!(
+            facts
+                .entities
+                .iter()
+                .any(|e| e.id == "feature::crates/foo::std")
+        );
+        assert!(
+            facts
+                .entities
+                .iter()
+                .any(|e| e.id == "feature::crates/foo::default")
+        );
 
-        assert!(facts.edges.iter().any(|e| e.src_id
-            == "component::cargo::crates/foo"
-            && e.dst_id == "feature::crates/foo::default"
-            && e.rel == EdgeKind::DeclaresFeature));
+        assert!(
+            facts
+                .edges
+                .iter()
+                .any(|e| e.src_id == "component::cargo::crates/foo"
+                    && e.dst_id == "feature::crates/foo::default"
+                    && e.rel == EdgeKind::DeclaresFeature)
+        );
 
-        assert!(facts.edges.iter().any(|e| e.src_id
-            == "feature::crates/foo::default"
-            && e.dst_id == "feature::crates/foo::std"
-            && e.rel == EdgeKind::FeatureEnables));
+        assert!(
+            facts
+                .edges
+                .iter()
+                .any(|e| e.src_id == "feature::crates/foo::default"
+                    && e.dst_id == "feature::crates/foo::std"
+                    && e.rel == EdgeKind::FeatureEnables)
+        );
     }
 
     #[test]

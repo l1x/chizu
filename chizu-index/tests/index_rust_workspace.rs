@@ -139,6 +139,34 @@ foo = { path = "../foo" }
         Some(chizu_core::ComponentId::new("cargo", "crates/bar"))
     );
 
+    let foo_source = store
+        .get_entity("source_unit::crates/foo/src/lib.rs")
+        .unwrap()
+        .expect("foo source unit should exist");
+    assert_eq!(foo_source.kind, EntityKind::SourceUnit);
+    assert_eq!(
+        foo_source.component_id,
+        Some(chizu_core::ComponentId::new("cargo", "crates/foo"))
+    );
+
+    let foo_symbol = store
+        .get_entity("symbol::crates/foo/src/lib.rs::add")
+        .unwrap()
+        .expect("foo symbol should exist");
+    assert_eq!(foo_symbol.kind, EntityKind::Symbol);
+    assert_eq!(
+        foo_symbol.component_id,
+        Some(chizu_core::ComponentId::new("cargo", "crates/foo"))
+    );
+
+    let foo_edges = store
+        .get_edges_from(&comp_id("cargo", "crates/foo"))
+        .unwrap();
+    let contains_source = foo_edges
+        .iter()
+        .any(|e| e.rel == EdgeKind::Contains && e.dst_id == "source_unit::crates/foo/src/lib.rs");
+    assert!(contains_source, "foo should contain its source unit");
+
     // Verify feature entities and edges
     let std_feature = store.get_entity("feature::crates/foo::std").unwrap();
     assert!(std_feature.is_some());

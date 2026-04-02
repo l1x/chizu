@@ -1,5 +1,5 @@
-use chizu_core::{ChizuStore, Store, StoreError};
 use chizu_core::store::sqlite::SqliteStore;
+use chizu_core::{ChizuStore, Store, StoreError};
 
 /// Remove the usearch vector and embedding metadata for an entity.
 fn remove_entity_vector(
@@ -129,26 +129,36 @@ mod tests {
         cascade_delete_file(&store, "src/lib.rs").unwrap();
 
         assert!(sqlite.get_file("src/lib.rs").unwrap().is_none());
-        assert!(sqlite
-            .get_entity("symbol::src/lib.rs::foo")
-            .unwrap()
-            .is_none());
-        assert!(sqlite
-            .get_entity("test::src/lib.rs::test_foo")
-            .unwrap()
-            .is_none());
-        assert!(sqlite
-            .get_summary("symbol::src/lib.rs::foo")
-            .unwrap()
-            .is_none());
-        assert!(sqlite
-            .get_entity_task_routes("symbol::src/lib.rs::foo")
-            .unwrap()
-            .is_empty());
-        assert!(sqlite
-            .get_edges_from("source_unit::src/lib.rs")
-            .unwrap()
-            .is_empty());
+        assert!(
+            sqlite
+                .get_entity("symbol::src/lib.rs::foo")
+                .unwrap()
+                .is_none()
+        );
+        assert!(
+            sqlite
+                .get_entity("test::src/lib.rs::test_foo")
+                .unwrap()
+                .is_none()
+        );
+        assert!(
+            sqlite
+                .get_summary("symbol::src/lib.rs::foo")
+                .unwrap()
+                .is_none()
+        );
+        assert!(
+            sqlite
+                .get_entity_task_routes("symbol::src/lib.rs::foo")
+                .unwrap()
+                .is_empty()
+        );
+        assert!(
+            sqlite
+                .get_edges_from("source_unit::src/lib.rs")
+                .unwrap()
+                .is_empty()
+        );
     }
 
     #[test]
@@ -167,9 +177,8 @@ mod tests {
         let key = entity_id_to_usearch_key(entity_id);
         let vector = vec![1.0_f32; store.vector_dimensions()];
         store.add_vector(entity_id, key, &vector).unwrap();
-        let meta =
-            EmbeddingMeta::new(entity_id, "test-model", store.vector_dimensions() as u32)
-                .with_usearch_key(key);
+        let meta = EmbeddingMeta::new(entity_id, "test-model", store.vector_dimensions() as u32)
+            .with_usearch_key(key);
         sqlite.insert_embedding_meta(&meta).unwrap();
 
         assert!(store.contains_vector(key));

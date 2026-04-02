@@ -39,8 +39,8 @@ pub fn score(candidates: &mut [Candidate], category: TaskCategory, weights: &Rer
 #[cfg(test)]
 mod tests {
     use super::*;
-    use chizu_core::{Entity, EntityKind, RerankWeights, TaskCategory};
     use crate::retrieval::Candidate;
+    use chizu_core::{Entity, EntityKind, RerankWeights, TaskCategory};
 
     fn make_candidate(
         id: &str,
