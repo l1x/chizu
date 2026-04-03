@@ -5,7 +5,8 @@ repositories. It extracts deterministic structural facts about a codebase --
 components, files, symbols, docs, infra units, and their relationships -- and
 uses those facts to route a subject to the most relevant files and components.
 It also materializes a graph for human visualization and graph-based
-navigation.
+navigation. The CLI binary is `chizu`; in this workspace the installable Rust
+package is `chizu-cli`.
 
 ## What It Does
 
@@ -18,6 +19,8 @@ navigation.
 3. **Answers** natural-language subjects through a single `search` command that
    runs a five-stage pipeline: classify, retrieve, expand, rerank, and return a
    ranked reading plan.
+4. **Visualizes** indexed structure as either a static SVG graph or a
+   self-contained interactive HTML tree explorer.
 
 ## Key Design Decisions
 
@@ -37,8 +40,8 @@ navigation.
 ## Target Repositories
 
 Mixed-language monorepos with infrastructure and documentation: Rust
-workspaces, TypeScript/npm workspaces, Terraform roots, Docker deployments,
-Astro/Hugo sites, and combinations thereof.
+workspaces, npm workspaces, Terraform roots, Docker deployments, Astro/Hugo
+sites, and combinations thereof.
 
 ## Details
 

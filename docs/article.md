@@ -32,34 +32,42 @@ With Chizu, you ask: `chizu --repo . search "what tests cover user authenticatio
 
 ## What Chizu Does
 
-Chizu treats your codebase as a graph. It parses your source files, extracts meaningful entities (functions, structs, tests, documentation, infrastructure), and creates edges between them based on their relationships.
+Chizu treats your codebase as a graph. It parses and scans repository inputs,
+extracts meaningful entities (components, source files, symbols, tests,
+documentation, tasks, sites, and infrastructure), and creates edges between
+them based on their relationships.
 
 ### Entity Types
 
 | Type | Description | Example |
 |------|-------------|---------|
+| `component` | Cargo crate or npm package | `component::cargo::chizu-core` |
 | `symbol` | Functions, structs, traits, types | `fn handle_request` |
 | `test` | Test functions | `#[test] fn test_routing` |
 | `source_unit` | Source files | `src/main.rs` |
 | `doc` | Markdown documentation | `README.md` |
-| `infra_root` | Terraform directories | `infra/base-infra` |
+| `task` | Build or dev tasks from `mise.toml` | `task::build` |
+| `site` | Detected Astro/Hugo/site root | `site::.` |
+| `infra_root` | Terraform roots | `infra/base-infra/main.tf` |
 | `containerized` | Dockerfiles | `Dockerfile` |
 
 ### Edge Types
 
 | Edge | Meaning | Example |
 |------|---------|---------|
+| `contains` | Repo/component/site contains another entity | `repo::. --contains--> component::cargo::chizu-core` |
 | `defines` | File contains symbol | `main.rs --defines--> handle_request` |
+| `documented_by` | Component or repo is documented by a doc file | `component::cargo::chizu-core --documented_by--> doc::README.md` |
 | `tested_by` | File has associated tests | `router.rs --tested_by--> test_routing` |
-| `mentions` | Doc references symbol | `README.md --mentions--> Config` |
-| `deploys` | Infra deploys container | `base-infra --deploys--> Dockerfile` |
+| `depends_on` | Component depends on another local component | `component::cargo::chizu-cli --depends_on--> component::cargo::chizu-core` |
+| `deploys` | Site points to an infra root | `site::. --deploys--> infra_root::infra/main.tf` |
 
 This graph structure enables queries that understand context, not just text matching.
 
 ## Architecture Overview
 
 ```
-Input (Rust, TS, Astro, Terraform, Markdown)
+Input (Rust, Cargo/npm, Markdown, site files, infra/config)
                     |
                     v
         +-----------------------+
@@ -95,7 +103,10 @@ Input (Rust, TS, Astro, Terraform, Markdown)
 
 2. **Incremental**: Chizu only re-indexes files that have changed, using content hashing to detect modifications quickly.
 
-3. **Language-agnostic**: The parser architecture supports any language with a tree-sitter grammar. Currently supports Rust, TypeScript, Astro, Terraform, and Markdown.
+3. **Adapter-based**: Deep AST extraction is currently strongest for Rust. The
+   broader repository model also comes from Cargo and npm manifests, Markdown
+   docs, frontmatter, site detection, and scanner rules for infrastructure,
+   templates, workflows, and agent config files.
 
 4. **Graph-native**: Relationships are first-class citizens, not afterthoughts.
 
@@ -111,9 +122,8 @@ chizu --repo /path/to/repo index
 ```
 
 The index is stored in `.chizu/` at the repository root:
-- `graph.db` - SQLite database with entities and edges
-- `vectors.usearch` - Vector index for semantic search
-- `content_hashes.json` - Content addressing for incremental updates
+- `graph.db` - SQLite database with entities, edges, files, summaries, task routes, and embedding metadata
+- `graph.db.usearch` - usearch HNSW vector index for semantic retrieval
 
 Indexing also generates summaries and embeddings. An embedding provider is required.
 
@@ -144,6 +154,21 @@ chizu --repo /path/to/repo entity "symbol::src/main.rs::main"
 For lower-level inspection, `routes` and `edges` expose task-route and
 relationship data as top-level commands.
 
+### Visualization Outputs
+
+```bash
+# Static SVG snapshot
+chizu --repo /path/to/repo visualize --entity-id "component::cargo::." --output graph.svg
+
+# Interactive HTML tree explorer
+chizu --repo /path/to/repo visualize --interactive --entity-id "component::cargo::." --output graph.html
+```
+
+The default SVG output is a static artifact you can attach to docs, screenshots,
+or design notes. The `--interactive` variant writes a single HTML file with a
+tree explorer, search box, breadcrumbs, inspector pane, theme toggle, and
+optional `Open in editor` links when `[visualize].editor_link` is configured.
+
 ### SQL Access
 
 Since the underlying storage is SQLite, you can query directly:
@@ -168,13 +193,14 @@ Chizu walks the directory tree, respecting `.gitignore` and configurable exclude
 
 ### 2. Parsing
 
-Files are parsed using tree-sitter, a parser generator that produces concrete syntax trees for many languages. For each file:
+Chizu combines AST parsing, manifest parsing, and scanner-based extraction. In
+the current implementation:
 
-- Rust: Extracts functions, structs, enums, traits, impl blocks, tests
-- TypeScript: Extracts functions, classes, interfaces, types
-- Astro: Extracts components, frontmatter
-- Terraform: Extracts resources, modules, variables
-- Markdown: Extracts headers, code blocks, symbol mentions
+- Rust source files: Extract functions, structs, enums, traits, impl blocks, tests, benches, and reexports
+- Cargo and npm manifests: Discover components, local component dependencies, and Cargo features
+- Markdown and frontmatter content: Extract docs and content pages
+- `mise.toml`: Extract tasks
+- Site markers and scanner rules: Detect sites, templates, infra roots, workflows, migrations, specs, container files, and agent config files
 
 ### 3. Entity Extraction
 
@@ -192,10 +218,11 @@ doc::docs/auth.md
 
 As entities are extracted, relationships are recorded:
 
-- A file "defines" all symbols it contains
-- A symbol "uses" symbols it references
-- A test file "tests" the source file it's named after
-- Documentation "mentions" symbols referenced in backticks
+- A repo or component "contains" the entities underneath it
+- A source unit "defines" symbols it contains
+- A source unit can be "tested_by" tests or "benchmarked_by" benches
+- A component or repo can be "documented_by" Markdown docs
+- A site can "deploy" an infra root, and a template can "render" a site or content page
 
 ### 5. Summary and Embedding Generation
 
@@ -225,30 +252,42 @@ Create `.chizu.toml` in your repository root:
 ```toml
 [index]
 exclude_patterns = ["**/target/**", "**/node_modules/**"]
-parallel_workers = 4
 
-[query]
+[search]
 default_limit = 15
 
-[query.rerank_weights]
-task_route = 0.30
-keyword = 0.20
-name_match = 0.15
-vector = 0.20
-kind_preference = 0.05
-exported = 0.05
-path_match = 0.05
+[search.rerank_weights]
+task_route = 0.00
+keyword = 0.25
+name_match = 0.20
+vector = 0.25
+kind_preference = 0.10
+exported = 0.10
+path_match = 0.10
 
-[llm]
-default_model = "gpt-4o-mini"
-timeout_secs = 60
+[providers.ollama]
+base_url = "http://localhost:11434/v1"
+timeout_secs = 120
+retry_attempts = 3
+
+[summary]
+provider = "ollama"
+model = "llama3:8b"
+max_tokens = 512
+temperature = 0.2
+batch_size = 4
+concurrency = 1
+exported_only = true
 
 [embedding]
-enabled = true # required
 provider = "ollama"
-base_url = "http://localhost:11434/v1"
 model = "nomic-embed-text-v2-moe:latest"
 dimensions = 768
+batch_size = 32
+
+[visualize]
+# Optional: enable editor deep links in interactive HTML output
+# editor_link = "vscode://file/{abs_path}:{line}:{column}"
 ```
 
 ## Use Cases
@@ -273,21 +312,21 @@ Skip the grep-and-hope approach.
 
 ```bash
 sqlite3 .chizu/graph.db "SELECT dst_id FROM edges 
-    WHERE src_id = 'symbol::src/order.rs::process_order' 
-    AND rel = 'uses';"
+    WHERE src_id = 'component::cargo::chizu-cli' 
+    AND rel = 'depends_on';"
 ```
 
-See exactly what a function depends on.
+See exactly which local components a crate depends on.
 
 ### Documentation Gap Analysis
 
 ```bash
-sqlite3 .chizu/graph.db "SELECT s.name FROM entities s 
-    LEFT JOIN edges e ON s.id = e.dst_id AND e.rel = 'mentions'
-    WHERE s.kind = 'symbol' AND e.dst_id IS NULL;"
+sqlite3 .chizu/graph.db "SELECT e.id FROM entities e
+    LEFT JOIN edges ed ON e.id = ed.src_id AND ed.rel = 'documented_by'
+    WHERE e.kind = 'component' AND ed.dst_id IS NULL;"
 ```
 
-Find exported symbols never mentioned in docs.
+Find components that do not yet have an attached doc entity.
 
 ## Comparison with Existing Tools
 
@@ -305,14 +344,15 @@ Chizu occupies a unique space: it provides AI-powered code understanding that ru
 
 Chizu is early software. Current limitations:
 
-- **Language coverage**: Only Rust, TypeScript, Astro, Terraform, and Markdown. Python, Go, Java, and others need parsers.
-- **Cross-file analysis**: Import resolution and cross-file type inference are limited.
+- **Deep language extraction**: Symbol-level parsing is strongest for Rust today. Other repository inputs are covered mostly through manifests, scanners, docs, and site detection.
+- **Cross-file analysis**: Import resolution and full call-graph or type-flow analysis are limited.
+- **Release polish**: The CLI is usable from source now, but package/release metadata still needs tightening for public distribution.
 - **Git integration**: No blame information or commit history in the graph yet.
 
 Future directions:
 
 - Language server protocol (LSP) integration for IDE support
-- Web UI for graph visualization
+- Richer browser UI and additional graph layouts beyond the current interactive HTML explorer
 - Code complexity metrics
 - Import/dependency analysis
 - Git blame integration
@@ -326,7 +366,7 @@ Chizu is written in Rust because parsing millions of lines of code needs to be f
 
 ```bash
 # Clone and build
-git clone https://github.com/yourusername/chizu
+git clone https://github.com/l1x/chizu.git
 cd chizu
 cargo build --release
 

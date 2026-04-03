@@ -6,7 +6,9 @@ Chizu is a local repository understanding engine. It extracts deterministic
 structural facts about a codebase -- components, files, symbols, docs, infra
 units, and their relationships -- and uses those facts to route a subject to the
 most relevant files and components. It also materializes a graph for human
-visualization and navigation.
+visualization and navigation. The `visualize` command can emit either a static
+SVG graph or a self-contained interactive HTML tree explorer over the indexed
+graph slice.
 
 ![Chizu Knowledge Graph](docs/knowledge-graph.svg)
 
@@ -14,14 +16,20 @@ visualization and navigation.
 
 ### Installation
 
+Install the current workspace package from source:
+
 ```bash
 cargo install --path chizu-cli
 ```
 
-Or from crates.io (when published):
-```bash
-cargo install chizu
-```
+Naming in this repo:
+
+- Project and CLI name: `chizu`
+- Installable Rust package in this workspace: `chizu-cli`
+- Indexed data directory created in target repos: `.chizu/`
+
+This repository is not published to crates.io yet, so the supported install
+path today is `cargo install --path chizu-cli`.
 
 ### 1. Configure and Index
 
@@ -56,10 +64,26 @@ chizu --repo /path/to/repo routes --task deploy
 
 ### 4. Visualize
 
+Generate a static SVG snapshot when you want a shareable graph artifact:
+
 ```bash
 chizu --repo /path/to/repo visualize -o graph.svg
 open graph.svg
 ```
+
+Generate an interactive HTML tree explorer when you want to browse a focused
+slice of the graph locally:
+
+```bash
+chizu --repo /path/to/repo visualize --interactive -o graph.html
+open graph.html
+```
+
+- SVG output is a static graph view suited for screenshots, docs, and quick
+  inspection.
+- HTML output is a self-contained explorer with search, breadcrumbs, an
+  inspector pane, theme toggle, and optional editor deep links.
+- If you omit `--output`, Chizu writes the SVG or HTML to stdout.
 
 ## Commands
 
@@ -71,7 +95,7 @@ open graph.svg
 | `entities`  | List entities                       | `--component`, `--kind` |
 | `routes`    | List task routes                    | `--task`, `--entity` |
 | `edges`     | List edges                          | `--from`, `--to`, `--rel` |
-| `visualize` | Generate SVG graph                  | `--entity-id`, `--depth`, `--kind`, `--exclude`, `--max-nodes`, `--output` |
+| `visualize` | Generate SVG or interactive HTML    | `--entity-id`, `--depth`, `--kind`, `--exclude`, `--interactive`, `--max-nodes`, `--output` |
 | `config`    | Initialize or validate config       | subcommands: `init`, `validate` |
 | `guide`     | Interactive usage guide             | none |
 
@@ -94,13 +118,15 @@ Verify ollama is running:
 curl -s http://localhost:11434/v1/models | head -1
 ```
 
-### Step 1: Install chizu
+### Step 1: Install `chizu`
 
 ```bash
 git clone https://github.com/l1x/chizu.git
 cd chizu
 cargo install --path chizu-cli
 ```
+
+This installs the `chizu` binary from the local `chizu-cli` package.
 
 ### Step 2: Configure
 
@@ -179,6 +205,21 @@ chizu search "deploy to prod" --category deploy
 chizu search "fix the login bug" --format json --limit 5
 ```
 
+### Step 4b: Visualize
+
+```bash
+# Static SVG output
+chizu visualize --entity-id "component::cargo::." --output graph.svg
+
+# Interactive HTML output
+chizu visualize --interactive --entity-id "component::cargo::." --output graph.html
+```
+
+The default SVG output gives you a static graph snapshot. The `--interactive`
+variant writes a single HTML file that embeds the graph data and renders a tree
+explorer with keyboard search, structural navigation, summary copy, and optional
+`Open in editor` links when `[visualize].editor_link` is configured.
+
 ### Step 5: Onboard an agent
 
 To give a coding agent (Claude Code, Cursor, Aider, etc.) access to chizu's
@@ -198,7 +239,7 @@ chizu search "your question here"
 chizu entity "symbol::src/auth.rs::validate_token"
 
 # List entities in a component
-chizu entities --component cargo::crates/core
+chizu entities --component "component::cargo::crates/core"
 
 # Explore edges from an entity
 chizu edges --from "component::cargo::crates/core"
@@ -301,12 +342,17 @@ max_tokens = 512
 temperature = 0.2
 batch_size = 4
 concurrency = 1
+exported_only = true
 
 [embedding]
 provider = "ollama"
 model = "nomic-embed-text-v2-moe:latest"
 dimensions = 768
 batch_size = 32
+
+[visualize]
+# Optional: enable editor links in interactive HTML output
+# editor_link = "vscode://file/{abs_path}:{line}:{column}"
 ```
 
 Provider connection config is defined once per provider under
@@ -315,9 +361,9 @@ provider by name. See [docs/prd.md](docs/prd.md) for configuration design rules.
 
 ## Target Repositories
 
-Mixed-language monorepos with infrastructure and documentation: Rust workspaces,
-TypeScript/npm workspaces, Terraform roots, Docker deployments, Astro/Hugo
-sites, and combinations thereof.
+Mixed-language repos with infrastructure and documentation: Rust workspaces,
+npm workspaces, Terraform roots, Docker deployments, Astro/Hugo sites, and
+combinations thereof.
 
 ## Documentation
 

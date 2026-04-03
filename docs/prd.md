@@ -380,15 +380,18 @@ Chizu exposes a flat 9-command CLI:
 
 | Command     | Description                         | Key flags |
 | ----------- | ----------------------------------- | --------- |
-| `index`     | Parse graph + summarize + embed     | none |
+| `index`     | Parse graph + summarize + embed     | `--force` |
 | `search`    | Full query pipeline -> reading plan | `--limit`, `--category`, `--format`, positional query |
 | `entity`    | Look up a single entity by id       | positional id |
-| `entities`  | List entities                       | `--component` |
+| `entities`  | List entities                       | `--component`, `--kind` |
 | `routes`    | List task routes                    | `--task`, `--entity` |
 | `edges`     | List edges                          | `--from`, `--to`, `--rel` |
-| `visualize` | Generate SVG graph                  | `--entity-id`, `--depth`, `--kind`, `--exclude`, `--layout`, `--max-nodes`, `--output`, `--legend` |
+| `visualize` | Generate SVG or interactive HTML    | `--entity-id`, `--depth`, `--kind`, `--exclude`, `--interactive`, `--max-nodes`, `--output` |
 | `config`    | Initialize or validate config       | subcommands: `init`, `validate` |
 | `guide`     | Interactive usage guide             | none |
+
+`visualize` defaults to static SVG output. `visualize --interactive` emits a
+self-contained HTML tree explorer over the same focused graph slice.
 
 ### Command Migration
 
@@ -499,12 +502,17 @@ max_tokens = 512
 temperature = 0.2
 batch_size = 4
 concurrency = 1
+exported_only = true
 
 [embedding]
 provider = "ollama"
 model = "nomic-embed-text-v2-moe:latest"
 dimensions = 768
 batch_size = 32
+
+[visualize]
+# Optional: enable editor links in interactive HTML output
+# editor_link = "vscode://file/{abs_path}:{line}:{column}"
 ```
 
 ### Configuration Design Rules
@@ -514,12 +522,14 @@ batch_size = 32
   `[embedding]` sections reference a provider by name.
 - `api_key` defaults to empty string (local providers like Ollama need no key).
   Only specify when using a remote provider.
-- `parallel_workers` for indexing defaults to the number of available CPUs.
-  Only specify to override.
+- `summary.exported_only` defaults to true so symbol summaries focus on
+  exported Rust items unless explicitly overridden.
+- `summary` and `embedding` currently must reference the same provider.
 - Rerank weights must sum to 1.0. `task_route` stays at 0.00 until task route
   generation is fully implemented.
 - `config validate` checks that weights sum to 1.0, referenced providers
-  exist, and required fields are present.
+  exist, the summary and embedding providers match, and required fields are
+  present.
 
 ## Open Questions
 
