@@ -22,6 +22,12 @@ Install the current workspace package from source:
 cargo install --path chizu-cli
 ```
 
+Install from crates.io after a registry release:
+
+```bash
+cargo install chizu-cli --bin chizu
+```
+
 Naming in this repo:
 
 - Project and CLI name: `chizu`
@@ -369,6 +375,8 @@ combinations thereof.
 
 - [Brief](docs/brief.md)
 - [Product Requirements](docs/prd.md)
+- [Changelog](CHANGELOG.md)
+- [Release Guide](RELEASING.md)
 - Interactive guide: `chizu guide`
 
 ## License

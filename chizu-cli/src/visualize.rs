@@ -397,8 +397,14 @@ pub fn render_focus_graph_html(
     :root {
       --bg: #f6f4ee;
       --bg-deep: #efebe3;
-      --bg-accent: rgba(139, 154, 154, 0.08);
-      --grid-overlay: rgba(126, 141, 145, 0.09);
+      --bg-accent: rgba(95, 115, 119, 0.06);
+      --grid-overlay: rgba(111, 125, 129, 0.08);
+      --accent-cyan: #5f7377;
+      --accent-cyan-soft: rgba(95, 115, 119, 0.14);
+      --accent-green: #5f7c68;
+      --accent-green-soft: rgba(95, 124, 104, 0.14);
+      --accent-purple: #7d7394;
+      --accent-purple-soft: rgba(125, 115, 148, 0.14);
       --panel: rgba(255, 253, 248, 0.88);
       --panel-strong: rgba(255, 253, 248, 0.96);
       --surface: rgba(255, 253, 248, 0.96);
@@ -428,52 +434,58 @@ pub fn render_focus_graph_html(
       --stage-overlay: rgba(255, 255, 255, 0.42);
       --stage-grid: rgba(153, 167, 168, 0.06);
       --stage-border: rgba(111, 131, 132, 0.12);
-      --mark-bg: rgba(216, 198, 130, 0.34);
-      --shadow: 0 22px 50px rgba(124, 128, 118, 0.12);
-      --shadow-soft: 0 14px 30px rgba(124, 128, 118, 0.08);
-      --radius: 28px;
-      --radius-small: 18px;
-      --sans: "SF Pro Display", "Segoe UI", "Helvetica Neue", Arial, sans-serif;
-      --serif: "Iowan Old Style", "Palatino Linotype", "Book Antiqua", Georgia, serif;
+      --mark-bg: rgba(95, 115, 119, 0.16);
+      --shadow: 0 10px 24px rgba(124, 128, 118, 0.08);
+      --shadow-soft: 0 6px 16px rgba(124, 128, 118, 0.06);
+      --radius: 18px;
+      --radius-small: 12px;
+      --font-mono: "JetBrains Mono", "IBM Plex Mono", "Fira Code", ui-monospace, SFMono-Regular, Menlo, monospace;
+      --font-sans: "Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     }
 
     :root[data-theme="dark"] {
-      --bg: #0b1219;
-      --bg-deep: #081018;
-      --bg-accent: rgba(86, 112, 129, 0.18);
-      --grid-overlay: rgba(86, 112, 129, 0.12);
-      --panel: rgba(12, 20, 29, 0.88);
-      --panel-strong: rgba(14, 23, 33, 0.96);
-      --surface: rgba(16, 24, 34, 0.96);
-      --surface-strong: rgba(15, 23, 32, 0.99);
-      --surface-hover: rgba(37, 49, 61, 0.88);
-      --ink: #ecf4f6;
-      --muted: #9db0b8;
-      --line: rgba(111, 136, 152, 0.24);
-      --line-soft: rgba(111, 136, 152, 0.14);
-      --line-faint: rgba(111, 136, 152, 0.10);
-      --line-strong: rgba(162, 191, 207, 0.34);
-      --button-bg: rgba(17, 26, 36, 0.82);
-      --button-bg-hover: rgba(20, 31, 43, 0.96);
-      --button-border: rgba(111, 136, 152, 0.22);
-      --button-border-strong: rgba(162, 191, 207, 0.34);
-      --crumb-bg: rgba(27, 38, 49, 0.86);
-      --crumb-active: rgba(92, 128, 150, 0.24);
-      --pill-bg: rgba(29, 40, 51, 0.92);
-      --pill-strong: rgba(31, 43, 55, 0.94);
-      --card-bg: rgba(16, 24, 34, 0.95);
-      --card-border: rgba(111, 136, 152, 0.16);
-      --card-border-strong: rgba(162, 191, 207, 0.30);
-      --card-shadow-strong: 0 18px 32px rgba(0, 0, 0, 0.28);
-      --root-card-shadow: 0 24px 42px rgba(0, 0, 0, 0.32);
-      --stage-glow: rgba(42, 62, 79, 0.58);
-      --stage-surface: rgba(13, 20, 29, 0.82);
+      --bg: #0f1115;
+      --bg-deep: #0b0e12;
+      --bg-accent: rgba(125, 211, 252, 0.05);
+      --grid-overlay: rgba(156, 163, 175, 0.05);
+      --accent-cyan: #7dd3fc;
+      --accent-cyan-soft: rgba(125, 211, 252, 0.16);
+      --accent-green: #86efac;
+      --accent-green-soft: rgba(134, 239, 172, 0.16);
+      --accent-purple: #c4b5fd;
+      --accent-purple-soft: rgba(196, 181, 253, 0.16);
+      --panel: rgba(15, 17, 21, 0.94);
+      --panel-strong: rgba(18, 21, 27, 0.98);
+      --surface: rgba(21, 25, 34, 0.98);
+      --surface-strong: rgba(21, 25, 34, 1);
+      --surface-hover: rgba(28, 34, 44, 1);
+      --ink: #e6e6e6;
+      --muted: #9ca3af;
+      --line: rgba(255, 255, 255, 0.08);
+      --line-soft: rgba(255, 255, 255, 0.06);
+      --line-faint: rgba(255, 255, 255, 0.05);
+      --line-strong: rgba(125, 211, 252, 0.28);
+      --button-bg: rgba(21, 25, 34, 0.98);
+      --button-bg-hover: rgba(25, 30, 40, 1);
+      --button-border: rgba(255, 255, 255, 0.08);
+      --button-border-strong: rgba(125, 211, 252, 0.30);
+      --crumb-bg: rgba(21, 25, 34, 0.98);
+      --crumb-active: rgba(125, 211, 252, 0.12);
+      --pill-bg: rgba(21, 25, 34, 0.98);
+      --pill-strong: rgba(24, 29, 39, 1);
+      --card-bg: rgba(21, 25, 34, 0.98);
+      --card-border: rgba(255, 255, 255, 0.08);
+      --card-border-strong: rgba(125, 211, 252, 0.24);
+      --card-shadow-strong: 0 0 0 1px rgba(125, 211, 252, 0.10);
+      --root-card-shadow: 0 0 0 1px rgba(125, 211, 252, 0.12);
+      --stage-glow: rgba(125, 211, 252, 0.06);
+      --stage-surface: rgba(15, 17, 21, 0.98);
       --stage-overlay: rgba(255, 255, 255, 0.03);
-      --stage-grid: rgba(90, 115, 132, 0.08);
-      --stage-border: rgba(111, 136, 152, 0.18);
-      --mark-bg: rgba(205, 172, 84, 0.34);
-      --shadow: 0 24px 56px rgba(0, 0, 0, 0.34);
-      --shadow-soft: 0 16px 34px rgba(0, 0, 0, 0.26);
+      --stage-grid: rgba(255, 255, 255, 0.025);
+      --stage-border: rgba(255, 255, 255, 0.08);
+      --mark-bg: rgba(125, 211, 252, 0.20);
+      --shadow: 0 8px 18px rgba(0, 0, 0, 0.22);
+      --shadow-soft: 0 4px 12px rgba(0, 0, 0, 0.16);
     }
 
     * {
@@ -488,7 +500,9 @@ pub fn render_focus_graph_html(
         linear-gradient(135deg, var(--bg-accent), transparent 45%),
         linear-gradient(180deg, var(--bg) 0%, var(--bg-deep) 100%);
       color: var(--ink);
-      font-family: var(--sans);
+      font-family: var(--font-mono);
+      font-size: 14px;
+      line-height: 1.6;
     }
 
     body::before {
@@ -528,26 +542,26 @@ pub fn render_focus_graph_html(
       display: inline-block;
       margin-bottom: 10px;
       color: var(--muted);
-      font-size: 12px;
+      font-size: 11px;
       font-weight: 700;
-      letter-spacing: 0.18em;
+      letter-spacing: 0.14em;
       text-transform: uppercase;
     }
 
     .topbar h1 {
       margin: 0;
-      font-family: var(--serif);
-      font-size: clamp(30px, 5vw, 54px);
-      font-weight: 600;
-      line-height: 0.95;
-      letter-spacing: -0.03em;
+      font-family: var(--font-mono);
+      font-size: clamp(22px, 3.2vw, 32px);
+      font-weight: 700;
+      line-height: 1.02;
+      letter-spacing: -0.02em;
     }
 
     .topbar p {
       margin: 10px 0 0;
       max-width: 680px;
       color: var(--muted);
-      font-size: 15px;
+      font-size: 14px;
       line-height: 1.6;
     }
 
@@ -586,15 +600,17 @@ pub fn render_focus_graph_html(
       border: 1px solid var(--button-border);
       background: var(--surface);
       color: var(--ink);
-      border-radius: 16px;
-      padding: 13px 16px 13px 38px;
-      box-shadow: 0 10px 24px rgba(122, 130, 122, 0.06);
+      border-radius: 10px;
+      padding: 12px 14px 12px 38px;
+      box-shadow: none;
       outline: none;
+      font-family: var(--font-mono);
+      font-size: 13px;
     }
 
     .search-input:focus {
       border-color: var(--button-border-strong);
-      box-shadow: 0 12px 28px rgba(122, 130, 122, 0.10);
+      box-shadow: 0 0 0 1px rgba(125, 211, 252, 0.16);
     }
 
     .search-input::-webkit-search-decoration,
@@ -614,9 +630,9 @@ pub fn render_focus_graph_html(
       max-height: 420px;
       overflow: auto;
       border: 1px solid var(--line);
-      border-radius: 18px;
+      border-radius: 12px;
       background: var(--surface-strong);
-      box-shadow: 0 24px 44px rgba(122, 130, 122, 0.10);
+      box-shadow: var(--shadow);
       display: block;
       z-index: 20;
     }
@@ -629,9 +645,10 @@ pub fn render_focus_graph_html(
       padding: 10px 14px;
       border-bottom: 1px solid var(--line-soft);
       color: var(--muted);
-      font-size: 12px;
+      font-size: 11px;
       letter-spacing: 0.04em;
       text-transform: uppercase;
+      font-family: var(--font-mono);
     }
 
     .search-result {
@@ -643,12 +660,12 @@ pub fn render_focus_graph_html(
       border-bottom: 1px solid var(--line-faint);
       border-radius: 0;
       background: transparent;
-      padding: 12px 14px;
+      padding: 11px 14px;
       text-align: left;
       cursor: pointer;
       color: var(--ink);
       box-shadow: none;
-      transition: background 120ms ease;
+      transition: background 120ms ease, border-color 120ms ease;
     }
 
     .search-result:last-child {
@@ -658,12 +675,14 @@ pub fn render_focus_graph_html(
     .search-result:hover,
     .search-result.active {
       background: var(--surface-hover);
+      box-shadow: inset 2px 0 0 var(--accent-cyan);
     }
 
     .search-result-title {
       font-weight: 600;
       line-height: 1.3;
-      font-size: 15px;
+      font-size: 14px;
+      font-family: var(--font-mono);
     }
 
     .search-result-meta,
@@ -676,7 +695,7 @@ pub fn render_focus_graph_html(
 
     .search-result-copy {
       margin-top: 6px;
-      font-size: 13px;
+      font-size: 12px;
     }
 
     .search-result mark {
@@ -690,23 +709,25 @@ pub fn render_focus_graph_html(
       border: 1px solid var(--button-border);
       background: var(--button-bg);
       color: var(--ink);
-      border-radius: 999px;
-      padding: 12px 18px;
+      border-radius: 10px;
+      padding: 10px 14px;
       cursor: pointer;
-      transition: transform 120ms ease, border-color 120ms ease, background 120ms ease;
-      box-shadow: 0 10px 24px rgba(122, 130, 122, 0.08);
+      transition: border-color 120ms ease, background 120ms ease, color 120ms ease;
+      box-shadow: none;
+      font-family: var(--font-mono);
+      font-size: 12px;
     }
 
     .toolbar > button:hover {
-      transform: translateY(-1px);
       border-color: var(--button-border-strong);
       background: var(--button-bg-hover);
+      color: var(--accent-cyan);
     }
 
     .workspace {
       display: grid;
       grid-template-columns: minmax(280px, 330px) minmax(0, 1fr);
-      gap: 20px;
+      gap: 28px;
       align-items: start;
     }
 
@@ -717,7 +738,6 @@ pub fn render_focus_graph_html(
       border-radius: var(--radius);
       background: var(--panel);
       box-shadow: var(--shadow);
-      backdrop-filter: blur(14px);
     }
 
     .inspector {
@@ -737,30 +757,35 @@ pub fn render_focus_graph_html(
       border: 0;
       background: var(--crumb-bg);
       color: var(--ink);
-      border-radius: 999px;
-      padding: 8px 12px;
+      border-radius: 8px;
+      padding: 7px 10px;
       cursor: pointer;
-      font-size: 13px;
+      font-size: 12px;
+      font-family: var(--font-mono);
     }
 
     .crumb.active {
       background: var(--crumb-active);
+      color: var(--accent-cyan);
+      box-shadow: inset 0 0 0 1px var(--accent-cyan-soft);
     }
 
     .inspector-card h2 {
       margin: 0;
-      font-family: var(--serif);
-      font-size: 28px;
-      line-height: 1.02;
-      letter-spacing: -0.03em;
+      font-family: var(--font-mono);
+      font-size: 20px;
+      line-height: 1.08;
+      letter-spacing: -0.02em;
+      overflow-wrap: anywhere;
+      word-break: break-word;
     }
 
     .kind-line {
       margin-top: 8px;
       color: var(--muted);
-      font-size: 13px;
+      font-size: 11px;
       text-transform: uppercase;
-      letter-spacing: 0.14em;
+      letter-spacing: 0.12em;
     }
 
     .inspector-copy {
@@ -784,17 +809,18 @@ pub fn render_focus_graph_html(
       gap: 8px;
       padding: 10px 14px;
       border-radius: 999px;
-      border: 1px solid var(--button-border);
+      border: 1px solid var(--accent-cyan-soft);
       background: var(--button-bg-hover);
-      color: var(--ink);
+      color: var(--accent-cyan);
       text-decoration: none;
       font-size: 13px;
-      box-shadow: 0 10px 20px rgba(122, 130, 122, 0.08);
+      box-shadow: none;
+      font-family: var(--font-mono);
     }
 
     .action-link:hover {
-      border-color: var(--button-border-strong);
-      background: var(--surface-strong);
+      border-color: var(--accent-cyan);
+      background: color-mix(in srgb, var(--accent-cyan) 8%, var(--surface-strong));
     }
 
     .inspector-section {
@@ -833,6 +859,7 @@ pub fn render_focus_graph_html(
       color: var(--ink);
       font-size: 14px;
       line-height: 1.5;
+      overflow-wrap: anywhere;
       word-break: break-word;
     }
 
@@ -850,8 +877,10 @@ pub fn render_focus_graph_html(
       border-radius: 999px;
       background: var(--pill-bg);
       color: var(--ink);
-      font-size: 12px;
+      font-size: 11px;
       line-height: 1;
+      border: 1px solid var(--line-faint);
+      font-family: var(--font-mono);
     }
 
     .pill strong {
@@ -886,7 +915,7 @@ pub fn render_focus_graph_html(
         var(--stage-surface);
       border: 1px solid var(--stage-border);
       overflow: hidden;
-      padding: 34px 30px 30px;
+      padding: 24px 24px 22px;
     }
 
     .stage::before {
@@ -921,59 +950,77 @@ pub fn render_focus_graph_html(
       z-index: 1;
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-      gap: 18px;
+      gap: 20px;
       align-items: start;
     }
 
     .node-card {
+      --accent: var(--accent-cyan);
       position: relative;
       border: 1px solid var(--card-border);
-      border-radius: 24px;
+      border-radius: 12px;
       background: var(--card-bg);
       box-shadow: var(--shadow-soft);
       text-align: left;
-      padding: 18px 18px 16px;
+      padding: 16px 16px 15px;
       cursor: pointer;
-      transition: transform 140ms ease, border-color 140ms ease, box-shadow 140ms ease;
+      transition: border-color 140ms ease, background 140ms ease;
       color: var(--ink);
       width: 100%;
+      overflow: hidden;
+    }
+
+    .node-card::before {
+      content: "";
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 2px;
+      background: linear-gradient(90deg, var(--accent), transparent 72%);
+      opacity: 0.85;
     }
 
     .node-card:hover {
-      transform: translateY(-2px);
       border-color: var(--card-border-strong);
       box-shadow: var(--card-shadow-strong);
+      background: var(--surface-hover);
+    }
+
+    .node-card:hover .kind-chip {
+      color: color-mix(in srgb, var(--accent) 58%, var(--muted));
     }
 
     .node-card.root-card {
-      max-width: min(640px, 100%);
-      padding: 20px 22px 18px;
-      border-radius: 28px;
+      max-width: min(560px, 100%);
+      padding: 18px 20px 16px;
+      border-radius: 14px;
       box-shadow: var(--root-card-shadow);
     }
 
     .node-card.root-card.compact-root {
-      max-width: min(560px, 100%);
-      padding: 18px 20px 16px;
+      max-width: min(500px, 100%);
+      padding: 16px 18px 14px;
     }
 
     .card-topline {
       display: flex;
       align-items: center;
       justify-content: space-between;
-      gap: 14px;
-      margin-bottom: 14px;
+      gap: 10px;
+      margin-bottom: 10px;
     }
 
     .kind-chip {
       display: inline-flex;
       align-items: center;
       gap: 8px;
-      color: var(--muted);
-      font-size: 11px;
+      color: color-mix(in srgb, var(--accent) 44%, var(--muted));
+      font-size: 10px;
       font-weight: 700;
-      letter-spacing: 0.16em;
+      letter-spacing: 0.12em;
       text-transform: uppercase;
+      font-family: var(--font-mono);
     }
 
     .kind-dot {
@@ -981,7 +1028,7 @@ pub fn render_focus_graph_html(
       height: 10px;
       border-radius: 50%;
       background: var(--accent, #62797d);
-      box-shadow: 0 0 0 6px color-mix(in srgb, var(--accent, #62797d) 14%, transparent);
+      box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent, #62797d) 16%, transparent);
       flex: none;
     }
 
@@ -990,36 +1037,40 @@ pub fn render_focus_graph_html(
       border-radius: 999px;
       background: var(--pill-bg);
       color: var(--muted);
-      font-size: 12px;
+      font-size: 11px;
       line-height: 1;
+      border: 1px solid var(--line-faint);
+      font-family: var(--font-mono);
     }
 
     .node-card h2,
     .node-card h3 {
       margin: 0;
-      font-family: var(--serif);
-      font-weight: 600;
-      letter-spacing: -0.03em;
+      font-family: var(--font-mono);
+      font-weight: 700;
+      letter-spacing: -0.02em;
       color: var(--ink);
+      overflow-wrap: anywhere;
+      word-break: break-word;
     }
 
     .root-card h2 {
-      font-size: clamp(28px, 4vw, 44px);
-      line-height: 0.98;
+      font-size: clamp(24px, 3.2vw, 34px);
+      line-height: 1.04;
     }
 
     .root-card.compact-root h2 {
-      font-size: clamp(24px, 3.4vw, 36px);
+      font-size: clamp(22px, 2.8vw, 28px);
     }
 
     .root-card.compact-root .card-topline {
-      margin-bottom: 10px;
+      margin-bottom: 8px;
     }
 
     .root-card.compact-root .card-subtitle,
     .root-card.compact-root .card-path {
-      margin-top: 8px;
-      font-size: 13px;
+      margin-top: 6px;
+      font-size: 12px;
       line-height: 1.45;
     }
 
@@ -1029,37 +1080,61 @@ pub fn render_focus_graph_html(
     }
 
     .node-card h3 {
-      font-size: 21px;
-      line-height: 1.04;
+      font-size: 18px;
+      line-height: 1.08;
+    }
+
+    .card-title {
+      overflow-wrap: anywhere;
+      word-break: break-word;
+    }
+
+    .children-grid .card-title {
+      display: -webkit-box;
+      -webkit-box-orient: vertical;
+      -webkit-line-clamp: 2;
+      overflow: hidden;
+      min-height: calc(1.08em * 2);
     }
 
     .card-subtitle,
     .card-path {
-      margin-top: 10px;
+      margin-top: 8px;
       color: var(--muted);
-      font-size: 14px;
+      font-size: 12px;
       line-height: 1.5;
+      overflow-wrap: anywhere;
+      word-break: break-word;
     }
 
     .card-path {
-      font-family: ui-monospace, "SFMono-Regular", Menlo, monospace;
-      font-size: 12px;
+      font-family: var(--font-mono);
+      font-size: 11px;
+    }
+
+    .children-grid .card-path {
+      display: -webkit-box;
+      -webkit-box-orient: vertical;
+      -webkit-line-clamp: 2;
+      overflow: hidden;
     }
 
     .card-pills {
       display: flex;
       flex-wrap: wrap;
-      gap: 8px;
-      margin-top: 16px;
+      gap: 6px;
+      margin-top: 12px;
     }
 
     .card-pill {
-      padding: 7px 10px;
+      padding: 6px 9px;
       border-radius: 999px;
       background: var(--pill-strong);
       color: var(--ink);
-      font-size: 12px;
+      font-size: 11px;
       line-height: 1;
+      border: 1px solid var(--line-faint);
+      font-family: var(--font-mono);
     }
 
     .empty-state {
@@ -1202,7 +1277,7 @@ pub fn render_focus_graph_html(
       }
 
       const storedTheme = localStorage.getItem(themeStorageKey);
-      const initialTheme = storedTheme || (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+      const initialTheme = storedTheme || "dark";
       applyTheme(initialTheme);
 
       function structuralPriority(edge) {
@@ -1252,15 +1327,28 @@ pub fn render_focus_graph_html(
       }
 
       function kindColor(kind) {
+        const darkTheme = rootEl.dataset.theme === "dark";
+        if (darkTheme) {
+          switch (kind) {
+            case "repo": return "#7dd3fc";
+            case "component": return "#94a3b8";
+            case "doc": return "#c4b5fd";
+            case "source_unit": return "#9ca3af";
+            case "symbol": return "#8f9ba8";
+            case "test": return "#86efac";
+            case "bench": return "#bca784";
+            default: return "#9ca3af";
+          }
+        }
         switch (kind) {
-          case "repo": return "#5b7478";
-          case "component": return "#667f84";
-          case "doc": return "#879783";
-          case "source_unit": return "#81919b";
-          case "symbol": return "#8da2ad";
-          case "test": return "#909e8f";
-          case "bench": return "#a18d72";
-          default: return "#7b8a8f";
+          case "repo": return "#5f7377";
+          case "component": return "#6a7c81";
+          case "doc": return "#7d7394";
+          case "source_unit": return "#7b878b";
+          case "symbol": return "#7e888e";
+          case "test": return "#5f7c68";
+          case "bench": return "#8f7a64";
+          default: return "#7b878b";
         }
       }
 
@@ -1499,9 +1587,10 @@ pub fn render_focus_graph_html(
         const node = nodeById.get(nodeId);
         const childIds = childrenFor(nodeId);
         const titleTag = options.root ? "h2" : "h3";
-        const title = escapeHtml(node.display_name || node.name || node.id);
+        const titleText = node.display_name || node.name || node.id;
+        const title = escapeHtml(titleText);
         const subtitle = escapeHtml(shortCopy(node));
-        const path = node.path ? `<div class="card-path">${escapeHtml(node.path)}</div>` : "";
+        const path = node.path ? `<div class="card-path" title="${escapeHtml(node.path)}">${escapeHtml(node.path)}</div>` : "";
         const lines = lineRange(node);
         const linesPill = lines ? `<span class="card-pill">${escapeHtml(lines)}</span>` : "";
         const componentPill = node.component_id ? `<span class="card-pill">${escapeHtml(node.component_id)}</span>` : "";
@@ -1513,7 +1602,7 @@ pub fn render_focus_graph_html(
             </span>
             ${childIds.length ? `<span class="child-count">${childIds.length} child${childIds.length === 1 ? "" : "ren"}</span>` : ""}
           </div>
-          <${titleTag}>${title}</${titleTag}>
+          <${titleTag} class="card-title" title="${title}">${title}</${titleTag}>
           <div class="card-subtitle">${subtitle}</div>
           ${path}
           <div class="card-pills">
@@ -1657,16 +1746,18 @@ pub fn render_focus_graph_html(
           .join("");
 
         inspectorEl.innerHTML = inspectorMarkup(currentId);
+        rootCard.className = `node-card root-card${childIds.length >= 4 || node.kind === "repo" || node.kind === "component" ? " compact-root" : ""}`;
         rootCard.dataset.nodeId = currentId;
         rootCard.dataset.kind = node.kind;
         rootCard.dataset.accent = kindColor(node.kind);
+        rootCard.style.setProperty("--accent", kindColor(node.kind));
         rootCard.innerHTML = cardMarkup(currentId, { root: true });
 
         childrenGrid.innerHTML = childIds
           .map((childId) => {
             const child = nodeById.get(childId);
             const accent = kindColor(child.kind);
-            return `<button type="button" class="node-card" data-node-id="${escapeHtml(child.id)}" data-kind="${escapeHtml(child.kind)}" data-accent="${escapeHtml(accent)}">${cardMarkup(childId)}</button>`;
+            return `<button type="button" class="node-card" style="--accent:${escapeHtml(accent)}" data-node-id="${escapeHtml(child.id)}" data-kind="${escapeHtml(child.kind)}" data-accent="${escapeHtml(accent)}">${cardMarkup(childId)}</button>`;
           })
           .join("");
 
@@ -1740,6 +1831,10 @@ pub fn render_focus_graph_html(
         if (event.target === themeButton) {
           const nextTheme = rootEl.dataset.theme === "dark" ? "light" : "dark";
           applyTheme(nextTheme, true);
+          render();
+          if (searchInput.value.trim()) {
+            renderSearchResults(searchInput.value);
+          }
           return;
         }
 
@@ -3070,5 +3165,48 @@ mod tests {
         assert!(html.contains("source_unit::src/lib.rs"));
         assert!(html.contains("Core fixture component for the example repository."));
         assert!(html.contains("vscode://file//tmp/fixture-repo/src/lib.rs:1:1"));
+    }
+
+    #[test]
+    fn long_symbol_names_are_clamped_in_interactive_cards() {
+        let source_unit = Entity::new(
+            "source_unit::src/config/mod.rs",
+            EntityKind::SourceUnit,
+            "src/config/mod.rs",
+        )
+        .with_path("src/config/mod.rs");
+        let symbol = Entity::new(
+            "symbol::src/config/mod.rs::default_exclude_patterns",
+            EntityKind::Symbol,
+            "default_exclude_patterns",
+        )
+        .with_path("src/config/mod.rs")
+        .with_lines(1, 12)
+        .with_exported(true);
+
+        let entity_cache = HashMap::from([
+            (source_unit.id.clone(), source_unit),
+            (symbol.id.clone(), symbol),
+        ]);
+        let summary_cache = HashMap::new();
+        let visited_edges = HashSet::from([(
+            "source_unit::src/config/mod.rs".to_string(),
+            "defines".to_string(),
+            "symbol::src/config/mod.rs::default_exclude_patterns".to_string(),
+        )]);
+
+        let html = render_focus_graph_html(
+            &entity_cache,
+            &summary_cache,
+            &visited_edges,
+            Path::new("/tmp/fixture-repo"),
+            None,
+            Some("source_unit::src/config/mod.rs"),
+        );
+        assert!(html.contains("default_exclude_patterns"));
+        assert!(html.contains(".children-grid .card-title"));
+        assert!(html.contains(".children-grid .card-path"));
+        assert!(html.contains("class=\"card-title\" title=\"${title}\""));
+        assert!(html.contains("overflow-wrap: anywhere;"));
     }
 }

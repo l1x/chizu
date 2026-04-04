@@ -2,6 +2,14 @@
 name = "chizu-core"
 version = "0.2.0"
 edition = "2024"
+description = "Core types, storage, config, and provider abstractions for the Chizu repository knowledge graph"
+license = "MIT"
+repository = "https://github.com/l1x/chizu"
+homepage = "https://github.com/l1x/chizu"
+documentation = "https://docs.rs/chizu-core"
+readme = "../README.md"
+keywords = ["code-search", "knowledge-graph", "agents", "sqlite", "usearch"]
+categories = ["development-tools", "data-structures"]
 
 [dependencies]
 reqwest = { workspace = true }

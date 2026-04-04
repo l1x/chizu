@@ -2,9 +2,17 @@
 name = "chizu-index"
 version = "0.2.0"
 edition = "2024"
+description = "Indexing pipeline and adapters for Chizu repository facts, summaries, and embeddings"
+license = "MIT"
+repository = "https://github.com/l1x/chizu"
+homepage = "https://github.com/l1x/chizu"
+documentation = "https://docs.rs/chizu-index"
+readme = "../README.md"
+keywords = ["code-indexing", "knowledge-graph", "agents", "tree-sitter", "embeddings"]
+categories = ["development-tools", "parser-implementations"]
 
 [dependencies]
-chizu-core = { path = "../chizu-core" }
+chizu-core = { version = "0.2.0", path = "../chizu-core" }
 blake3 = { workspace = true }
 cargo_toml = { workspace = true }
 globset = { workspace = true }

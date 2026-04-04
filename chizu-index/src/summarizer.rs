@@ -918,6 +918,11 @@ fn response_contract(
 - Keep `short_summary` to one short sentence, about 24 words max.
 - Keep `detailed_summary` to 1-2 short sentences, about 60 words max.
 - Return at most 4 short keywords.
+- Base every claim on facts explicit in the input.
+- Do not infer domain, audience, deployment model, architecture style, or product positioning from names or paths alone.
+- Avoid vague or marketing-style phrases like "suite of tools", "platform", "cloud-native", "server-side functionality", or "infrastructure" unless the input explicitly says that.
+- If the input is mostly structural metadata, summarize the structure literally using concrete counts, files, docs, dependencies, or symbols.
+- If the purpose is unclear, say what the entity contains or connects to, not what it is "for".
 - If you are running out of space, shorten `detailed_summary` and `keywords` first, but still return `short_summary`.
 - Return compact JSON on a single line.
 - Do not wrap the response in markdown."#,
@@ -927,7 +932,7 @@ fn response_contract(
 
 fn build_single_prompt(prompt_input: &str, max_tokens: Option<u32>) -> String {
     format!(
-        r#"You are a codebase documentation assistant. Given the following repository entity, provide a concise summary.
+        r#"You are a codebase documentation assistant. Given the following repository entity, provide a concise, literal summary grounded only in the provided input.
 
 {}
 
@@ -957,7 +962,7 @@ fn build_batch_prompt(
         .join("\n\n");
 
     format!(
-        r#"You are a codebase documentation assistant. Given the following repository entities, provide a concise summary for each one.
+        r#"You are a codebase documentation assistant. Given the following repository entities, provide a concise, literal summary for each one, grounded only in the provided input.
 
 {}
 
@@ -1606,6 +1611,8 @@ mod tests {
         let single = build_single_prompt("Entity ID: e1\nKind: doc", Some(128));
         assert!(single.contains("128 output tokens"));
         assert!(single.contains("`short_summary` is required and must never be omitted"));
+        assert!(single.contains("Base every claim on facts explicit in the input"));
+        assert!(single.contains("Avoid vague or marketing-style phrases like \"suite of tools\""));
 
         let batch = build_batch_prompt(
             &[SummaryWork {
