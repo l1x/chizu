@@ -326,6 +326,50 @@ impl SqliteStore {
         Ok(entities)
     }
 
+    pub fn search_entities_by_name_or_path(
+        &self,
+        like_patterns: &[String],
+        kinds: &[EntityKind],
+    ) -> Result<Vec<Entity>> {
+        if like_patterns.is_empty() || kinds.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        // Build: WHERE kind IN (?,?,...) AND (name LIKE ? OR path LIKE ? OR name LIKE ? OR ...)
+        let kind_placeholders: String = kinds.iter().map(|_| "?").collect::<Vec<_>>().join(",");
+        let text_conditions: String = like_patterns
+            .iter()
+            .enumerate()
+            .map(|(i, _)| {
+                let p = kinds.len() + 1 + i * 2;
+                format!("LOWER(name) LIKE ?{p} OR LOWER(COALESCE(path,'')) LIKE ?{}", p + 1)
+            })
+            .collect::<Vec<_>>()
+            .join(" OR ");
+
+        let sql = format!(
+            "SELECT id, kind, name, component_id, path, language, line_start, line_end, visibility, exported \
+             FROM entities WHERE kind IN ({kind_placeholders}) AND ({text_conditions})"
+        );
+
+        let mut params: Vec<Box<dyn rusqlite::types::ToSql>> = Vec::new();
+        for kind in kinds {
+            params.push(Box::new(kind.to_string()));
+        }
+        for pattern in like_patterns {
+            // Each pattern is used twice (name and path)
+            params.push(Box::new(pattern.clone()));
+            params.push(Box::new(pattern.clone()));
+        }
+
+        let param_refs: Vec<&dyn rusqlite::types::ToSql> = params.iter().map(|p| p.as_ref()).collect();
+        let mut stmt = self.conn.prepare(&sql)?;
+        let entities = stmt
+            .query_map(param_refs.as_slice(), entity_from_row)?
+            .collect::<std::result::Result<Vec<_>, _>>()?;
+        Ok(entities)
+    }
+
     pub fn delete_entities_by_path(&self, path: &str) -> Result<usize> {
         let count = self
             .conn
@@ -371,6 +415,16 @@ impl SqliteStore {
         Ok(edges)
     }
 
+    pub fn get_all_edges(&self) -> Result<Vec<Edge>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT src_id, rel, dst_id, provenance_path, provenance_line FROM edges",
+        )?;
+        let edges = stmt
+            .query_map([], edge_from_row)?
+            .collect::<std::result::Result<Vec<_>, _>>()?;
+        Ok(edges)
+    }
+
     pub fn get_edges_by_rel(&self, rel: EdgeKind) -> Result<Vec<Edge>> {
         let mut stmt = self.conn.prepare_cached(
             "SELECT src_id, rel, dst_id, provenance_path, provenance_line FROM edges WHERE rel = ?1",
@@ -398,6 +452,25 @@ impl SqliteStore {
              dst_id IN (SELECT id FROM component_entities)",
             [component_id.as_str()],
         )?;
+        Ok(count)
+    }
+
+    pub fn delete_edges_for_entity_ids(&self, ids: &[String]) -> Result<usize> {
+        if ids.is_empty() {
+            return Ok(0);
+        }
+        let placeholders: String = ids.iter().map(|_| "?").collect::<Vec<_>>().join(",");
+        let sql = format!(
+            "DELETE FROM edges WHERE src_id IN ({placeholders}) OR dst_id IN ({placeholders})"
+        );
+        let mut params: Vec<&dyn rusqlite::types::ToSql> = Vec::with_capacity(ids.len() * 2);
+        for id in ids {
+            params.push(id);
+        }
+        for id in ids {
+            params.push(id);
+        }
+        let count = self.conn.execute(&sql, params.as_slice())?;
         Ok(count)
     }
 
@@ -500,6 +573,35 @@ impl SqliteStore {
         Ok(summaries)
     }
 
+    pub fn search_summaries_by_text(&self, like_patterns: &[String]) -> Result<Vec<Summary>> {
+        if like_patterns.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        // Build: WHERE LOWER(short_summary || ' ' || COALESCE(keywords_json,'')) LIKE ?1
+        //           OR LOWER(short_summary || ' ' || COALESCE(keywords_json,'')) LIKE ?2 ...
+        let haystack_expr = "LOWER(short_summary || ' ' || COALESCE(keywords_json, ''))";
+        let conditions: String = like_patterns
+            .iter()
+            .enumerate()
+            .map(|(i, _)| format!("{haystack_expr} LIKE ?{}", i + 1))
+            .collect::<Vec<_>>()
+            .join(" OR ");
+
+        let sql = format!(
+            "SELECT entity_id, short_summary, detailed_summary, keywords_json, updated_at, source_hash \
+             FROM summaries WHERE {conditions}"
+        );
+
+        let param_refs: Vec<&dyn rusqlite::types::ToSql> =
+            like_patterns.iter().map(|p| p as &dyn rusqlite::types::ToSql).collect();
+        let mut stmt = self.conn.prepare(&sql)?;
+        let summaries = stmt
+            .query_map(param_refs.as_slice(), summary_from_row)?
+            .collect::<std::result::Result<Vec<_>, _>>()?;
+        Ok(summaries)
+    }
+
     pub fn delete_summary(&self, entity_id: &str) -> Result<()> {
         self.conn
             .prepare_cached("DELETE FROM summaries WHERE entity_id = ?1")?
@@ -573,6 +675,16 @@ impl SqliteStore {
             .query_row([entity_id], embedding_meta_from_row)
             .optional()?;
         Ok(meta)
+    }
+
+    pub fn get_all_embedding_metas(&self) -> Result<Vec<EmbeddingMeta>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT entity_id, model, dimensions, updated_at, usearch_key FROM embeddings",
+        )?;
+        let metas = stmt
+            .query_map([], embedding_meta_from_row)?
+            .collect::<std::result::Result<Vec<_>, _>>()?;
+        Ok(metas)
     }
 
     pub fn delete_embedding_meta(&self, entity_id: &str) -> Result<()> {

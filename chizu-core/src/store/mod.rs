@@ -53,6 +53,14 @@ pub trait Store {
     /// Get all entities.
     fn get_all_entities(&self) -> Result<Vec<Entity>>;
 
+    /// Search entities whose name or path matches any LIKE pattern, filtered to given kinds.
+    /// Patterns should be pre-formatted (e.g. `%token%`).
+    fn search_entities_by_name_or_path(
+        &self,
+        like_patterns: &[String],
+        kinds: &[EntityKind],
+    ) -> Result<Vec<Entity>>;
+
     /// Delete an entity by ID.
     fn delete_entity(&self, id: &str) -> Result<()>;
 
@@ -69,6 +77,9 @@ pub trait Store {
 
     /// Get edges by destination ID.
     fn get_edges_to(&self, dst_id: &str) -> Result<Vec<Edge>>;
+
+    /// Get all edges.
+    fn get_all_edges(&self) -> Result<Vec<Edge>>;
 
     /// Get edges by relationship kind.
     fn get_edges_by_rel(&self, rel: EdgeKind) -> Result<Vec<Edge>>;
@@ -104,6 +115,10 @@ pub trait Store {
     /// Get all summaries.
     fn get_all_summaries(&self) -> Result<Vec<Summary>>;
 
+    /// Search summaries whose short_summary or keywords match any LIKE pattern.
+    /// Patterns should be pre-formatted (e.g. `%token%`).
+    fn search_summaries_by_text(&self, like_patterns: &[String]) -> Result<Vec<Summary>>;
+
     /// Delete a summary.
     fn delete_summary(&self, entity_id: &str) -> Result<()>;
 
@@ -125,6 +140,9 @@ pub trait Store {
 
     /// Insert or replace embedding metadata.
     fn insert_embedding_meta(&self, meta: &EmbeddingMeta) -> Result<()>;
+
+    /// Get all embedding metadata.
+    fn get_all_embedding_metas(&self) -> Result<Vec<EmbeddingMeta>>;
 
     /// Get embedding metadata by entity ID.
     fn get_embedding_meta(&self, entity_id: &str) -> Result<Option<EmbeddingMeta>>;
@@ -239,6 +257,15 @@ impl Store for ChizuStore {
         self.sqlite.get_all_entities()
     }
 
+    fn search_entities_by_name_or_path(
+        &self,
+        like_patterns: &[String],
+        kinds: &[EntityKind],
+    ) -> Result<Vec<Entity>> {
+        self.sqlite
+            .search_entities_by_name_or_path(like_patterns, kinds)
+    }
+
     fn delete_entity(&self, id: &str) -> Result<()> {
         self.sqlite.delete_entity(id)
     }
@@ -257,6 +284,10 @@ impl Store for ChizuStore {
 
     fn get_edges_to(&self, dst_id: &str) -> Result<Vec<Edge>> {
         self.sqlite.get_edges_to(dst_id)
+    }
+
+    fn get_all_edges(&self) -> Result<Vec<Edge>> {
+        self.sqlite.get_all_edges()
     }
 
     fn get_edges_by_rel(&self, rel: EdgeKind) -> Result<Vec<Edge>> {
@@ -299,6 +330,10 @@ impl Store for ChizuStore {
         self.sqlite.get_all_summaries()
     }
 
+    fn search_summaries_by_text(&self, like_patterns: &[String]) -> Result<Vec<Summary>> {
+        self.sqlite.search_summaries_by_text(like_patterns)
+    }
+
     fn delete_summary(&self, entity_id: &str) -> Result<()> {
         self.sqlite.delete_summary(entity_id)
     }
@@ -321,6 +356,10 @@ impl Store for ChizuStore {
 
     fn insert_embedding_meta(&self, meta: &EmbeddingMeta) -> Result<()> {
         self.sqlite.insert_embedding_meta(meta)
+    }
+
+    fn get_all_embedding_metas(&self) -> Result<Vec<EmbeddingMeta>> {
+        self.sqlite.get_all_embedding_metas()
     }
 
     fn get_embedding_meta(&self, entity_id: &str) -> Result<Option<EmbeddingMeta>> {
