@@ -1,0 +1,1462 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Chizu tree explorer</title>
+  <style>
+    :root {
+      --bg: #f6f4ee;
+      --bg-deep: #efebe3;
+      --bg-accent: rgba(95, 115, 119, 0.06);
+      --grid-overlay: rgba(111, 125, 129, 0.08);
+      --accent-cyan: #5f7377;
+      --accent-cyan-soft: rgba(95, 115, 119, 0.14);
+      --accent-green: #5f7c68;
+      --accent-green-soft: rgba(95, 124, 104, 0.14);
+      --accent-purple: #7d7394;
+      --accent-purple-soft: rgba(125, 115, 148, 0.14);
+      --panel: rgba(255, 253, 248, 0.88);
+      --panel-strong: rgba(255, 253, 248, 0.96);
+      --surface: rgba(255, 253, 248, 0.96);
+      --surface-strong: rgba(255, 253, 248, 0.99);
+      --surface-hover: rgba(236, 240, 238, 0.72);
+      --ink: #223136;
+      --muted: #6f7d80;
+      --line: rgba(105, 125, 128, 0.24);
+      --line-soft: rgba(105, 125, 128, 0.14);
+      --line-faint: rgba(105, 125, 128, 0.10);
+      --line-strong: rgba(98, 122, 126, 0.42);
+      --button-bg: rgba(255, 253, 248, 0.82);
+      --button-bg-hover: rgba(255, 253, 248, 0.96);
+      --button-border: rgba(91, 111, 116, 0.18);
+      --button-border-strong: rgba(91, 111, 116, 0.36);
+      --crumb-bg: rgba(227, 233, 231, 0.8);
+      --crumb-active: rgba(90, 118, 125, 0.18);
+      --pill-bg: rgba(231, 236, 234, 0.88);
+      --pill-strong: rgba(233, 238, 236, 0.9);
+      --card-bg: rgba(255, 254, 251, 0.94);
+      --card-border: rgba(91, 111, 116, 0.16);
+      --card-border-strong: rgba(90, 118, 125, 0.28);
+      --card-shadow-strong: 0 18px 32px rgba(125, 134, 124, 0.12);
+      --root-card-shadow: 0 24px 42px rgba(124, 130, 119, 0.12);
+      --stage-glow: rgba(210, 220, 218, 0.6);
+      --stage-surface: rgba(255, 253, 248, 0.74);
+      --stage-overlay: rgba(255, 255, 255, 0.42);
+      --stage-grid: rgba(153, 167, 168, 0.06);
+      --stage-border: rgba(111, 131, 132, 0.12);
+      --mark-bg: rgba(95, 115, 119, 0.16);
+      --shadow: 0 10px 24px rgba(124, 128, 118, 0.08);
+      --shadow-soft: 0 6px 16px rgba(124, 128, 118, 0.06);
+      --radius: 18px;
+      --radius-small: 12px;
+      --font-mono: "JetBrains Mono", "IBM Plex Mono", "Fira Code", ui-monospace, SFMono-Regular, Menlo, monospace;
+      --font-sans: "Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    :root[data-theme="dark"] {
+      --bg: #0f1115;
+      --bg-deep: #0b0e12;
+      --bg-accent: rgba(125, 211, 252, 0.05);
+      --grid-overlay: rgba(156, 163, 175, 0.05);
+      --accent-cyan: #7dd3fc;
+      --accent-cyan-soft: rgba(125, 211, 252, 0.16);
+      --accent-green: #86efac;
+      --accent-green-soft: rgba(134, 239, 172, 0.16);
+      --accent-purple: #c4b5fd;
+      --accent-purple-soft: rgba(196, 181, 253, 0.16);
+      --panel: rgba(15, 17, 21, 0.94);
+      --panel-strong: rgba(18, 21, 27, 0.98);
+      --surface: rgba(21, 25, 34, 0.98);
+      --surface-strong: rgba(21, 25, 34, 1);
+      --surface-hover: rgba(28, 34, 44, 1);
+      --ink: #e6e6e6;
+      --muted: #9ca3af;
+      --line: rgba(255, 255, 255, 0.08);
+      --line-soft: rgba(255, 255, 255, 0.06);
+      --line-faint: rgba(255, 255, 255, 0.05);
+      --line-strong: rgba(125, 211, 252, 0.28);
+      --button-bg: rgba(21, 25, 34, 0.98);
+      --button-bg-hover: rgba(25, 30, 40, 1);
+      --button-border: rgba(255, 255, 255, 0.08);
+      --button-border-strong: rgba(125, 211, 252, 0.30);
+      --crumb-bg: rgba(21, 25, 34, 0.98);
+      --crumb-active: rgba(125, 211, 252, 0.12);
+      --pill-bg: rgba(21, 25, 34, 0.98);
+      --pill-strong: rgba(24, 29, 39, 1);
+      --card-bg: rgba(21, 25, 34, 0.98);
+      --card-border: rgba(255, 255, 255, 0.08);
+      --card-border-strong: rgba(125, 211, 252, 0.24);
+      --card-shadow-strong: 0 0 0 1px rgba(125, 211, 252, 0.10);
+      --root-card-shadow: 0 0 0 1px rgba(125, 211, 252, 0.12);
+      --stage-glow: rgba(125, 211, 252, 0.06);
+      --stage-surface: rgba(15, 17, 21, 0.98);
+      --stage-overlay: rgba(255, 255, 255, 0.03);
+      --stage-grid: rgba(255, 255, 255, 0.025);
+      --stage-border: rgba(255, 255, 255, 0.08);
+      --mark-bg: rgba(125, 211, 252, 0.20);
+      --shadow: 0 8px 18px rgba(0, 0, 0, 0.22);
+      --shadow-soft: 0 4px 12px rgba(0, 0, 0, 0.16);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html,
+    body {
+      margin: 0;
+      min-height: 100%;
+      background:
+        linear-gradient(135deg, var(--bg-accent), transparent 45%),
+        linear-gradient(180deg, var(--bg) 0%, var(--bg-deep) 100%);
+      color: var(--ink);
+      font-family: var(--font-mono);
+      font-size: 14px;
+      line-height: 1.6;
+    }
+
+    body::before {
+      content: "";
+      position: fixed;
+      inset: 0;
+      background:
+        linear-gradient(135deg, var(--grid-overlay) 0, var(--grid-overlay) 1px, transparent 1px, transparent 120px);
+      opacity: 0.22;
+      pointer-events: none;
+    }
+
+    button {
+      font: inherit;
+    }
+
+    .app {
+      position: relative;
+      min-height: 100vh;
+      padding: 26px;
+    }
+
+    .topbar {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 20px;
+      padding: 18px 20px 24px;
+      margin-bottom: 18px;
+    }
+
+    .title-wrap {
+      max-width: 720px;
+    }
+
+    .eyebrow {
+      display: inline-block;
+      margin-bottom: 10px;
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+    }
+
+    .topbar h1 {
+      margin: 0;
+      font-family: var(--font-mono);
+      font-size: clamp(22px, 3.2vw, 32px);
+      font-weight: 700;
+      line-height: 1.02;
+      letter-spacing: -0.02em;
+    }
+
+    .topbar p {
+      margin: 10px 0 0;
+      max-width: 680px;
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 1.6;
+    }
+
+    .toolbar {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+      padding-top: 8px;
+    }
+
+    .search-shell {
+      position: relative;
+      min-width: min(360px, 100%);
+      flex: 1 1 320px;
+      max-width: 460px;
+    }
+
+    .search-shell::before {
+      content: "⌕";
+      position: absolute;
+      left: 14px;
+      top: 50%;
+      transform: translateY(-50%);
+      color: var(--muted);
+      font-size: 14px;
+      z-index: 1;
+      pointer-events: none;
+    }
+
+    .search-input {
+      appearance: none;
+      -webkit-appearance: none;
+      width: 100%;
+      border: 1px solid var(--button-border);
+      background: var(--surface);
+      color: var(--ink);
+      border-radius: 10px;
+      padding: 12px 14px 12px 38px;
+      box-shadow: none;
+      outline: none;
+      font-family: var(--font-mono);
+      font-size: 13px;
+    }
+
+    .search-input:focus {
+      border-color: var(--button-border-strong);
+      box-shadow: 0 0 0 1px rgba(125, 211, 252, 0.16);
+    }
+
+    .search-input::-webkit-search-decoration,
+    .search-input::-webkit-search-cancel-button,
+    .search-input::-webkit-search-results-button,
+    .search-input::-webkit-search-results-decoration {
+      -webkit-appearance: none;
+      appearance: none;
+      display: none;
+    }
+
+    .search-results {
+      position: absolute;
+      top: calc(100% + 8px);
+      right: 0;
+      width: 100%;
+      max-height: 420px;
+      overflow: auto;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: var(--surface-strong);
+      box-shadow: var(--shadow);
+      display: block;
+      z-index: 20;
+    }
+
+    .search-results[hidden] {
+      display: none;
+    }
+
+    .search-results-header {
+      padding: 10px 14px;
+      border-bottom: 1px solid var(--line-soft);
+      color: var(--muted);
+      font-size: 11px;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      font-family: var(--font-mono);
+    }
+
+    .search-result {
+      appearance: none;
+      -webkit-appearance: none;
+      display: block;
+      width: 100%;
+      border: 0;
+      border-bottom: 1px solid var(--line-faint);
+      border-radius: 0;
+      background: transparent;
+      padding: 11px 14px;
+      text-align: left;
+      cursor: pointer;
+      color: var(--ink);
+      box-shadow: none;
+      transition: background 120ms ease, border-color 120ms ease;
+    }
+
+    .search-result:last-child {
+      border-bottom: 0;
+    }
+
+    .search-result:hover,
+    .search-result.active {
+      background: var(--surface-hover);
+      box-shadow: inset 2px 0 0 var(--accent-cyan);
+    }
+
+    .search-result-title {
+      font-weight: 600;
+      line-height: 1.3;
+      font-size: 14px;
+      font-family: var(--font-mono);
+    }
+
+    .search-result-meta,
+    .search-result-copy {
+      margin-top: 4px;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.5;
+    }
+
+    .search-result-copy {
+      margin-top: 6px;
+      font-size: 12px;
+    }
+
+    .search-result mark {
+      background: var(--mark-bg);
+      color: inherit;
+      padding: 0 1px;
+      border-radius: 3px;
+    }
+
+    .toolbar > button {
+      border: 1px solid var(--button-border);
+      background: var(--button-bg);
+      color: var(--ink);
+      border-radius: 10px;
+      padding: 10px 14px;
+      cursor: pointer;
+      transition: border-color 120ms ease, background 120ms ease, color 120ms ease;
+      box-shadow: none;
+      font-family: var(--font-mono);
+      font-size: 12px;
+    }
+
+    .toolbar > button:hover {
+      border-color: var(--button-border-strong);
+      background: var(--button-bg-hover);
+      color: var(--accent-cyan);
+    }
+
+    .workspace {
+      display: grid;
+      grid-template-columns: minmax(280px, 330px) minmax(0, 1fr);
+      gap: 28px;
+      align-items: start;
+    }
+
+    .inspector,
+    .canvas-shell {
+      position: relative;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--panel);
+      box-shadow: var(--shadow);
+    }
+
+    .inspector {
+      padding: 22px 22px 24px;
+      position: sticky;
+      top: 24px;
+    }
+
+    .crumbs {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-bottom: 18px;
+    }
+
+    .crumb {
+      border: 0;
+      background: var(--crumb-bg);
+      color: var(--ink);
+      border-radius: 8px;
+      padding: 7px 10px;
+      cursor: pointer;
+      font-size: 12px;
+      font-family: var(--font-mono);
+    }
+
+    .crumb.active {
+      background: var(--crumb-active);
+      color: var(--accent-cyan);
+      box-shadow: inset 0 0 0 1px var(--accent-cyan-soft);
+    }
+
+    .inspector-card h2 {
+      margin: 0;
+      font-family: var(--font-mono);
+      font-size: 20px;
+      line-height: 1.08;
+      letter-spacing: -0.02em;
+      overflow-wrap: anywhere;
+      word-break: break-word;
+    }
+
+    .kind-line {
+      margin-top: 8px;
+      color: var(--muted);
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+    }
+
+    .inspector-copy {
+      margin-top: 14px;
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 1.7;
+    }
+
+    .inspector-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 16px;
+    }
+
+    .action-link {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      padding: 10px 14px;
+      border-radius: 999px;
+      border: 1px solid var(--accent-cyan-soft);
+      background: var(--button-bg-hover);
+      color: var(--accent-cyan);
+      text-decoration: none;
+      font-size: 13px;
+      box-shadow: none;
+      font-family: var(--font-mono);
+    }
+
+    .action-link:hover {
+      border-color: var(--accent-cyan);
+      background: color-mix(in srgb, var(--accent-cyan) 8%, var(--surface-strong));
+    }
+
+    .inspector-section {
+      margin-top: 22px;
+      padding-top: 18px;
+      border-top: 1px solid var(--line-soft);
+    }
+
+    .section-title {
+      margin: 0 0 10px;
+      color: var(--ink);
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+    }
+
+    .meta-list {
+      display: grid;
+      gap: 10px;
+    }
+
+    .meta-row {
+      display: grid;
+      gap: 4px;
+    }
+
+    .meta-label {
+      color: var(--muted);
+      font-size: 12px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    .meta-value {
+      color: var(--ink);
+      font-size: 14px;
+      line-height: 1.5;
+      overflow-wrap: anywhere;
+      word-break: break-word;
+    }
+
+    .pill-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 8px 11px;
+      border-radius: 999px;
+      background: var(--pill-bg);
+      color: var(--ink);
+      font-size: 11px;
+      line-height: 1;
+      border: 1px solid var(--line-faint);
+      font-family: var(--font-mono);
+    }
+
+    .pill strong {
+      font-size: 13px;
+    }
+
+    .canvas-shell {
+      padding: 18px;
+      overflow: hidden;
+    }
+
+    .canvas-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      padding: 8px 10px 16px;
+    }
+
+    .canvas-caption {
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 1.5;
+    }
+
+    .stage {
+      position: relative;
+      min-height: calc(100vh - 180px);
+      border-radius: calc(var(--radius) - 8px);
+      background:
+        radial-gradient(circle at top, var(--stage-glow), transparent 56%),
+        var(--stage-surface);
+      border: 1px solid var(--stage-border);
+      overflow: hidden;
+      padding: 24px 24px 22px;
+    }
+
+    .stage::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background:
+        linear-gradient(180deg, var(--stage-overlay), transparent 30%),
+        linear-gradient(135deg, var(--stage-grid) 0, var(--stage-grid) 1px, transparent 1px, transparent 72px);
+      pointer-events: none;
+    }
+
+    #links {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      overflow: visible;
+      pointer-events: none;
+    }
+
+    .root-zone {
+      position: relative;
+      z-index: 1;
+      display: flex;
+      justify-content: center;
+      margin-bottom: 28px;
+    }
+
+    .children-grid {
+      position: relative;
+      z-index: 1;
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 20px;
+      align-items: start;
+    }
+
+    .node-card {
+      --accent: var(--accent-cyan);
+      position: relative;
+      border: 1px solid var(--card-border);
+      border-radius: 12px;
+      background: var(--card-bg);
+      box-shadow: var(--shadow-soft);
+      text-align: left;
+      padding: 16px 16px 15px;
+      cursor: pointer;
+      transition: border-color 140ms ease, background 140ms ease;
+      color: var(--ink);
+      width: 100%;
+      overflow: hidden;
+    }
+
+    .node-card::before {
+      content: "";
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 2px;
+      background: linear-gradient(90deg, var(--accent), transparent 72%);
+      opacity: 0.85;
+    }
+
+    .node-card:hover {
+      border-color: var(--card-border-strong);
+      box-shadow: var(--card-shadow-strong);
+      background: var(--surface-hover);
+    }
+
+    .node-card:hover .kind-chip {
+      color: color-mix(in srgb, var(--accent) 58%, var(--muted));
+    }
+
+    .node-card.root-card {
+      max-width: min(560px, 100%);
+      padding: 18px 20px 16px;
+      border-radius: 14px;
+      box-shadow: var(--root-card-shadow);
+    }
+
+    .node-card.root-card.compact-root {
+      max-width: min(500px, 100%);
+      padding: 16px 18px 14px;
+    }
+
+    .card-topline {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      margin-bottom: 10px;
+    }
+
+    .kind-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      color: color-mix(in srgb, var(--accent) 44%, var(--muted));
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      font-family: var(--font-mono);
+    }
+
+    .kind-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: var(--accent, #62797d);
+      box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent, #62797d) 16%, transparent);
+      flex: none;
+    }
+
+    .child-count {
+      padding: 7px 10px;
+      border-radius: 999px;
+      background: var(--pill-bg);
+      color: var(--muted);
+      font-size: 11px;
+      line-height: 1;
+      border: 1px solid var(--line-faint);
+      font-family: var(--font-mono);
+    }
+
+    .node-card h2,
+    .node-card h3 {
+      margin: 0;
+      font-family: var(--font-mono);
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      color: var(--ink);
+      overflow-wrap: anywhere;
+      word-break: break-word;
+    }
+
+    .root-card h2 {
+      font-size: clamp(24px, 3.2vw, 34px);
+      line-height: 1.04;
+    }
+
+    .root-card.compact-root h2 {
+      font-size: clamp(22px, 2.8vw, 28px);
+    }
+
+    .root-card.compact-root .card-topline {
+      margin-bottom: 8px;
+    }
+
+    .root-card.compact-root .card-subtitle,
+    .root-card.compact-root .card-path {
+      margin-top: 6px;
+      font-size: 12px;
+      line-height: 1.45;
+    }
+
+    .root-card.compact-root .card-pills {
+      margin-top: 12px;
+      gap: 6px;
+    }
+
+    .node-card h3 {
+      font-size: 18px;
+      line-height: 1.08;
+    }
+
+    .card-title {
+      overflow-wrap: anywhere;
+      word-break: break-word;
+    }
+
+    .children-grid .card-title {
+      display: -webkit-box;
+      -webkit-box-orient: vertical;
+      -webkit-line-clamp: 2;
+      overflow: hidden;
+      min-height: calc(1.08em * 2);
+    }
+
+    .card-subtitle,
+    .card-path {
+      margin-top: 8px;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.5;
+      overflow-wrap: anywhere;
+      word-break: break-word;
+    }
+
+    .card-path {
+      font-family: var(--font-mono);
+      font-size: 11px;
+    }
+
+    .children-grid .card-path {
+      display: -webkit-box;
+      -webkit-box-orient: vertical;
+      -webkit-line-clamp: 2;
+      overflow: hidden;
+    }
+
+    .card-pills {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-top: 12px;
+    }
+
+    .card-pill {
+      padding: 6px 9px;
+      border-radius: 999px;
+      background: var(--pill-strong);
+      color: var(--ink);
+      font-size: 11px;
+      line-height: 1;
+      border: 1px solid var(--line-faint);
+      font-family: var(--font-mono);
+    }
+
+    .empty-state {
+      position: relative;
+      z-index: 1;
+      padding: 38px 24px 8px;
+      color: var(--muted);
+      text-align: center;
+      font-size: 15px;
+      line-height: 1.7;
+    }
+
+    .edge-path {
+      fill: none;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+      opacity: 0.82;
+    }
+
+    @media (max-width: 980px) {
+      .app {
+        padding: 18px;
+      }
+
+      .workspace {
+        grid-template-columns: 1fr;
+      }
+
+      .inspector {
+        position: relative;
+        top: auto;
+      }
+
+      .stage {
+        min-height: 680px;
+        padding: 28px 18px 20px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <header class="topbar">
+      <div class="title-wrap">
+        <span class="eyebrow">tree explorer</span>
+        <h1 id="view-title">Repository</h1>
+        <p id="view-subtitle">Walk the structural tree and reuse the full canvas at each level.</p>
+      </div>
+      <div class="toolbar">
+        <div class="search-shell">
+          <input
+            id="search-input"
+            class="search-input"
+            type="search"
+            placeholder="Search visible nodes by name, path, or summary"
+            autocomplete="off"
+            spellcheck="false"
+          />
+          <div class="search-results" id="search-results" hidden></div>
+        </div>
+        <button type="button" id="overview-btn">Overview</button>
+        <button type="button" id="up-btn">Up One Level</button>
+        <button type="button" id="theme-btn">Dark Theme</button>
+      </div>
+    </header>
+    <div class="workspace">
+      <aside class="inspector">
+        <div class="crumbs" id="breadcrumbs"></div>
+        <div id="inspector-panel"></div>
+      </aside>
+      <main class="canvas-shell">
+        <div class="canvas-header">
+          <div class="canvas-caption" id="focus-caption"></div>
+        </div>
+        <section class="stage" id="stage">
+          <svg id="links" aria-hidden="true"></svg>
+          <div class="root-zone">
+            <button type="button" class="node-card root-card" id="root-card"></button>
+          </div>
+          <div class="children-grid" id="children-grid"></div>
+          <div class="empty-state" id="empty-state" hidden></div>
+        </section>
+      </main>
+    </div>
+  </div>
+  <script id="chizu-data" type="application/json">{{ payload_json }}</script>
+  <script>
+    (() => {
+      const data = JSON.parse(document.getElementById("chizu-data").textContent);
+      const nodeById = new Map(data.nodes.map((node) => [node.id, node]));
+      const outgoing = new Map();
+      const incoming = new Map();
+      const relationCount = new Map();
+
+      for (const edge of data.edges) {
+        if (!nodeById.has(edge.src_id) || !nodeById.has(edge.dst_id)) {
+          continue;
+        }
+        if (!outgoing.has(edge.src_id)) outgoing.set(edge.src_id, []);
+        if (!incoming.has(edge.dst_id)) incoming.set(edge.dst_id, []);
+        outgoing.get(edge.src_id).push(edge);
+        incoming.get(edge.dst_id).push(edge);
+        relationCount.set(edge.src_id, (relationCount.get(edge.src_id) || 0) + 1);
+        relationCount.set(edge.dst_id, (relationCount.get(edge.dst_id) || 0) + 1);
+      }
+
+      const stage = document.getElementById("stage");
+      const linksSvg = document.getElementById("links");
+      const rootCard = document.getElementById("root-card");
+      const childrenGrid = document.getElementById("children-grid");
+      const emptyState = document.getElementById("empty-state");
+      const searchInput = document.getElementById("search-input");
+      const searchResults = document.getElementById("search-results");
+      const breadcrumbsEl = document.getElementById("breadcrumbs");
+      const inspectorEl = document.getElementById("inspector-panel");
+      const titleEl = document.getElementById("view-title");
+      const subtitleEl = document.getElementById("view-subtitle");
+      const captionEl = document.getElementById("focus-caption");
+      const upButton = document.getElementById("up-btn");
+      const overviewButton = document.getElementById("overview-btn");
+      const themeButton = document.getElementById("theme-btn");
+      const rootEl = document.documentElement;
+      const themeStorageKey = "chizu-theme";
+
+      function updateThemeButton(theme) {
+        themeButton.textContent = theme === "dark" ? "Light Theme" : "Dark Theme";
+        themeButton.setAttribute("aria-pressed", theme === "dark" ? "true" : "false");
+      }
+
+      function applyTheme(theme, persist = false) {
+        rootEl.dataset.theme = theme;
+        updateThemeButton(theme);
+        if (persist) {
+          localStorage.setItem(themeStorageKey, theme);
+        }
+      }
+
+      const storedTheme = localStorage.getItem(themeStorageKey);
+      const initialTheme = storedTheme || "dark";
+      applyTheme(initialTheme);
+
+      function structuralPriority(edge) {
+        const src = nodeById.get(edge.src_id);
+        const dst = nodeById.get(edge.dst_id);
+        if (!src || !dst) return -1;
+        if (edge.rel === "contains" && src.kind === "repo" && dst.kind === "component") return 60;
+        if (edge.rel === "documented_by" && (src.kind === "repo" || src.kind === "component") && dst.kind === "doc") return 55;
+        if (edge.rel === "contains" && src.kind === "component" && dst.kind === "source_unit") return 50;
+        if (edge.rel === "defines" && src.kind === "source_unit" && dst.kind === "symbol") return 40;
+        if (edge.rel === "tested_by" && src.kind === "source_unit" && dst.kind === "test") return 39;
+        if (edge.rel === "benchmarked_by" && src.kind === "source_unit" && dst.kind === "bench") return 38;
+        return -1;
+      }
+
+      const parentChoice = new Map();
+      for (const edge of data.edges) {
+        const priority = structuralPriority(edge);
+        if (priority < 0) continue;
+        const current = parentChoice.get(edge.dst_id);
+        if (!current || priority > current.priority || (priority === current.priority && edge.src_id < current.parent_id)) {
+          parentChoice.set(edge.dst_id, {
+            parent_id: edge.src_id,
+            rel: edge.rel,
+            priority,
+          });
+        }
+      }
+
+      const treeChildren = new Map();
+      for (const [childId, choice] of parentChoice.entries()) {
+        if (!treeChildren.has(choice.parent_id)) treeChildren.set(choice.parent_id, []);
+        treeChildren.get(choice.parent_id).push(childId);
+      }
+
+      function kindOrder(kind) {
+        switch (kind) {
+          case "repo": return 0;
+          case "component": return 1;
+          case "doc": return 2;
+          case "source_unit": return 3;
+          case "symbol": return 4;
+          case "test": return 5;
+          case "bench": return 6;
+          default: return 7;
+        }
+      }
+
+      function kindColor(kind) {
+        const darkTheme = rootEl.dataset.theme === "dark";
+        if (darkTheme) {
+          switch (kind) {
+            case "repo": return "#7dd3fc";
+            case "component": return "#94a3b8";
+            case "doc": return "#c4b5fd";
+            case "source_unit": return "#9ca3af";
+            case "symbol": return "#8f9ba8";
+            case "test": return "#86efac";
+            case "bench": return "#bca784";
+            default: return "#9ca3af";
+          }
+        }
+        switch (kind) {
+          case "repo": return "#5f7377";
+          case "component": return "#6a7c81";
+          case "doc": return "#7d7394";
+          case "source_unit": return "#7b878b";
+          case "symbol": return "#7e888e";
+          case "test": return "#5f7c68";
+          case "bench": return "#8f7a64";
+          default: return "#7b878b";
+        }
+      }
+
+      function readableKind(kind) {
+        return kind.replaceAll("_", " ");
+      }
+
+      function escapeHtml(value) {
+        return String(value ?? "")
+          .replaceAll("&", "&amp;")
+          .replaceAll("<", "&lt;")
+          .replaceAll(">", "&gt;")
+          .replaceAll('"', "&quot;")
+          .replaceAll("'", "&#39;");
+      }
+
+      function compactCount(label, value) {
+        if (!value) return "";
+        return `<span class="card-pill"><strong>${value}</strong> ${escapeHtml(label)}</span>`;
+      }
+
+      function lineRange(node) {
+        if (typeof node.line_start !== "number" || typeof node.line_end !== "number") return null;
+        if (node.line_start === node.line_end) return `line ${node.line_start}`;
+        return `lines ${node.line_start}-${node.line_end}`;
+      }
+
+      function childrenFor(nodeId) {
+        const children = [...(treeChildren.get(nodeId) || [])];
+        children.sort((leftId, rightId) => {
+          const left = nodeById.get(leftId);
+          const right = nodeById.get(rightId);
+          const byKind = kindOrder(left.kind) - kindOrder(right.kind);
+          if (byKind !== 0) return byKind;
+          return (left.display_name || left.name || left.id).localeCompare(right.display_name || right.name || right.id);
+        });
+        return children;
+      }
+
+      const descendantMetricsCache = new Map();
+      function descendantMetrics(nodeId) {
+        if (descendantMetricsCache.has(nodeId)) {
+          return descendantMetricsCache.get(nodeId);
+        }
+        const totals = { component: 0, doc: 0, source_unit: 0, symbol: 0, test: 0, bench: 0, other: 0 };
+        for (const childId of childrenFor(nodeId)) {
+          const child = nodeById.get(childId);
+          if (totals[child.kind] !== undefined) {
+            totals[child.kind] += 1;
+          } else {
+            totals.other += 1;
+          }
+          const nested = descendantMetrics(childId);
+          for (const [kind, count] of Object.entries(nested)) {
+            totals[kind] = (totals[kind] || 0) + count;
+          }
+        }
+        descendantMetricsCache.set(nodeId, totals);
+        return totals;
+      }
+
+      function parentOf(nodeId) {
+        return parentChoice.get(nodeId)?.parent_id || null;
+      }
+
+      function breadcrumbTrail(nodeId) {
+        const trail = [];
+        let cursor = nodeId;
+        const seen = new Set();
+        while (cursor && !seen.has(cursor) && nodeById.has(cursor)) {
+          trail.unshift(nodeById.get(cursor));
+          seen.add(cursor);
+          cursor = parentOf(cursor);
+        }
+        return trail;
+      }
+
+      function fallbackSummary(node) {
+        switch (node.kind) {
+          case "repo":
+            return "Repository overview. Select a component to reuse the full canvas for its files, or a document for narrative context.";
+          case "component":
+            return "Component node in the structural tree.";
+          case "source_unit":
+            return "Source file in the structural tree.";
+          case "doc":
+            return "Documentation node linked into the tree.";
+          default:
+            return "Leaf node in the structural tree.";
+        }
+      }
+
+      function shortCopy(node) {
+        return node.summary_short || fallbackSummary(node);
+      }
+
+      function inspectorCopy(node) {
+        return node.summary_detailed || node.summary_short || fallbackSummary(node);
+      }
+
+      function searchableText(node) {
+        return [
+          node.display_name,
+          node.name,
+          node.path,
+          node.id,
+          node.summary_short,
+          node.summary_detailed,
+          node.component_id,
+        ]
+          .filter(Boolean)
+          .join(" ")
+          .toLowerCase();
+      }
+
+      function escapeRegExp(value) {
+        return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      }
+
+      function highlightMatches(text, query) {
+        const value = String(text || "");
+        const normalized = query.trim();
+        if (!normalized) return escapeHtml(value);
+        const terms = normalized
+          .split(/\s+/)
+          .filter(Boolean)
+          .sort((left, right) => right.length - left.length);
+        if (!terms.length) return escapeHtml(value);
+        const pattern = terms.map(escapeRegExp).join("|");
+        const regex = new RegExp(`(${pattern})`, "ig");
+        return escapeHtml(value).replace(regex, "<mark>$1</mark>");
+      }
+
+      function searchResultsFor(query) {
+        const normalized = query.trim().toLowerCase();
+        if (!normalized) return [];
+        const terms = normalized.split(/\s+/).filter(Boolean);
+        return data.nodes
+          .map((node) => {
+            const haystack = searchableText(node);
+            if (!terms.every((term) => haystack.includes(term))) return null;
+            const title = (node.display_name || node.name || node.id).toLowerCase();
+            const path = (node.path || "").toLowerCase();
+            const summary = ((node.summary_short || "") + " " + (node.summary_detailed || "")).toLowerCase();
+            let score = 0;
+            if (title.startsWith(normalized)) score += 120;
+            if (path.startsWith(normalized)) score += 95;
+            if (node.id.toLowerCase().startsWith(normalized)) score += 80;
+            if (title.includes(normalized)) score += 36;
+            if (path.includes(normalized)) score += 24;
+            if (summary.includes(normalized)) score += 12;
+            score -= kindOrder(node.kind) * 2;
+            return { node, score };
+          })
+          .filter(Boolean)
+          .sort((left, right) => {
+            if (right.score !== left.score) return right.score - left.score;
+            return (left.node.display_name || left.node.name || left.node.id)
+              .localeCompare(right.node.display_name || right.node.name || right.node.id);
+          })
+          .slice(0, 12);
+      }
+
+      function renderSearchResults(query) {
+        const matches = searchResultsFor(query);
+        if (!matches.length) {
+          searchResults.hidden = true;
+          searchResults.innerHTML = "";
+          return;
+        }
+
+        searchResults.innerHTML = `
+          <div class="search-results-header">${matches.length} result${matches.length === 1 ? "" : "s"} in this view</div>
+          ${matches
+          .map(({ node }) => {
+            const title = highlightMatches(node.display_name || node.name || node.id, query);
+            const meta = highlightMatches([readableKind(node.kind), node.path].filter(Boolean).join(" · "), query);
+            const copy = highlightMatches(node.summary_short || fallbackSummary(node), query);
+            return `
+              <button type="button" class="search-result" data-node-id="${escapeHtml(node.id)}">
+                <div class="search-result-title">${title}</div>
+                <div class="search-result-meta">${meta}</div>
+                <div class="search-result-copy">${copy}</div>
+              </button>
+            `;
+          })
+          .join("")}
+        `;
+        const first = searchResults.querySelector(".search-result");
+        if (first) first.classList.add("active");
+        searchResults.hidden = false;
+      }
+
+      function statsFor(nodeId) {
+        const node = nodeById.get(nodeId);
+        const metrics = descendantMetrics(nodeId);
+        if (!node) return [];
+        if (node.kind === "repo") {
+          return [
+            compactCount("components", metrics.component),
+            compactCount("docs", metrics.doc),
+            compactCount("files", metrics.source_unit),
+          ].filter(Boolean).join("");
+        }
+        if (node.kind === "component") {
+          return [
+            compactCount("files", metrics.source_unit),
+            compactCount("symbols", metrics.symbol),
+            compactCount("tests", metrics.test),
+          ].filter(Boolean).join("");
+        }
+        if (node.kind === "source_unit") {
+          return [
+            compactCount("symbols", metrics.symbol),
+            compactCount("tests", metrics.test),
+            compactCount("benches", metrics.bench),
+          ].filter(Boolean).join("");
+        }
+        if (node.kind === "doc") {
+          return compactCount("linked docs", 1);
+        }
+        return [
+          node.exported ? `<span class="card-pill"><strong>exported</strong></span>` : "",
+          node.visibility ? `<span class="card-pill"><strong>${escapeHtml(node.visibility)}</strong> visibility</span>` : "",
+        ].filter(Boolean).join("");
+      }
+
+      function captionFor(nodeId, childIds) {
+        const node = nodeById.get(nodeId);
+        const childLabel = childIds.length === 1 ? "child" : "children";
+        const total = relationCount.get(nodeId) || 0;
+        return `${readableKind(node.kind)} · ${childIds.length} structural ${childLabel} · ${total} visible relations in this slice`;
+      }
+
+      function cardMarkup(nodeId, options = {}) {
+        const node = nodeById.get(nodeId);
+        const childIds = childrenFor(nodeId);
+        const titleTag = options.root ? "h2" : "h3";
+        const titleText = node.display_name || node.name || node.id;
+        const title = escapeHtml(titleText);
+        const subtitle = escapeHtml(shortCopy(node));
+        const path = node.path ? `<div class="card-path" title="${escapeHtml(node.path)}">${escapeHtml(node.path)}</div>` : "";
+        const lines = lineRange(node);
+        const linesPill = lines ? `<span class="card-pill">${escapeHtml(lines)}</span>` : "";
+        const componentPill = node.component_id ? `<span class="card-pill">${escapeHtml(node.component_id)}</span>` : "";
+        return `
+          <div class="card-topline">
+            <span class="kind-chip" style="--accent:${kindColor(node.kind)}">
+              <span class="kind-dot"></span>
+              <span>${escapeHtml(readableKind(node.kind))}</span>
+            </span>
+            ${childIds.length ? `<span class="child-count">${childIds.length} child${childIds.length === 1 ? "" : "ren"}</span>` : ""}
+          </div>
+          <${titleTag} class="card-title" title="${title}">${title}</${titleTag}>
+          <div class="card-subtitle">${subtitle}</div>
+          ${path}
+          <div class="card-pills">
+            ${statsFor(nodeId)}
+            ${componentPill}
+            ${linesPill}
+          </div>
+        `;
+      }
+
+      function inspectorMarkup(nodeId) {
+        const node = nodeById.get(nodeId);
+        const childIds = childrenFor(nodeId);
+        const metrics = descendantMetrics(nodeId);
+        const detailRows = [
+          node.path ? `<div class="meta-row"><div class="meta-label">Path</div><div class="meta-value">${escapeHtml(node.path)}</div></div>` : "",
+          node.component_id ? `<div class="meta-row"><div class="meta-label">Component</div><div class="meta-value">${escapeHtml(node.component_id)}</div></div>` : "",
+          node.language ? `<div class="meta-row"><div class="meta-label">Language</div><div class="meta-value">${escapeHtml(node.language)}</div></div>` : "",
+          node.visibility ? `<div class="meta-row"><div class="meta-label">Visibility</div><div class="meta-value">${escapeHtml(node.visibility)}</div></div>` : "",
+          lineRange(node) ? `<div class="meta-row"><div class="meta-label">Location</div><div class="meta-value">${escapeHtml(lineRange(node))}</div></div>` : "",
+          `<div class="meta-row"><div class="meta-label">Entity ID</div><div class="meta-value">${escapeHtml(node.id)}</div></div>`,
+        ].filter(Boolean).join("");
+
+        const counts = [
+          compactCount("components", metrics.component),
+          compactCount("docs", metrics.doc),
+          compactCount("files", metrics.source_unit),
+          compactCount("symbols", metrics.symbol),
+          compactCount("tests", metrics.test),
+          compactCount("benches", metrics.bench),
+        ].filter(Boolean).join("");
+        const actions = node.editor_url
+          ? `
+            <div class="inspector-actions">
+              <a class="action-link" href="${escapeHtml(node.editor_url)}" target="_blank" rel="noreferrer">Open in editor</a>
+            </div>
+          `
+          : "";
+
+        return `
+          <section class="inspector-card">
+            <h2>${escapeHtml(node.display_name || node.name || node.id)}</h2>
+            <div class="kind-line">${escapeHtml(readableKind(node.kind))}</div>
+            <div class="inspector-copy">${escapeHtml(inspectorCopy(node))}</div>
+            ${actions}
+            <div class="inspector-section">
+              <div class="section-title">Scope</div>
+              <div class="pill-row">
+                <span class="pill"><strong>${childIds.length}</strong> visible children</span>
+                <span class="pill"><strong>${relationCount.get(nodeId) || 0}</strong> relations</span>
+                ${node.exported ? `<span class="pill"><strong>exported</strong></span>` : ""}
+              </div>
+            </div>
+            <div class="inspector-section">
+              <div class="section-title">Descendants</div>
+              <div class="pill-row">${counts || `<span class="pill"><strong>0</strong> descendants</span>`}</div>
+            </div>
+            <div class="inspector-section">
+              <div class="section-title">Details</div>
+              <div class="meta-list">${detailRows}</div>
+            </div>
+          </section>
+        `;
+      }
+
+      function drawLinks() {
+        const stageRect = stage.getBoundingClientRect();
+        const rootRect = rootCard.getBoundingClientRect();
+        const childCards = [...childrenGrid.querySelectorAll("[data-node-id]")];
+        linksSvg.setAttribute("viewBox", `0 0 ${stageRect.width} ${stageRect.height}`);
+        linksSvg.innerHTML = "";
+        if (!childCards.length) {
+          return;
+        }
+        const startX = rootRect.left - stageRect.left + rootRect.width / 2;
+        const startY = rootRect.bottom - stageRect.top - 4;
+
+        for (const card of childCards) {
+          const cardRect = card.getBoundingClientRect();
+          const endX = cardRect.left - stageRect.left + cardRect.width / 2;
+          const endY = cardRect.top - stageRect.top + 4;
+          const bend = Math.max(48, (endY - startY) * 0.42);
+          const color = card.dataset.accent || "#7b8a8f";
+          const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+          path.setAttribute(
+            "d",
+            `M ${startX} ${startY} C ${startX} ${startY + bend} ${endX} ${endY - bend} ${endX} ${endY}`,
+          );
+          path.setAttribute("class", "edge-path");
+          path.setAttribute("stroke", color);
+          path.setAttribute("stroke-width", card.dataset.kind === "doc" ? "1.6" : "2.2");
+          linksSvg.appendChild(path);
+        }
+      }
+
+      const initialId = nodeById.has(data.focus_id)
+        ? data.focus_id
+        : (nodeById.has("repo::.") ? "repo::." : data.nodes[0]?.id);
+      const homeId = nodeById.has(data.home_id) ? data.home_id : initialId;
+      let currentId = initialId;
+
+      function searchButtons() {
+        return [...searchResults.querySelectorAll(".search-result")];
+      }
+
+      function setActiveSearchResult(index) {
+        const buttons = searchButtons();
+        buttons.forEach((button, buttonIndex) => {
+          button.classList.toggle("active", buttonIndex === index);
+        });
+        const active = buttons[index];
+        if (active) {
+          active.scrollIntoView({ block: "nearest" });
+        }
+      }
+
+      function focusNode(nodeId) {
+        currentId = nodeId;
+        render();
+      }
+
+      function render() {
+        const node = nodeById.get(currentId);
+        if (!node) return;
+
+        const childIds = childrenFor(currentId);
+        const trail = breadcrumbTrail(currentId);
+        const title = node.display_name || node.name || node.id;
+
+        titleEl.textContent = title;
+        subtitleEl.textContent = shortCopy(node);
+        captionEl.textContent = captionFor(currentId, childIds);
+        overviewButton.disabled = currentId === homeId;
+        upButton.disabled = !parentOf(currentId);
+
+        breadcrumbsEl.innerHTML = trail
+          .map((entry) => {
+            const active = entry.id === currentId ? " active" : "";
+            return `<button type="button" class="crumb${active}" data-node-id="${escapeHtml(entry.id)}">${escapeHtml(entry.display_name || entry.name || entry.id)}</button>`;
+          })
+          .join("");
+
+        inspectorEl.innerHTML = inspectorMarkup(currentId);
+        rootCard.className = `node-card root-card${childIds.length >= 4 || node.kind === "repo" || node.kind === "component" ? " compact-root" : ""}`;
+        rootCard.dataset.nodeId = currentId;
+        rootCard.dataset.kind = node.kind;
+        rootCard.dataset.accent = kindColor(node.kind);
+        rootCard.style.setProperty("--accent", kindColor(node.kind));
+        rootCard.innerHTML = cardMarkup(currentId, { root: true });
+
+        childrenGrid.innerHTML = childIds
+          .map((childId) => {
+            const child = nodeById.get(childId);
+            const accent = kindColor(child.kind);
+            return `<button type="button" class="node-card" style="--accent:${escapeHtml(accent)}" data-node-id="${escapeHtml(child.id)}" data-kind="${escapeHtml(child.kind)}" data-accent="${escapeHtml(accent)}">${cardMarkup(childId)}</button>`;
+          })
+          .join("");
+
+        emptyState.hidden = childIds.length > 0;
+        emptyState.textContent = childIds.length
+          ? ""
+          : "No deeper structural children are visible in this indexed slice. Move back out, or re-run visualize with a deeper traversal if you want a larger tree.";
+
+        requestAnimationFrame(drawLinks);
+      }
+
+      searchInput.addEventListener("input", () => {
+        renderSearchResults(searchInput.value);
+      });
+
+      searchInput.addEventListener("focus", () => {
+        if (searchInput.value.trim()) {
+          renderSearchResults(searchInput.value);
+        }
+      });
+
+      searchInput.addEventListener("keydown", (event) => {
+        if (event.key === "Escape") {
+          searchResults.hidden = true;
+          return;
+        }
+        const buttons = searchButtons();
+        const activeIndex = buttons.findIndex((button) => button.classList.contains("active"));
+        if (event.key === "ArrowDown") {
+          if (!buttons.length) return;
+          event.preventDefault();
+          const nextIndex = activeIndex < 0 ? 0 : Math.min(activeIndex + 1, buttons.length - 1);
+          setActiveSearchResult(nextIndex);
+          return;
+        }
+        if (event.key === "ArrowUp") {
+          if (!buttons.length) return;
+          event.preventDefault();
+          const nextIndex = activeIndex <= 0 ? 0 : activeIndex - 1;
+          setActiveSearchResult(nextIndex);
+          return;
+        }
+        if (event.key !== "Enter") return;
+        const target = activeIndex >= 0 ? buttons[activeIndex] : buttons[0];
+        if (!target) return;
+        event.preventDefault();
+        focusNode(target.dataset.nodeId);
+        searchResults.hidden = true;
+      });
+
+      document.addEventListener("click", (event) => {
+        const target = event.target.closest("[data-node-id]");
+        if (target && nodeById.has(target.dataset.nodeId)) {
+          focusNode(target.dataset.nodeId);
+          if (target.classList.contains("search-result")) {
+            searchResults.hidden = true;
+          }
+          return;
+        }
+
+        if (!event.target.closest(".search-shell")) {
+          searchResults.hidden = true;
+        }
+
+        if (event.target === overviewButton) {
+          currentId = homeId;
+          render();
+          return;
+        }
+
+        if (event.target === themeButton) {
+          const nextTheme = rootEl.dataset.theme === "dark" ? "light" : "dark";
+          applyTheme(nextTheme, true);
+          render();
+          if (searchInput.value.trim()) {
+            renderSearchResults(searchInput.value);
+          }
+          return;
+        }
+
+        if (event.target === upButton) {
+          const parentId = parentOf(currentId);
+          if (parentId) {
+            currentId = parentId;
+            render();
+          }
+        }
+      });
+
+      window.addEventListener("resize", () => requestAnimationFrame(drawLinks));
+      render();
+    })();
+  </script>
+</body>
+</html>

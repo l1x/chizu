@@ -23,6 +23,7 @@ argh = { workspace = true }
 serde_json = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+minijinja = "2.19.0"
 
 [dev-dependencies]
 tempfile = "3"
