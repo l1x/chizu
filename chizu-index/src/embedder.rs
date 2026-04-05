@@ -228,9 +228,8 @@ fn build_embedding_text(entity: &chizu_core::Entity, summary: &chizu_core::Summa
 mod tests {
     use super::*;
     use chizu_core::{
-        ChizuStore, Config, Entity, EntityKind, Provider, ProviderError, Store, Summary,
+        ChizuStore, Entity, EntityKind, Provider, ProviderError, Store, Summary,
     };
-    use tempfile::TempDir;
 
     struct MockProvider {
         vectors: Vec<Vec<f32>>,
@@ -252,12 +251,8 @@ mod tests {
         }
     }
 
-    fn create_test_store(dimensions: u32) -> (ChizuStore, TempDir) {
-        let temp_dir = TempDir::new().unwrap();
-        let mut config = Config::default();
-        config.embedding.dimensions = Some(dimensions);
-        let store = ChizuStore::open(temp_dir.path(), &config).unwrap();
-        (store, temp_dir)
+    fn create_test_store(dimensions: u32) -> (ChizuStore, tempfile::TempDir) {
+        ChizuStore::open_test(Some(dimensions))
     }
 
     #[test]

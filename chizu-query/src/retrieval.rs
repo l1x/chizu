@@ -179,10 +179,9 @@ pub fn retrieve(
 mod tests {
     use super::*;
     use chizu_core::{
-        ChizuStore, Config, Entity, EntityKind, Provider, ProviderError, Store, Summary, TaskRoute,
+        ChizuStore, Entity, EntityKind, Provider, ProviderError, Store, Summary, TaskRoute,
         entity_id_to_usearch_key,
     };
-    use tempfile::TempDir;
 
     struct MockProvider {
         vector: Vec<f32>,
@@ -201,12 +200,8 @@ mod tests {
         }
     }
 
-    fn create_test_store(dimensions: u32) -> (ChizuStore, TempDir) {
-        let temp_dir = TempDir::new().unwrap();
-        let mut config = Config::default();
-        config.embedding.dimensions = Some(dimensions);
-        let store = ChizuStore::open(temp_dir.path(), &config).unwrap();
-        (store, temp_dir)
+    fn create_test_store(dimensions: u32) -> (ChizuStore, tempfile::TempDir) {
+        ChizuStore::open_test(Some(dimensions))
     }
 
     #[test]

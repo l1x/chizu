@@ -23,6 +23,13 @@ toml = { workspace = true }
 tracing = { workspace = true }
 usearch = { workspace = true }
 
+[features]
+test-support = ["dep:tempfile"]
+
+[dependencies.tempfile]
+version = "3"
+optional = true
+
 [dev-dependencies]
 bolero = { workspace = true }
 bolero-generator = { workspace = true }

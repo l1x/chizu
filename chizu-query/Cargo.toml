@@ -19,4 +19,5 @@ tracing = { workspace = true }
 thiserror = { workspace = true }
 
 [dev-dependencies]
+chizu-core = { version = "0.2.0", path = "../chizu-core", features = ["test-support"] }
 tempfile = "3"

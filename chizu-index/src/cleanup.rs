@@ -66,16 +66,12 @@ pub fn cascade_delete_file(store: &ChizuStore, path: &str) -> Result<(), StoreEr
 mod tests {
     use super::*;
     use chizu_core::{
-        ComponentId, Config, Edge, EdgeKind, EmbeddingMeta, Entity, EntityKind, FileKind,
-        FileRecord, Summary, TaskRoute, entity_id_to_usearch_key,
+        ComponentId, Edge, EdgeKind, EmbeddingMeta, Entity, EntityKind, FileKind, FileRecord,
+        Summary, TaskRoute, entity_id_to_usearch_key,
     };
-    use tempfile::TempDir;
 
-    fn create_test_store() -> (ChizuStore, TempDir) {
-        let temp_dir = TempDir::new().unwrap();
-        let config = Config::default();
-        let store = ChizuStore::open(temp_dir.path(), &config).unwrap();
-        (store, temp_dir)
+    fn create_test_store() -> (ChizuStore, tempfile::TempDir) {
+        ChizuStore::open_test(None)
     }
 
     #[test]

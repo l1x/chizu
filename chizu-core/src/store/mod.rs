@@ -234,6 +234,19 @@ impl ChizuStore {
     pub fn sqlite(&self) -> &SqliteStore {
         &self.sqlite
     }
+
+    /// Create a temporary store for tests. Returns the store and the temp
+    /// directory (which must be kept alive for the store's lifetime).
+    #[cfg(any(test, feature = "test-support"))]
+    pub fn open_test(dimensions: Option<u32>) -> (Self, tempfile::TempDir) {
+        let temp_dir = tempfile::TempDir::new().unwrap();
+        let mut config = Config::default();
+        if let Some(d) = dimensions {
+            config.embedding.dimensions = Some(d);
+        }
+        let store = Self::open(temp_dir.path(), &config).unwrap();
+        (store, temp_dir)
+    }
 }
 
 impl Store for ChizuStore {

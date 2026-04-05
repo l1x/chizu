@@ -85,6 +85,18 @@ CREATE INDEX IF NOT EXISTS idx_entities_path ON entities(path);
 CREATE INDEX IF NOT EXISTS idx_edges_provenance ON edges(provenance_path);
 "#;
 
+// ── Column lists (single source of truth for SELECT projections) ────────
+
+const ENTITY_COLUMNS: &str =
+    "id, kind, name, component_id, path, language, line_start, line_end, visibility, exported";
+
+const EDGE_COLUMNS: &str = "src_id, rel, dst_id, provenance_path, provenance_line";
+
+const SUMMARY_COLUMNS: &str =
+    "entity_id, short_summary, detailed_summary, keywords_json, updated_at, source_hash";
+
+const EMBEDDING_META_COLUMNS: &str = "entity_id, model, dimensions, updated_at, usearch_key";
+
 // ── Row mapping helpers ─────────────────────────────────────────────────
 
 fn parse_text_column<T: std::str::FromStr<Err = String>>(s: String) -> rusqlite::Result<T> {
@@ -261,8 +273,7 @@ impl SqliteStore {
 
     pub fn get_entity(&self, id: &str) -> Result<Option<Entity>> {
         let mut stmt = self.conn.prepare_cached(
-            "SELECT id, kind, name, component_id, path, language, line_start, line_end, visibility, exported
-             FROM entities WHERE id = ?1",
+            &format!("SELECT {ENTITY_COLUMNS} FROM entities WHERE id = ?1"),
         )?;
         let entity = stmt.query_row([id], entity_from_row).optional()?;
         Ok(entity)
@@ -270,8 +281,7 @@ impl SqliteStore {
 
     pub fn get_entities_by_kind(&self, kind: EntityKind) -> Result<Vec<Entity>> {
         let mut stmt = self.conn.prepare_cached(
-            "SELECT id, kind, name, component_id, path, language, line_start, line_end, visibility, exported
-             FROM entities WHERE kind = ?1",
+            &format!("SELECT {ENTITY_COLUMNS} FROM entities WHERE kind = ?1"),
         )?;
         let entities = stmt
             .query_map([kind.to_string()], entity_from_row)?
@@ -281,8 +291,7 @@ impl SqliteStore {
 
     pub fn get_entities_by_component(&self, component_id: &ComponentId) -> Result<Vec<Entity>> {
         let mut stmt = self.conn.prepare_cached(
-            "SELECT id, kind, name, component_id, path, language, line_start, line_end, visibility, exported
-             FROM entities WHERE component_id = ?1",
+            &format!("SELECT {ENTITY_COLUMNS} FROM entities WHERE component_id = ?1"),
         )?;
         let entities = stmt
             .query_map([component_id.as_str()], entity_from_row)?
@@ -307,8 +316,7 @@ impl SqliteStore {
 
     pub fn get_entities_by_path(&self, path: &str) -> Result<Vec<Entity>> {
         let mut stmt = self.conn.prepare_cached(
-            "SELECT id, kind, name, component_id, path, language, line_start, line_end, visibility, exported
-             FROM entities WHERE path = ?1",
+            &format!("SELECT {ENTITY_COLUMNS} FROM entities WHERE path = ?1"),
         )?;
         let entities = stmt
             .query_map([path], entity_from_row)?
@@ -319,7 +327,7 @@ impl SqliteStore {
     pub fn get_all_entities(&self) -> Result<Vec<Entity>> {
         let mut stmt = self
             .conn
-            .prepare("SELECT id, kind, name, component_id, path, language, line_start, line_end, visibility, exported FROM entities")?;
+            .prepare(&format!("SELECT {ENTITY_COLUMNS} FROM entities"))?;
         let entities = stmt
             .query_map([], entity_from_row)?
             .collect::<std::result::Result<Vec<_>, _>>()?;
@@ -348,8 +356,7 @@ impl SqliteStore {
             .join(" OR ");
 
         let sql = format!(
-            "SELECT id, kind, name, component_id, path, language, line_start, line_end, visibility, exported \
-             FROM entities WHERE kind IN ({kind_placeholders}) AND ({text_conditions})"
+            "SELECT {ENTITY_COLUMNS} FROM entities WHERE kind IN ({kind_placeholders}) AND ({text_conditions})"
         );
 
         let mut params: Vec<Box<dyn rusqlite::types::ToSql>> = Vec::new();
@@ -397,7 +404,7 @@ impl SqliteStore {
 
     pub fn get_edges_from(&self, src_id: &str) -> Result<Vec<Edge>> {
         let mut stmt = self.conn.prepare_cached(
-            "SELECT src_id, rel, dst_id, provenance_path, provenance_line FROM edges WHERE src_id = ?1",
+            &format!("SELECT {EDGE_COLUMNS} FROM edges WHERE src_id = ?1"),
         )?;
         let edges = stmt
             .query_map([src_id], edge_from_row)?
@@ -407,7 +414,7 @@ impl SqliteStore {
 
     pub fn get_edges_to(&self, dst_id: &str) -> Result<Vec<Edge>> {
         let mut stmt = self.conn.prepare_cached(
-            "SELECT src_id, rel, dst_id, provenance_path, provenance_line FROM edges WHERE dst_id = ?1",
+            &format!("SELECT {EDGE_COLUMNS} FROM edges WHERE dst_id = ?1"),
         )?;
         let edges = stmt
             .query_map([dst_id], edge_from_row)?
@@ -417,7 +424,7 @@ impl SqliteStore {
 
     pub fn get_all_edges(&self) -> Result<Vec<Edge>> {
         let mut stmt = self.conn.prepare(
-            "SELECT src_id, rel, dst_id, provenance_path, provenance_line FROM edges",
+            &format!("SELECT {EDGE_COLUMNS} FROM edges"),
         )?;
         let edges = stmt
             .query_map([], edge_from_row)?
@@ -427,7 +434,7 @@ impl SqliteStore {
 
     pub fn get_edges_by_rel(&self, rel: EdgeKind) -> Result<Vec<Edge>> {
         let mut stmt = self.conn.prepare_cached(
-            "SELECT src_id, rel, dst_id, provenance_path, provenance_line FROM edges WHERE rel = ?1",
+            &format!("SELECT {EDGE_COLUMNS} FROM edges WHERE rel = ?1"),
         )?;
         let edges = stmt
             .query_map([rel.to_string()], edge_from_row)?
@@ -556,8 +563,7 @@ impl SqliteStore {
 
     pub fn get_summary(&self, entity_id: &str) -> Result<Option<Summary>> {
         let mut stmt = self.conn.prepare_cached(
-            "SELECT entity_id, short_summary, detailed_summary, keywords_json, updated_at, source_hash
-             FROM summaries WHERE entity_id = ?1",
+            &format!("SELECT {SUMMARY_COLUMNS} FROM summaries WHERE entity_id = ?1"),
         )?;
         let summary = stmt.query_row([entity_id], summary_from_row).optional()?;
         Ok(summary)
@@ -566,7 +572,7 @@ impl SqliteStore {
     pub fn get_all_summaries(&self) -> Result<Vec<Summary>> {
         let mut stmt = self
             .conn
-            .prepare("SELECT entity_id, short_summary, detailed_summary, keywords_json, updated_at, source_hash FROM summaries")?;
+            .prepare(&format!("SELECT {SUMMARY_COLUMNS} FROM summaries"))?;
         let summaries = stmt
             .query_map([], summary_from_row)?
             .collect::<std::result::Result<Vec<_>, _>>()?;
@@ -588,10 +594,7 @@ impl SqliteStore {
             .collect::<Vec<_>>()
             .join(" OR ");
 
-        let sql = format!(
-            "SELECT entity_id, short_summary, detailed_summary, keywords_json, updated_at, source_hash \
-             FROM summaries WHERE {conditions}"
-        );
+        let sql = format!("SELECT {SUMMARY_COLUMNS} FROM summaries WHERE {conditions}");
 
         let param_refs: Vec<&dyn rusqlite::types::ToSql> =
             like_patterns.iter().map(|p| p as &dyn rusqlite::types::ToSql).collect();
@@ -668,8 +671,7 @@ impl SqliteStore {
 
     pub fn get_embedding_meta(&self, entity_id: &str) -> Result<Option<EmbeddingMeta>> {
         let mut stmt = self.conn.prepare_cached(
-            "SELECT entity_id, model, dimensions, updated_at, usearch_key
-             FROM embeddings WHERE entity_id = ?1",
+            &format!("SELECT {EMBEDDING_META_COLUMNS} FROM embeddings WHERE entity_id = ?1"),
         )?;
         let meta = stmt
             .query_row([entity_id], embedding_meta_from_row)
@@ -679,7 +681,7 @@ impl SqliteStore {
 
     pub fn get_all_embedding_metas(&self) -> Result<Vec<EmbeddingMeta>> {
         let mut stmt = self.conn.prepare(
-            "SELECT entity_id, model, dimensions, updated_at, usearch_key FROM embeddings",
+            &format!("SELECT {EMBEDDING_META_COLUMNS} FROM embeddings"),
         )?;
         let metas = stmt
             .query_map([], embedding_meta_from_row)?
@@ -700,8 +702,7 @@ impl SqliteStore {
         usearch_key: i64,
     ) -> Result<Option<EmbeddingMeta>> {
         let mut stmt = self.conn.prepare_cached(
-            "SELECT entity_id, model, dimensions, updated_at, usearch_key
-             FROM embeddings WHERE usearch_key = ?1",
+            &format!("SELECT {EMBEDDING_META_COLUMNS} FROM embeddings WHERE usearch_key = ?1"),
         )?;
         let meta = stmt
             .query_row([usearch_key], embedding_meta_from_row)

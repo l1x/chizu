@@ -1289,12 +1289,10 @@ fn salvage_summary_from_raw(entity_id: &str, response: &str) -> Option<Summary> 
 mod tests {
     use super::*;
     use chizu_core::{
-        ChizuStore, ComponentId, Config, Edge, EdgeKind, Entity, EntityKind, Provider,
-        ProviderError,
+        ChizuStore, ComponentId, Edge, EdgeKind, Entity, EntityKind, Provider, ProviderError,
     };
     use std::collections::HashMap;
     use std::sync::atomic::{AtomicUsize, Ordering};
-    use tempfile::TempDir;
 
     struct MockProvider {
         responses: HashMap<String, String>,
@@ -1337,11 +1335,8 @@ mod tests {
         }
     }
 
-    fn create_test_store() -> (ChizuStore, TempDir) {
-        let temp_dir = TempDir::new().unwrap();
-        let config = Config::default();
-        let store = ChizuStore::open(temp_dir.path(), &config).unwrap();
-        (store, temp_dir)
+    fn create_test_store() -> (ChizuStore, tempfile::TempDir) {
+        ChizuStore::open_test(None)
     }
 
     #[test]
