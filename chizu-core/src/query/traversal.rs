@@ -1,6 +1,7 @@
 use std::collections::{HashMap, HashSet, VecDeque};
 
-use crate::model::{Edge, EdgeKind, Entity};
+use crate::model::{EdgeKind, Entity};
+use crate::store::{Result, Store};
 
 /// Result of a BFS graph traversal.
 pub struct TraversalResult {
@@ -22,32 +23,16 @@ pub struct TraversalOptions<'a> {
     pub exclude_patterns: &'a [String],
 }
 
-/// Perform a BFS traversal over an in-memory graph, starting from `seed_ids`.
+/// Perform a BFS traversal over the graph in `store`, starting from `seed_ids`.
 ///
+/// Queries entities and edges on demand (bounded by `max_nodes`), so cost
+/// scales with the reachable subgraph rather than total repo size.
 /// Returns the set of visited entities and all edges between them.
-/// The caller is responsible for bulk-loading `all_entities` and `all_edges`
-/// from the store before calling this function.
 pub fn graph_traversal(
-    all_entities: &HashMap<String, Entity>,
-    all_edges: &[Edge],
+    store: &dyn Store,
     seed_ids: &[String],
     opts: &TraversalOptions,
-) -> TraversalResult {
-    // Build adjacency maps.
-    let mut edges_from: HashMap<&str, Vec<&Edge>> = HashMap::new();
-    let mut edges_to: HashMap<&str, Vec<&Edge>> = HashMap::new();
-    for edge in all_edges {
-        edges_from
-            .entry(edge.src_id.as_str())
-            .or_default()
-            .push(edge);
-        edges_to
-            .entry(edge.dst_id.as_str())
-            .or_default()
-            .push(edge);
-    }
-
-    // BFS.
+) -> Result<TraversalResult> {
     let mut entity_cache: HashMap<String, Entity> = HashMap::new();
     let mut visited_edges: HashSet<(String, EdgeKind, String)> = HashSet::new();
     let mut queue: VecDeque<(String, u32)> = VecDeque::new();
@@ -64,7 +49,7 @@ pub fn graph_traversal(
             break;
         }
 
-        let Some(entity) = all_entities.get(&entity_id) else {
+        let Some(entity) = store.get_entity(&entity_id)? else {
             continue;
         };
 
@@ -81,23 +66,19 @@ pub fn graph_traversal(
             continue;
         }
 
-        entity_cache.insert(entity_id.clone(), entity.clone());
+        entity_cache.insert(entity_id.clone(), entity);
 
         if depth < opts.max_depth {
-            if let Some(out_edges) = edges_from.get(entity_id.as_str()) {
-                for edge in out_edges {
-                    let key = (edge.src_id.clone(), edge.rel, edge.dst_id.clone());
-                    if visited_edges.insert(key) {
-                        queue.push_back((edge.dst_id.clone(), depth + 1));
-                    }
+            for edge in store.get_edges_from(&entity_id)? {
+                let key = (edge.src_id.clone(), edge.rel, edge.dst_id.clone());
+                if visited_edges.insert(key) {
+                    queue.push_back((edge.dst_id.clone(), depth + 1));
                 }
             }
-            if let Some(in_edges) = edges_to.get(entity_id.as_str()) {
-                for edge in in_edges {
-                    let key = (edge.src_id.clone(), edge.rel, edge.dst_id.clone());
-                    if visited_edges.insert(key) {
-                        queue.push_back((edge.src_id.clone(), depth + 1));
-                    }
+            for edge in store.get_edges_to(&entity_id)? {
+                let key = (edge.src_id.clone(), edge.rel, edge.dst_id.clone());
+                if visited_edges.insert(key) {
+                    queue.push_back((edge.src_id.clone(), depth + 1));
                 }
             }
         }
@@ -107,41 +88,46 @@ pub fn graph_traversal(
     let selected_ids: HashSet<&str> = entity_cache.keys().map(|s| s.as_str()).collect();
     let mut render_edges: HashSet<(String, EdgeKind, String)> = HashSet::new();
     for entity_id in &selected_ids {
-        if let Some(out_edges) = edges_from.get(entity_id) {
-            for edge in out_edges {
-                if selected_ids.contains(edge.dst_id.as_str()) {
-                    render_edges.insert((edge.src_id.clone(), edge.rel, edge.dst_id.clone()));
-                }
+        for edge in store.get_edges_from(entity_id)? {
+            if selected_ids.contains(edge.dst_id.as_str()) {
+                render_edges.insert((edge.src_id.clone(), edge.rel, edge.dst_id.clone()));
             }
         }
     }
 
-    TraversalResult {
+    Ok(TraversalResult {
         entities: entity_cache,
         edges: render_edges,
-    }
+    })
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::model::{Edge, EdgeKind, Entity, EntityKind};
+    use crate::store::ChizuStore;
 
     #[test]
     fn traversal_respects_depth_limit() {
-        let entities = HashMap::from([
-            ("a".into(), Entity::new("a", EntityKind::Repo, "a")),
-            ("b".into(), Entity::new("b", EntityKind::Component, "b")),
-            ("c".into(), Entity::new("c", EntityKind::Symbol, "c")),
-        ]);
-        let edges = vec![
-            Edge::new("a", EdgeKind::Contains, "b"),
-            Edge::new("b", EdgeKind::Defines, "c"),
-        ];
+        let (store, _tmp) = ChizuStore::open_test(None);
+        store
+            .insert_entity(&Entity::new("a", EntityKind::Repo, "a"))
+            .unwrap();
+        store
+            .insert_entity(&Entity::new("b", EntityKind::Component, "b"))
+            .unwrap();
+        store
+            .insert_entity(&Entity::new("c", EntityKind::Symbol, "c"))
+            .unwrap();
+        store
+            .insert_edge(&Edge::new("a", EdgeKind::Contains, "b"))
+            .unwrap();
+        store
+            .insert_edge(&Edge::new("b", EdgeKind::Defines, "c"))
+            .unwrap();
 
         let result = graph_traversal(
-            &entities,
-            &edges,
+            &store,
             &["a".into()],
             &TraversalOptions {
                 max_depth: 1,
@@ -149,28 +135,38 @@ mod tests {
                 kind_filter: None,
                 exclude_patterns: &[],
             },
-        );
+        )
+        .unwrap();
 
         assert!(result.entities.contains_key("a"));
         assert!(result.entities.contains_key("b"));
-        assert!(!result.entities.contains_key("c"), "depth 2 should not be reached");
+        assert!(
+            !result.entities.contains_key("c"),
+            "depth 2 should not be reached"
+        );
     }
 
     #[test]
     fn traversal_respects_max_nodes() {
-        let entities = HashMap::from([
-            ("a".into(), Entity::new("a", EntityKind::Repo, "a")),
-            ("b".into(), Entity::new("b", EntityKind::Component, "b")),
-            ("c".into(), Entity::new("c", EntityKind::Component, "c")),
-        ]);
-        let edges = vec![
-            Edge::new("a", EdgeKind::Contains, "b"),
-            Edge::new("a", EdgeKind::Contains, "c"),
-        ];
+        let (store, _tmp) = ChizuStore::open_test(None);
+        store
+            .insert_entity(&Entity::new("a", EntityKind::Repo, "a"))
+            .unwrap();
+        store
+            .insert_entity(&Entity::new("b", EntityKind::Component, "b"))
+            .unwrap();
+        store
+            .insert_entity(&Entity::new("c", EntityKind::Component, "c"))
+            .unwrap();
+        store
+            .insert_edge(&Edge::new("a", EdgeKind::Contains, "b"))
+            .unwrap();
+        store
+            .insert_edge(&Edge::new("a", EdgeKind::Contains, "c"))
+            .unwrap();
 
         let result = graph_traversal(
-            &entities,
-            &edges,
+            &store,
             &["a".into()],
             &TraversalOptions {
                 max_depth: 10,
@@ -178,27 +174,34 @@ mod tests {
                 kind_filter: None,
                 exclude_patterns: &[],
             },
-        );
+        )
+        .unwrap();
 
         assert_eq!(result.entities.len(), 2);
     }
 
     #[test]
     fn traversal_filters_by_kind() {
-        let entities = HashMap::from([
-            ("a".into(), Entity::new("a", EntityKind::Repo, "a")),
-            ("b".into(), Entity::new("b", EntityKind::Component, "b")),
-            ("c".into(), Entity::new("c", EntityKind::Symbol, "c")),
-        ]);
-        let edges = vec![
-            Edge::new("a", EdgeKind::Contains, "b"),
-            Edge::new("b", EdgeKind::Defines, "c"),
-        ];
+        let (store, _tmp) = ChizuStore::open_test(None);
+        store
+            .insert_entity(&Entity::new("a", EntityKind::Repo, "a"))
+            .unwrap();
+        store
+            .insert_entity(&Entity::new("b", EntityKind::Component, "b"))
+            .unwrap();
+        store
+            .insert_entity(&Entity::new("c", EntityKind::Symbol, "c"))
+            .unwrap();
+        store
+            .insert_edge(&Edge::new("a", EdgeKind::Contains, "b"))
+            .unwrap();
+        store
+            .insert_edge(&Edge::new("b", EdgeKind::Defines, "c"))
+            .unwrap();
         let kinds = vec!["repo".to_string(), "component".to_string()];
 
         let result = graph_traversal(
-            &entities,
-            &edges,
+            &store,
             &["a".into()],
             &TraversalOptions {
                 max_depth: 10,
@@ -206,7 +209,8 @@ mod tests {
                 kind_filter: Some(&kinds),
                 exclude_patterns: &[],
             },
-        );
+        )
+        .unwrap();
 
         assert!(result.entities.contains_key("a"));
         assert!(result.entities.contains_key("b"));
@@ -215,19 +219,29 @@ mod tests {
 
     #[test]
     fn traversal_excludes_patterns() {
-        let entities = HashMap::from([
-            ("a".into(), Entity::new("a", EntityKind::Repo, "a")),
-            ("b::skip".into(), Entity::new("b::skip", EntityKind::Component, "b")),
-            ("c".into(), Entity::new("c", EntityKind::Component, "c")),
-        ]);
-        let edges = vec![
-            Edge::new("a", EdgeKind::Contains, "b::skip"),
-            Edge::new("a", EdgeKind::Contains, "c"),
-        ];
+        let (store, _tmp) = ChizuStore::open_test(None);
+        store
+            .insert_entity(&Entity::new("a", EntityKind::Repo, "a"))
+            .unwrap();
+        store
+            .insert_entity(&Entity::new(
+                "b::skip",
+                EntityKind::Component,
+                "b",
+            ))
+            .unwrap();
+        store
+            .insert_entity(&Entity::new("c", EntityKind::Component, "c"))
+            .unwrap();
+        store
+            .insert_edge(&Edge::new("a", EdgeKind::Contains, "b::skip"))
+            .unwrap();
+        store
+            .insert_edge(&Edge::new("a", EdgeKind::Contains, "c"))
+            .unwrap();
 
         let result = graph_traversal(
-            &entities,
-            &edges,
+            &store,
             &["a".into()],
             &TraversalOptions {
                 max_depth: 10,
@@ -235,7 +249,8 @@ mod tests {
                 kind_filter: None,
                 exclude_patterns: &["skip".to_string()],
             },
-        );
+        )
+        .unwrap();
 
         assert!(result.entities.contains_key("a"));
         assert!(!result.entities.contains_key("b::skip"));
@@ -244,19 +259,25 @@ mod tests {
 
     #[test]
     fn traversal_collects_edges_between_selected() {
-        let entities = HashMap::from([
-            ("a".into(), Entity::new("a", EntityKind::Repo, "a")),
-            ("b".into(), Entity::new("b", EntityKind::Component, "b")),
-            ("c".into(), Entity::new("c", EntityKind::Symbol, "c")),
-        ]);
-        let edges = vec![
-            Edge::new("a", EdgeKind::Contains, "b"),
-            Edge::new("b", EdgeKind::Defines, "c"),
-        ];
+        let (store, _tmp) = ChizuStore::open_test(None);
+        store
+            .insert_entity(&Entity::new("a", EntityKind::Repo, "a"))
+            .unwrap();
+        store
+            .insert_entity(&Entity::new("b", EntityKind::Component, "b"))
+            .unwrap();
+        store
+            .insert_entity(&Entity::new("c", EntityKind::Symbol, "c"))
+            .unwrap();
+        store
+            .insert_edge(&Edge::new("a", EdgeKind::Contains, "b"))
+            .unwrap();
+        store
+            .insert_edge(&Edge::new("b", EdgeKind::Defines, "c"))
+            .unwrap();
 
         let result = graph_traversal(
-            &entities,
-            &edges,
+            &store,
             &["a".into()],
             &TraversalOptions {
                 max_depth: 10,
@@ -264,10 +285,15 @@ mod tests {
                 kind_filter: None,
                 exclude_patterns: &[],
             },
-        );
+        )
+        .unwrap();
 
         assert_eq!(result.entities.len(), 3);
-        assert!(result.edges.contains(&("a".into(), EdgeKind::Contains, "b".into())));
-        assert!(result.edges.contains(&("b".into(), EdgeKind::Defines, "c".into())));
+        assert!(result
+            .edges
+            .contains(&("a".into(), EdgeKind::Contains, "b".into())));
+        assert!(result
+            .edges
+            .contains(&("b".into(), EdgeKind::Defines, "c".into())));
     }
 }

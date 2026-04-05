@@ -438,25 +438,16 @@ fn cmd_visualize(repo: &Path, args: VisualizeArgs) -> Result<(), Box<dyn std::er
         .map(|e| e.split(',').map(|s| s.trim().to_string()).collect())
         .unwrap_or_default();
 
-    // Bulk-load and traverse in-memory via chizu_core::graph_traversal.
-    let all_entities: std::collections::HashMap<String, chizu_core::Entity> = store
-        .get_all_entities()?
-        .into_iter()
-        .map(|e| (e.id.clone(), e))
-        .collect();
-    let all_edges = store.get_all_edges()?;
-
     let seed_ids: Vec<String> = if let Some(ref start_id) = args.entity_id {
         vec![start_id.clone()]
-    } else if all_entities.contains_key("repo::.") {
+    } else if store.get_entity("repo::.")?.is_some() {
         vec!["repo::.".to_string()]
     } else {
-        all_entities.keys().cloned().collect()
+        store.get_all_entities()?.into_iter().map(|e| e.id).collect()
     };
 
     let traversal = chizu_core::graph_traversal(
-        &all_entities,
-        &all_edges,
+        &store,
         &seed_ids,
         &chizu_core::TraversalOptions {
             max_depth: args.depth,
@@ -464,7 +455,7 @@ fn cmd_visualize(repo: &Path, args: VisualizeArgs) -> Result<(), Box<dyn std::er
             kind_filter: kind_filter.as_deref(),
             exclude_patterns: &exclude_patterns,
         },
-    );
+    )?;
 
     if traversal.entities.is_empty() {
         println!("No entities to visualize.");
@@ -473,16 +464,13 @@ fn cmd_visualize(repo: &Path, args: VisualizeArgs) -> Result<(), Box<dyn std::er
     }
 
     let output_text = if args.interactive {
-        let all_summaries: std::collections::HashMap<String, chizu_core::Summary> = store
-            .get_all_summaries()?
-            .into_iter()
-            .map(|s| (s.entity_id.clone(), s))
-            .collect();
-        let summary_cache: std::collections::HashMap<String, chizu_core::Summary> = traversal
-            .entities
-            .keys()
-            .filter_map(|id| all_summaries.get(id).map(|s| (id.clone(), s.clone())))
-            .collect();
+        let mut summary_cache: std::collections::HashMap<String, chizu_core::Summary> =
+            std::collections::HashMap::new();
+        for entity_id in traversal.entities.keys() {
+            if let Some(summary) = store.get_summary(entity_id)? {
+                summary_cache.insert(entity_id.clone(), summary);
+            }
+        }
         visualize::render_focus_graph_html(
             &traversal.entities,
             &summary_cache,

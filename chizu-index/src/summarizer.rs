@@ -742,14 +742,8 @@ fn build_component_prompt_input(
     source_units.sort();
     docs.sort();
 
-    let entity_map: std::collections::HashMap<String, Entity> = store
-        .get_all_entities()?
-        .into_iter()
-        .map(|e| (e.id.clone(), e))
-        .collect();
-    let dependency_names = resolve_edge_target_names(&entity_map, &edges, EdgeKind::DependsOn);
-    let linked_doc_names =
-        resolve_edge_target_names(&entity_map, &edges, EdgeKind::DocumentedBy);
+    let dependency_names = resolve_edge_target_names(store, &edges, EdgeKind::DependsOn)?;
+    let linked_doc_names = resolve_edge_target_names(store, &edges, EdgeKind::DocumentedBy)?;
     let doc_names = if linked_doc_names.is_empty() {
         docs.clone()
     } else {
@@ -851,18 +845,19 @@ Key docs:
 }
 
 fn resolve_edge_target_names(
-    entity_map: &std::collections::HashMap<String, Entity>,
+    store: &ChizuStore,
     edges: &[chizu_core::Edge],
     rel: EdgeKind,
-) -> Vec<String> {
-    let mut names: Vec<String> = edges
-        .iter()
-        .filter(|edge| edge.rel == rel)
-        .filter_map(|edge| entity_map.get(&edge.dst_id).map(|e| e.name.clone()))
-        .collect();
+) -> Result<Vec<String>> {
+    let mut names = Vec::new();
+    for edge in edges.iter().filter(|edge| edge.rel == rel) {
+        if let Some(target) = store.get_entity(&edge.dst_id)? {
+            names.push(target.name);
+        }
+    }
     names.sort();
     names.dedup();
-    names
+    Ok(names)
 }
 
 fn summarize_name_list(names: &[String], limit: usize) -> String {
