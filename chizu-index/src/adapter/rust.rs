@@ -47,17 +47,17 @@ pub fn index_rust_file(
     let test_names = collect_attributed_fns(tree.root_node(), &source, "test");
     let bench_names = collect_attributed_fns(tree.root_node(), &source, "bench");
 
-    extract_items(
-        tree.root_node(),
-        &source,
-        &path_str,
-        &su_id,
-        file.component_id.as_ref(),
-        &test_names,
-        &bench_names,
-        &mut entities,
-        &mut edges,
-    );
+    let mut parse_ctx = ParseContext {
+        source: &source,
+        path_str: &path_str,
+        source_unit_id: &su_id,
+        component_id: file.component_id.as_ref(),
+        test_names: &test_names,
+        bench_names: &bench_names,
+        entities: &mut entities,
+        edges: &mut edges,
+    };
+    extract_items(&mut parse_ctx, tree.root_node());
 
     Ok((entities, edges))
 }
@@ -126,135 +126,135 @@ fn extract_visibility(node: tree_sitter::Node, source: &str) -> Option<Visibilit
     None
 }
 
-#[allow(clippy::too_many_arguments)]
-fn extract_items(
-    node: tree_sitter::Node,
-    source: &str,
-    path_str: &str,
-    source_unit_id: &str,
-    component_id: Option<&ComponentId>,
-    test_names: &std::collections::HashSet<String>,
-    bench_names: &std::collections::HashSet<String>,
-    entities: &mut Vec<Entity>,
-    edges: &mut Vec<Edge>,
-) {
+struct ParseContext<'a> {
+    source: &'a str,
+    path_str: &'a str,
+    source_unit_id: &'a str,
+    component_id: Option<&'a ComponentId>,
+    test_names: &'a std::collections::HashSet<String>,
+    bench_names: &'a std::collections::HashSet<String>,
+    entities: &'a mut Vec<Entity>,
+    edges: &'a mut Vec<Edge>,
+}
+
+fn extract_items(ctx: &mut ParseContext, node: tree_sitter::Node) {
+    // tree-sitter rows are 0-based; with_lines expects 1-based.
+    let line_start = node.start_position().row as u32 + 1;
+    let line_end = node.end_position().row as u32 + 1;
+
     match node.kind() {
         "function_item" => {
             if let Some(name_node) = node.child_by_field_name("name") {
-                let name = source[name_node.byte_range()].to_string();
-                let vis = extract_visibility(node, source);
+                let name = ctx.source[name_node.byte_range()].to_string();
+                let vis = extract_visibility(node, ctx.source);
                 let exported = vis == Some(Visibility::Public);
 
-                if test_names.contains(&name) {
-                    let id = test_id(path_str, &name);
+                if ctx.test_names.contains(&name) {
+                    let id = test_id(ctx.path_str, &name);
                     let mut e = apply_component(
                         Entity::new(&id, EntityKind::Test, &name)
-                            .with_path(path_str)
-                            .with_language("rust"),
-                        component_id,
+                            .with_path(ctx.path_str)
+                            .with_language("rust")
+                            .with_lines(line_start, line_end),
+                        ctx.component_id,
                     );
                     if let Some(v) = vis {
                         e = e.with_visibility(v);
                     }
-                    entities.push(e);
-                    edges.push(Edge::new(source_unit_id, EdgeKind::TestedBy, &id));
-                } else if bench_names.contains(&name) {
+                    ctx.entities.push(e);
+                    ctx.edges
+                        .push(Edge::new(ctx.source_unit_id, EdgeKind::TestedBy, &id));
+                } else if ctx.bench_names.contains(&name) {
+                    let path_str = ctx.path_str;
                     let id = entity_id("bench", &format!("{path_str}::{name}"));
                     let mut e = apply_component(
                         Entity::new(&id, EntityKind::Bench, &name)
-                            .with_path(path_str)
-                            .with_language("rust"),
-                        component_id,
+                            .with_path(ctx.path_str)
+                            .with_language("rust")
+                            .with_lines(line_start, line_end),
+                        ctx.component_id,
                     );
                     if let Some(v) = vis {
                         e = e.with_visibility(v);
                     }
-                    entities.push(e);
-                    edges.push(Edge::new(source_unit_id, EdgeKind::BenchmarkedBy, &id));
+                    ctx.entities.push(e);
+                    ctx.edges.push(Edge::new(
+                        ctx.source_unit_id,
+                        EdgeKind::BenchmarkedBy,
+                        &id,
+                    ));
                 } else {
-                    let id = symbol_id(path_str, &name);
+                    let id = symbol_id(ctx.path_str, &name);
                     let mut e = apply_component(
                         Entity::new(&id, EntityKind::Symbol, &name)
-                            .with_path(path_str)
+                            .with_path(ctx.path_str)
                             .with_language("rust")
-                            .with_exported(exported),
-                        component_id,
+                            .with_exported(exported)
+                            .with_lines(line_start, line_end),
+                        ctx.component_id,
                     );
                     if let Some(v) = vis {
                         e = e.with_visibility(v);
                     }
-                    entities.push(e);
-                    edges.push(Edge::new(source_unit_id, EdgeKind::Defines, &id));
+                    ctx.entities.push(e);
+                    ctx.edges
+                        .push(Edge::new(ctx.source_unit_id, EdgeKind::Defines, &id));
                 }
             }
         }
         "struct_item" | "enum_item" | "trait_item" => {
             if let Some(name_node) = node.child_by_field_name("name") {
-                let name = source[name_node.byte_range()].to_string();
-                let vis = extract_visibility(node, source);
+                let name = ctx.source[name_node.byte_range()].to_string();
+                let vis = extract_visibility(node, ctx.source);
                 let exported = vis == Some(Visibility::Public);
-                let id = symbol_id(path_str, &name);
+                let id = symbol_id(ctx.path_str, &name);
                 let mut e = apply_component(
                     Entity::new(&id, EntityKind::Symbol, &name)
-                        .with_path(path_str)
+                        .with_path(ctx.path_str)
                         .with_language("rust")
-                        .with_exported(exported),
-                    component_id,
+                        .with_exported(exported)
+                        .with_lines(line_start, line_end),
+                    ctx.component_id,
                 );
                 if let Some(v) = vis {
                     e = e.with_visibility(v);
                 }
-                entities.push(e);
-                edges.push(Edge::new(source_unit_id, EdgeKind::Defines, &id));
+                ctx.entities.push(e);
+                ctx.edges
+                    .push(Edge::new(ctx.source_unit_id, EdgeKind::Defines, &id));
             }
         }
         "impl_item" => {
             // `impl Trait for Type` → Implements edge from type to trait
-            extract_impl(node, source, path_str, edges);
+            extract_impl(node, ctx.source, ctx.path_str, ctx.edges);
             // Recurse into impl body for methods
             let mut cursor = node.walk();
             for child in node.children(&mut cursor) {
                 if child.kind() == "declaration_list" {
-                    extract_items(
-                        child,
-                        source,
-                        path_str,
-                        source_unit_id,
-                        component_id,
-                        test_names,
-                        bench_names,
-                        entities,
-                        edges,
-                    );
+                    extract_items(ctx, child);
                 }
             }
         }
         "use_declaration" => {
             // `pub use foo::Bar` → Reexports edge
-            let vis = extract_visibility(node, source);
+            let vis = extract_visibility(node, ctx.source);
             if vis == Some(Visibility::Public) {
-                let text = &source[node.byte_range()];
+                let text = &ctx.source[node.byte_range()];
                 // Extract the last path segment as the reexported name
                 if let Some(last_segment) = extract_use_target(text) {
-                    let reexport_id = symbol_id(path_str, last_segment);
-                    edges.push(Edge::new(source_unit_id, EdgeKind::Reexports, &reexport_id));
+                    let reexport_id = symbol_id(ctx.path_str, last_segment);
+                    ctx.edges.push(Edge::new(
+                        ctx.source_unit_id,
+                        EdgeKind::Reexports,
+                        &reexport_id,
+                    ));
                 }
             }
         }
         _ => {
             let mut cursor = node.walk();
             for child in node.children(&mut cursor) {
-                extract_items(
-                    child,
-                    source,
-                    path_str,
-                    source_unit_id,
-                    component_id,
-                    test_names,
-                    bench_names,
-                    entities,
-                    edges,
-                );
+                extract_items(ctx, child);
             }
         }
     }
