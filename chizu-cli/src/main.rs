@@ -438,19 +438,39 @@ fn cmd_visualize(repo: &Path, args: VisualizeArgs) -> Result<(), Box<dyn std::er
         .map(|e| e.split(',').map(|s| s.trim().to_string()).collect())
         .unwrap_or_default();
 
+    // Bulk-load entities, edges, and (if interactive) summaries upfront to
+    // avoid N+1 query patterns during BFS traversal.
+    let all_entities: std::collections::HashMap<String, chizu_core::Entity> = store
+        .get_all_entities()?
+        .into_iter()
+        .map(|e| (e.id.clone(), e))
+        .collect();
+
+    let mut edges_from: std::collections::HashMap<String, Vec<chizu_core::Edge>> =
+        std::collections::HashMap::new();
+    let mut edges_to: std::collections::HashMap<String, Vec<chizu_core::Edge>> =
+        std::collections::HashMap::new();
+    for edge in store.get_all_edges()? {
+        edges_from
+            .entry(edge.src_id.clone())
+            .or_default()
+            .push(edge.clone());
+        edges_to.entry(edge.dst_id.clone()).or_default().push(edge);
+    }
+
     let mut entity_cache: std::collections::HashMap<String, chizu_core::Entity> =
         std::collections::HashMap::new();
-    let mut visited_edges: std::collections::HashSet<(String, String, String)> =
+    let mut visited_edges: std::collections::HashSet<(String, chizu_core::EdgeKind, String)> =
         std::collections::HashSet::new();
     let mut queue: std::collections::VecDeque<(String, u32)> = std::collections::VecDeque::new();
 
     if let Some(ref start_id) = args.entity_id {
         queue.push_back((start_id.clone(), 0));
-    } else if store.get_entity("repo::.")?.is_some() {
+    } else if all_entities.contains_key("repo::.") {
         queue.push_back(("repo::.".to_string(), 0));
     } else {
-        for entity in store.get_all_entities()? {
-            queue.push_back((entity.id, 0));
+        for id in all_entities.keys() {
+            queue.push_back((id.clone(), 0));
         }
     }
 
@@ -462,7 +482,7 @@ fn cmd_visualize(repo: &Path, args: VisualizeArgs) -> Result<(), Box<dyn std::er
             break;
         }
 
-        let Some(entity) = store.get_entity(&entity_id)? else {
+        let Some(entity) = all_entities.get(&entity_id) else {
             continue;
         };
 
@@ -475,27 +495,23 @@ fn cmd_visualize(repo: &Path, args: VisualizeArgs) -> Result<(), Box<dyn std::er
             continue;
         }
 
-        entity_cache.insert(entity_id.clone(), entity);
+        entity_cache.insert(entity_id.clone(), entity.clone());
 
         if depth < args.depth {
-            for edge in store.get_edges_from(&entity_id)? {
-                let key = (
-                    edge.src_id.clone(),
-                    edge.rel.to_string(),
-                    edge.dst_id.clone(),
-                );
-                if visited_edges.insert(key) {
-                    queue.push_back((edge.dst_id.clone(), depth + 1));
+            if let Some(out_edges) = edges_from.get(&entity_id) {
+                for edge in out_edges {
+                    let key = (edge.src_id.clone(), edge.rel, edge.dst_id.clone());
+                    if visited_edges.insert(key) {
+                        queue.push_back((edge.dst_id.clone(), depth + 1));
+                    }
                 }
             }
-            for edge in store.get_edges_to(&entity_id)? {
-                let key = (
-                    edge.src_id.clone(),
-                    edge.rel.to_string(),
-                    edge.dst_id.clone(),
-                );
-                if visited_edges.insert(key) {
-                    queue.push_back((edge.src_id.clone(), depth + 1));
+            if let Some(in_edges) = edges_to.get(&entity_id) {
+                for edge in in_edges {
+                    let key = (edge.src_id.clone(), edge.rel, edge.dst_id.clone());
+                    if visited_edges.insert(key) {
+                        queue.push_back((edge.src_id.clone(), depth + 1));
+                    }
                 }
             }
         }
@@ -507,28 +523,31 @@ fn cmd_visualize(repo: &Path, args: VisualizeArgs) -> Result<(), Box<dyn std::er
         return Ok(());
     }
 
-    let selected_ids: std::collections::HashSet<String> = entity_cache.keys().cloned().collect();
-    let mut render_edges: std::collections::HashSet<(String, String, String)> =
+    // Build render edges from the in-memory adjacency maps.
+    let selected_ids: std::collections::HashSet<&String> = entity_cache.keys().collect();
+    let mut render_edges: std::collections::HashSet<(String, chizu_core::EdgeKind, String)> =
         std::collections::HashSet::new();
     for entity_id in &selected_ids {
-        for edge in store.get_edges_from(entity_id)? {
-            if selected_ids.contains(&edge.dst_id) {
-                render_edges.insert((
-                    edge.src_id.clone(),
-                    edge.rel.to_string(),
-                    edge.dst_id.clone(),
-                ));
+        if let Some(out_edges) = edges_from.get(*entity_id) {
+            for edge in out_edges {
+                if selected_ids.contains(&edge.dst_id) {
+                    render_edges
+                        .insert((edge.src_id.clone(), edge.rel, edge.dst_id.clone()));
+                }
             }
         }
     }
 
     let output_text = if args.interactive {
-        let mut summary_cache = std::collections::HashMap::new();
-        for entity_id in &selected_ids {
-            if let Some(summary) = store.get_summary(entity_id)? {
-                summary_cache.insert(entity_id.clone(), summary);
-            }
-        }
+        let all_summaries: std::collections::HashMap<String, chizu_core::Summary> = store
+            .get_all_summaries()?
+            .into_iter()
+            .map(|s| (s.entity_id.clone(), s))
+            .collect();
+        let summary_cache: std::collections::HashMap<String, chizu_core::Summary> = selected_ids
+            .iter()
+            .filter_map(|id| all_summaries.get(*id).map(|s| ((*id).clone(), s.clone())))
+            .collect();
         visualize::render_focus_graph_html(
             &entity_cache,
             &summary_cache,
@@ -553,10 +572,11 @@ fn cmd_visualize(repo: &Path, args: VisualizeArgs) -> Result<(), Box<dyn std::er
 }
 
 fn truncate(s: &str, max_len: usize) -> std::borrow::Cow<'_, str> {
-    if s.len() > max_len {
-        format!("{}...", &s[..max_len - 3]).into()
-    } else {
+    if s.chars().count() <= max_len {
         s.into()
+    } else {
+        let truncated: String = s.chars().take(max_len.saturating_sub(3)).collect();
+        format!("{truncated}...").into()
     }
 }
 

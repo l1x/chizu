@@ -41,18 +41,30 @@ impl<'a> Embedder<'a> {
         let batch_size = self.config.batch_size.unwrap_or(32).max(1);
         let dimensions = self.config.dimensions.unwrap_or(768);
 
+        // Bulk-load entities and embedding metadata to avoid N+1 queries.
+        let entity_map: std::collections::HashMap<String, chizu_core::Entity> = store
+            .get_all_entities()?
+            .into_iter()
+            .map(|e| (e.id.clone(), e))
+            .collect();
+        let meta_map: std::collections::HashMap<String, chizu_core::EmbeddingMeta> = store
+            .get_all_embedding_metas()?
+            .into_iter()
+            .map(|m| (m.entity_id.clone(), m))
+            .collect();
+
         let mut batch: Vec<(String, String)> = Vec::with_capacity(batch_size);
 
         for summary in summaries {
             // Skip if an embedding for this model already exists.
-            if let Some(existing) = store.get_embedding_meta(&summary.entity_id)? {
+            if let Some(existing) = meta_map.get(&summary.entity_id) {
                 if existing.model == *model {
                     stats.skipped += 1;
                     continue;
                 }
             }
 
-            let entity = match store.get_entity(&summary.entity_id)? {
+            let entity = match entity_map.get(&summary.entity_id) {
                 Some(e) => e,
                 None => {
                     warn!(
@@ -63,8 +75,8 @@ impl<'a> Embedder<'a> {
                 }
             };
 
-            let text = build_embedding_text(&entity, &summary);
-            batch.push((entity.id, text));
+            let text = build_embedding_text(entity, &summary);
+            batch.push((entity.id.clone(), text));
 
             if batch.len() >= batch_size {
                 self.flush_batch(store, model, dimensions, &batch, &mut stats);

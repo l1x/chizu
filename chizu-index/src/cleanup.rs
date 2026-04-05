@@ -51,16 +51,10 @@ pub fn cascade_delete_file(store: &ChizuStore, path: &str) -> Result<(), StoreEr
 
     sqlite.delete_edges_by_provenance_path(path)?;
 
-    // Also delete edges referencing these entities that were created by
-    // workspace-level adapters (which have no file provenance).
-    for entity in &entities {
-        for edge in sqlite.get_edges_from(&entity.id)? {
-            sqlite.delete_edge(&edge.src_id, edge.rel, &edge.dst_id)?;
-        }
-        for edge in sqlite.get_edges_to(&entity.id)? {
-            sqlite.delete_edge(&edge.src_id, edge.rel, &edge.dst_id)?;
-        }
-    }
+    // Bulk-delete any remaining edges referencing these entities (e.g. from
+    // workspace-level adapters that have no file provenance).
+    let entity_ids: Vec<String> = entities.iter().map(|e| e.id.clone()).collect();
+    sqlite.delete_edges_for_entity_ids(&entity_ids)?;
 
     sqlite.delete_entities_by_path(path)?;
     sqlite.delete_file(path)?;
