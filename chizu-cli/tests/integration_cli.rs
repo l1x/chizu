@@ -45,6 +45,7 @@ fn cli_index_creates_graph_db() {
 }
 
 #[test]
+#[ignore = "requires Ollama running at localhost:11434"]
 fn cli_search_returns_valid_json() {
     let (_temp, repo) = create_fixture_repo();
 
