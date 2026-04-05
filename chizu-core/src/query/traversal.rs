@@ -53,16 +53,12 @@ pub fn graph_traversal(
             continue;
         };
 
-        if let Some(kinds) = opts.kind_filter {
-            if !kinds.contains(&entity.kind.to_string()) {
-                continue;
-            }
-        }
-        if opts
-            .exclude_patterns
-            .iter()
-            .any(|p| entity.id.contains(p))
+        if let Some(kinds) = opts.kind_filter
+            && !kinds.contains(&entity.kind.to_string())
         {
+            continue;
+        }
+        if opts.exclude_patterns.iter().any(|p| entity.id.contains(p)) {
             continue;
         }
 
@@ -224,11 +220,7 @@ mod tests {
             .insert_entity(&Entity::new("a", EntityKind::Repo, "a"))
             .unwrap();
         store
-            .insert_entity(&Entity::new(
-                "b::skip",
-                EntityKind::Component,
-                "b",
-            ))
+            .insert_entity(&Entity::new("b::skip", EntityKind::Component, "b"))
             .unwrap();
         store
             .insert_entity(&Entity::new("c", EntityKind::Component, "c"))
@@ -289,11 +281,15 @@ mod tests {
         .unwrap();
 
         assert_eq!(result.entities.len(), 3);
-        assert!(result
-            .edges
-            .contains(&("a".into(), EdgeKind::Contains, "b".into())));
-        assert!(result
-            .edges
-            .contains(&("b".into(), EdgeKind::Defines, "c".into())));
+        assert!(
+            result
+                .edges
+                .contains(&("a".into(), EdgeKind::Contains, "b".into()))
+        );
+        assert!(
+            result
+                .edges
+                .contains(&("b".into(), EdgeKind::Defines, "c".into()))
+        );
     }
 }

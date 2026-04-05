@@ -272,17 +272,17 @@ impl SqliteStore {
     }
 
     pub fn get_entity(&self, id: &str) -> Result<Option<Entity>> {
-        let mut stmt = self.conn.prepare_cached(
-            &format!("SELECT {ENTITY_COLUMNS} FROM entities WHERE id = ?1"),
-        )?;
+        let mut stmt = self.conn.prepare_cached(&format!(
+            "SELECT {ENTITY_COLUMNS} FROM entities WHERE id = ?1"
+        ))?;
         let entity = stmt.query_row([id], entity_from_row).optional()?;
         Ok(entity)
     }
 
     pub fn get_entities_by_kind(&self, kind: EntityKind) -> Result<Vec<Entity>> {
-        let mut stmt = self.conn.prepare_cached(
-            &format!("SELECT {ENTITY_COLUMNS} FROM entities WHERE kind = ?1"),
-        )?;
+        let mut stmt = self.conn.prepare_cached(&format!(
+            "SELECT {ENTITY_COLUMNS} FROM entities WHERE kind = ?1"
+        ))?;
         let entities = stmt
             .query_map([kind.to_string()], entity_from_row)?
             .collect::<std::result::Result<Vec<_>, _>>()?;
@@ -290,9 +290,9 @@ impl SqliteStore {
     }
 
     pub fn get_entities_by_component(&self, component_id: &ComponentId) -> Result<Vec<Entity>> {
-        let mut stmt = self.conn.prepare_cached(
-            &format!("SELECT {ENTITY_COLUMNS} FROM entities WHERE component_id = ?1"),
-        )?;
+        let mut stmt = self.conn.prepare_cached(&format!(
+            "SELECT {ENTITY_COLUMNS} FROM entities WHERE component_id = ?1"
+        ))?;
         let entities = stmt
             .query_map([component_id.as_str()], entity_from_row)?
             .collect::<std::result::Result<Vec<_>, _>>()?;
@@ -315,9 +315,9 @@ impl SqliteStore {
     }
 
     pub fn get_entities_by_path(&self, path: &str) -> Result<Vec<Entity>> {
-        let mut stmt = self.conn.prepare_cached(
-            &format!("SELECT {ENTITY_COLUMNS} FROM entities WHERE path = ?1"),
-        )?;
+        let mut stmt = self.conn.prepare_cached(&format!(
+            "SELECT {ENTITY_COLUMNS} FROM entities WHERE path = ?1"
+        ))?;
         let entities = stmt
             .query_map([path], entity_from_row)?
             .collect::<std::result::Result<Vec<_>, _>>()?;
@@ -350,7 +350,10 @@ impl SqliteStore {
             .enumerate()
             .map(|(i, _)| {
                 let p = kinds.len() + 1 + i * 2;
-                format!("LOWER(name) LIKE ?{p} OR LOWER(COALESCE(path,'')) LIKE ?{}", p + 1)
+                format!(
+                    "LOWER(name) LIKE ?{p} OR LOWER(COALESCE(path,'')) LIKE ?{}",
+                    p + 1
+                )
             })
             .collect::<Vec<_>>()
             .join(" OR ");
@@ -369,7 +372,8 @@ impl SqliteStore {
             params.push(Box::new(pattern.clone()));
         }
 
-        let param_refs: Vec<&dyn rusqlite::types::ToSql> = params.iter().map(|p| p.as_ref()).collect();
+        let param_refs: Vec<&dyn rusqlite::types::ToSql> =
+            params.iter().map(|p| p.as_ref()).collect();
         let mut stmt = self.conn.prepare(&sql)?;
         let entities = stmt
             .query_map(param_refs.as_slice(), entity_from_row)?
@@ -403,9 +407,9 @@ impl SqliteStore {
     }
 
     pub fn get_edges_from(&self, src_id: &str) -> Result<Vec<Edge>> {
-        let mut stmt = self.conn.prepare_cached(
-            &format!("SELECT {EDGE_COLUMNS} FROM edges WHERE src_id = ?1"),
-        )?;
+        let mut stmt = self.conn.prepare_cached(&format!(
+            "SELECT {EDGE_COLUMNS} FROM edges WHERE src_id = ?1"
+        ))?;
         let edges = stmt
             .query_map([src_id], edge_from_row)?
             .collect::<std::result::Result<Vec<_>, _>>()?;
@@ -413,9 +417,9 @@ impl SqliteStore {
     }
 
     pub fn get_edges_to(&self, dst_id: &str) -> Result<Vec<Edge>> {
-        let mut stmt = self.conn.prepare_cached(
-            &format!("SELECT {EDGE_COLUMNS} FROM edges WHERE dst_id = ?1"),
-        )?;
+        let mut stmt = self.conn.prepare_cached(&format!(
+            "SELECT {EDGE_COLUMNS} FROM edges WHERE dst_id = ?1"
+        ))?;
         let edges = stmt
             .query_map([dst_id], edge_from_row)?
             .collect::<std::result::Result<Vec<_>, _>>()?;
@@ -423,9 +427,9 @@ impl SqliteStore {
     }
 
     pub fn get_all_edges(&self) -> Result<Vec<Edge>> {
-        let mut stmt = self.conn.prepare(
-            &format!("SELECT {EDGE_COLUMNS} FROM edges"),
-        )?;
+        let mut stmt = self
+            .conn
+            .prepare(&format!("SELECT {EDGE_COLUMNS} FROM edges"))?;
         let edges = stmt
             .query_map([], edge_from_row)?
             .collect::<std::result::Result<Vec<_>, _>>()?;
@@ -433,9 +437,9 @@ impl SqliteStore {
     }
 
     pub fn get_edges_by_rel(&self, rel: EdgeKind) -> Result<Vec<Edge>> {
-        let mut stmt = self.conn.prepare_cached(
-            &format!("SELECT {EDGE_COLUMNS} FROM edges WHERE rel = ?1"),
-        )?;
+        let mut stmt = self
+            .conn
+            .prepare_cached(&format!("SELECT {EDGE_COLUMNS} FROM edges WHERE rel = ?1"))?;
         let edges = stmt
             .query_map([rel.to_string()], edge_from_row)?
             .collect::<std::result::Result<Vec<_>, _>>()?;
@@ -562,9 +566,9 @@ impl SqliteStore {
     }
 
     pub fn get_summary(&self, entity_id: &str) -> Result<Option<Summary>> {
-        let mut stmt = self.conn.prepare_cached(
-            &format!("SELECT {SUMMARY_COLUMNS} FROM summaries WHERE entity_id = ?1"),
-        )?;
+        let mut stmt = self.conn.prepare_cached(&format!(
+            "SELECT {SUMMARY_COLUMNS} FROM summaries WHERE entity_id = ?1"
+        ))?;
         let summary = stmt.query_row([entity_id], summary_from_row).optional()?;
         Ok(summary)
     }
@@ -596,8 +600,10 @@ impl SqliteStore {
 
         let sql = format!("SELECT {SUMMARY_COLUMNS} FROM summaries WHERE {conditions}");
 
-        let param_refs: Vec<&dyn rusqlite::types::ToSql> =
-            like_patterns.iter().map(|p| p as &dyn rusqlite::types::ToSql).collect();
+        let param_refs: Vec<&dyn rusqlite::types::ToSql> = like_patterns
+            .iter()
+            .map(|p| p as &dyn rusqlite::types::ToSql)
+            .collect();
         let mut stmt = self.conn.prepare(&sql)?;
         let summaries = stmt
             .query_map(param_refs.as_slice(), summary_from_row)?
@@ -670,9 +676,9 @@ impl SqliteStore {
     }
 
     pub fn get_embedding_meta(&self, entity_id: &str) -> Result<Option<EmbeddingMeta>> {
-        let mut stmt = self.conn.prepare_cached(
-            &format!("SELECT {EMBEDDING_META_COLUMNS} FROM embeddings WHERE entity_id = ?1"),
-        )?;
+        let mut stmt = self.conn.prepare_cached(&format!(
+            "SELECT {EMBEDDING_META_COLUMNS} FROM embeddings WHERE entity_id = ?1"
+        ))?;
         let meta = stmt
             .query_row([entity_id], embedding_meta_from_row)
             .optional()?;
@@ -680,9 +686,9 @@ impl SqliteStore {
     }
 
     pub fn get_all_embedding_metas(&self) -> Result<Vec<EmbeddingMeta>> {
-        let mut stmt = self.conn.prepare(
-            &format!("SELECT {EMBEDDING_META_COLUMNS} FROM embeddings"),
-        )?;
+        let mut stmt = self
+            .conn
+            .prepare(&format!("SELECT {EMBEDDING_META_COLUMNS} FROM embeddings"))?;
         let metas = stmt
             .query_map([], embedding_meta_from_row)?
             .collect::<std::result::Result<Vec<_>, _>>()?;
@@ -701,9 +707,9 @@ impl SqliteStore {
         &self,
         usearch_key: i64,
     ) -> Result<Option<EmbeddingMeta>> {
-        let mut stmt = self.conn.prepare_cached(
-            &format!("SELECT {EMBEDDING_META_COLUMNS} FROM embeddings WHERE usearch_key = ?1"),
-        )?;
+        let mut stmt = self.conn.prepare_cached(&format!(
+            "SELECT {EMBEDDING_META_COLUMNS} FROM embeddings WHERE usearch_key = ?1"
+        ))?;
         let meta = stmt
             .query_row([usearch_key], embedding_meta_from_row)
             .optional()?;

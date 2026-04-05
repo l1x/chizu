@@ -178,11 +178,8 @@ fn extract_items(ctx: &mut ParseContext, node: tree_sitter::Node) {
                         e = e.with_visibility(v);
                     }
                     ctx.entities.push(e);
-                    ctx.edges.push(Edge::new(
-                        ctx.source_unit_id,
-                        EdgeKind::BenchmarkedBy,
-                        &id,
-                    ));
+                    ctx.edges
+                        .push(Edge::new(ctx.source_unit_id, EdgeKind::BenchmarkedBy, &id));
                 } else {
                     let id = symbol_id(ctx.path_str, &name);
                     let mut e = apply_component(

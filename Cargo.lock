@@ -273,7 +273,7 @@ checksum = "613afe47fcd5fac7ccf1db93babcb082c5994d996f20b8b159f2ad1658eb5724"
 
 [[package]]
 name = "chizu-cli"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "argh",
  "chizu-core",
@@ -288,7 +288,7 @@ dependencies = [
 
 [[package]]
 name = "chizu-core"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "blake3",
  "bolero",
@@ -308,7 +308,7 @@ dependencies = [
 
 [[package]]
 name = "chizu-index"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "base64",
  "blake3",
@@ -333,7 +333,7 @@ dependencies = [
 
 [[package]]
 name = "chizu-query"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "chizu-core",
  "serde",

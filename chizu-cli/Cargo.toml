@@ -1,6 +1,6 @@
 [package]
 name = "chizu-cli"
-version = "0.2.0"
+version = "0.3.0"
 edition = "2024"
 description = "CLI for Chizu, a local repository knowledge graph and subject-to-file routing engine"
 license = "MIT"
@@ -16,9 +16,9 @@ name = "chizu"
 path = "src/main.rs"
 
 [dependencies]
-chizu-core = { version = "0.2.0", path = "../chizu-core" }
-chizu-index = { version = "0.2.0", path = "../chizu-index" }
-chizu-query = { version = "0.2.0", path = "../chizu-query" }
+chizu-core = { version = "0.3.0", path = "../chizu-core" }
+chizu-index = { version = "0.3.0", path = "../chizu-index" }
+chizu-query = { version = "0.3.0", path = "../chizu-query" }
 argh = { workspace = true }
 serde_json = { workspace = true }
 tracing = { workspace = true }

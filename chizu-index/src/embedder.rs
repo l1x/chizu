@@ -227,9 +227,7 @@ fn build_embedding_text(entity: &chizu_core::Entity, summary: &chizu_core::Summa
 #[cfg(test)]
 mod tests {
     use super::*;
-    use chizu_core::{
-        ChizuStore, Entity, EntityKind, Provider, ProviderError, Store, Summary,
-    };
+    use chizu_core::{ChizuStore, Entity, EntityKind, Provider, ProviderError, Store, Summary};
 
     struct MockProvider {
         vectors: Vec<Vec<f32>>,

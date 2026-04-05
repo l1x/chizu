@@ -1,6 +1,6 @@
 [package]
 name = "chizu-query"
-version = "0.2.0"
+version = "0.3.0"
 edition = "2024"
 description = "Query, retrieval, expansion, and reranking pipeline for Chizu reading plans"
 license = "MIT"
@@ -12,12 +12,12 @@ keywords = ["code-search", "knowledge-graph", "retrieval", "agents", "ranking"]
 categories = ["development-tools", "algorithms"]
 
 [dependencies]
-chizu-core = { version = "0.2.0", path = "../chizu-core" }
+chizu-core = { version = "0.3.0", path = "../chizu-core" }
 serde = { workspace = true }
 serde_json = { workspace = true }
 tracing = { workspace = true }
 thiserror = { workspace = true }
 
 [dev-dependencies]
-chizu-core = { version = "0.2.0", path = "../chizu-core", features = ["test-support"] }
+chizu-core = { version = "0.3.0", path = "../chizu-core", features = ["test-support"] }
 tempfile = "3"

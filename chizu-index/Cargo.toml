@@ -1,6 +1,6 @@
 [package]
 name = "chizu-index"
-version = "0.2.0"
+version = "0.3.0"
 edition = "2024"
 description = "Indexing pipeline and adapters for Chizu repository facts, summaries, and embeddings"
 license = "MIT"
@@ -12,7 +12,7 @@ keywords = ["code-indexing", "knowledge-graph", "agents", "tree-sitter", "embedd
 categories = ["development-tools", "parser-implementations"]
 
 [dependencies]
-chizu-core = { version = "0.2.0", path = "../chizu-core" }
+chizu-core = { version = "0.3.0", path = "../chizu-core" }
 blake3 = { workspace = true }
 cargo_toml = { workspace = true }
 globset = { workspace = true }
@@ -30,7 +30,7 @@ rustc-hash = { workspace = true }
 ruzstd = { workspace = true }
 
 [dev-dependencies]
-chizu-core = { version = "0.2.0", path = "../chizu-core", features = ["test-support"] }
+chizu-core = { version = "0.3.0", path = "../chizu-core", features = ["test-support"] }
 bolero = { workspace = true }
 bolero-generator = { workspace = true }
 tempfile = { workspace = true }

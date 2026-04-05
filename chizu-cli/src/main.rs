@@ -443,7 +443,11 @@ fn cmd_visualize(repo: &Path, args: VisualizeArgs) -> Result<(), Box<dyn std::er
     } else if store.get_entity("repo::.")?.is_some() {
         vec!["repo::.".to_string()]
     } else {
-        store.get_all_entities()?.into_iter().map(|e| e.id).collect()
+        store
+            .get_all_entities()?
+            .into_iter()
+            .map(|e| e.id)
+            .collect()
     };
 
     let traversal = chizu_core::graph_traversal(
