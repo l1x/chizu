@@ -742,45 +742,6 @@ batch_size = 32
 }
 
 fn cmd_guide() -> Result<(), Box<dyn std::error::Error>> {
-    println!(
-        r#"Chizu - Local Repository Understanding Engine
-
-USAGE:
-    chizu [--repo <path>] <command>
-
-COMMANDS:
-    index       Parse repository, generate summaries and embeddings
-    search      Natural language search for relevant entities
-    entity      Look up a specific entity by ID
-    entities    List entities with optional filters
-    routes      List task route assignments
-    edges       List edges/relationships
-    visualize   Generate SVG graph visualization or interactive HTML tree
-    config      Initialize or validate configuration
-    guide       Show this help message
-
-EXAMPLES:
-    # Index current directory
-    chizu index
-
-    # Search for routing-related code
-    chizu search "how does routing work"
-
-    # Look up a specific symbol
-    chizu entity "symbol::src/main.rs::main"
-
-    # List all test entities
-    chizu entities --kind test
-
-    # Generate visualization
-    chizu visualize --entity-id "component::cargo::." --output graph.svg
-
-    # Generate interactive visualization
-    chizu visualize --interactive --output graph.html
-
-For more information, see the documentation at:
-    https://github.com/l1x/chizu
-"#
-    );
+    print!("{}", include_str!("../guide.md"));
     Ok(())
 }
