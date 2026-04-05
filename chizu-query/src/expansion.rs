@@ -60,14 +60,10 @@ pub fn expand(store: &dyn Store, candidates: &mut Vec<Candidate>, limit: usize) 
 mod tests {
     use super::*;
     use crate::retrieval::Candidate;
-    use chizu_core::{ChizuStore, Config, Edge, EdgeKind, Entity, EntityKind, Store};
-    use tempfile::TempDir;
+    use chizu_core::{ChizuStore, Edge, EdgeKind, Entity, EntityKind, Store};
 
-    fn create_test_store() -> (ChizuStore, TempDir) {
-        let temp_dir = TempDir::new().unwrap();
-        let config = Config::default();
-        let store = ChizuStore::open(temp_dir.path(), &config).unwrap();
-        (store, temp_dir)
+    fn create_test_store() -> (ChizuStore, tempfile::TempDir) {
+        ChizuStore::open_test(None)
     }
 
     #[test]

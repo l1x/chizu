@@ -428,10 +428,10 @@ fn cmd_visualize(repo: &Path, args: VisualizeArgs) -> Result<(), Box<dyn std::er
     let (config, store) = open_store(repo)?;
     let repo_root = repo.canonicalize().unwrap_or_else(|_| repo.to_path_buf());
 
-    let kind_filter: Option<Vec<String>> = args
+    let kind_filter: Option<Vec<chizu_core::EntityKind>> = args
         .kind
         .as_ref()
-        .map(|k| k.split(',').map(|s| s.trim().to_string()).collect());
+        .map(|k| k.split(',').filter_map(|s| s.trim().parse().ok()).collect());
     let exclude_patterns: Vec<String> = args
         .exclude
         .as_ref()

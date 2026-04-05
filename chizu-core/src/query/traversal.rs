@@ -1,6 +1,6 @@
 use std::collections::{HashMap, HashSet, VecDeque};
 
-use crate::model::{EdgeKind, Entity};
+use crate::model::{EdgeKind, Entity, EntityKind};
 use crate::store::{Result, Store};
 
 /// Result of a BFS graph traversal.
@@ -17,8 +17,8 @@ pub struct TraversalOptions<'a> {
     pub max_depth: u32,
     /// Maximum number of entities to collect.
     pub max_nodes: usize,
-    /// If set, only include entities whose kind (as string) is in this list.
-    pub kind_filter: Option<&'a [String]>,
+    /// If set, only include entities whose kind is in this list.
+    pub kind_filter: Option<&'a [EntityKind]>,
     /// Exclude entities whose ID contains any of these patterns.
     pub exclude_patterns: &'a [String],
 }
@@ -54,7 +54,7 @@ pub fn graph_traversal(
         };
 
         if let Some(kinds) = opts.kind_filter
-            && !kinds.contains(&entity.kind.to_string())
+            && !kinds.contains(&entity.kind)
         {
             continue;
         }
@@ -80,16 +80,11 @@ pub fn graph_traversal(
         }
     }
 
-    // Collect edges between selected entities.
-    let selected_ids: HashSet<&str> = entity_cache.keys().map(|s| s.as_str()).collect();
-    let mut render_edges: HashSet<(String, EdgeKind, String)> = HashSet::new();
-    for entity_id in &selected_ids {
-        for edge in store.get_edges_from(entity_id)? {
-            if selected_ids.contains(edge.dst_id.as_str()) {
-                render_edges.insert((edge.src_id.clone(), edge.rel, edge.dst_id.clone()));
-            }
-        }
-    }
+    // Filter BFS-collected edges to those where both endpoints were selected.
+    let render_edges = visited_edges
+        .into_iter()
+        .filter(|(src, _, dst)| entity_cache.contains_key(src) && entity_cache.contains_key(dst))
+        .collect();
 
     Ok(TraversalResult {
         entities: entity_cache,
@@ -194,7 +189,7 @@ mod tests {
         store
             .insert_edge(&Edge::new("b", EdgeKind::Defines, "c"))
             .unwrap();
-        let kinds = vec!["repo".to_string(), "component".to_string()];
+        let kinds = vec![EntityKind::Repo, EntityKind::Component];
 
         let result = graph_traversal(
             &store,

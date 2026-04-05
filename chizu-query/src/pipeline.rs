@@ -89,16 +89,10 @@ fn build_reasons(candidate: &retrieval::Candidate) -> Vec<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use chizu_core::{
-        ChizuStore, Config, Edge, EdgeKind, Entity, EntityKind, Store, Summary, TaskRoute,
-    };
-    use tempfile::TempDir;
+    use chizu_core::{ChizuStore, Edge, EdgeKind, Entity, EntityKind, Store, Summary, TaskRoute};
 
-    fn create_test_store() -> (ChizuStore, TempDir) {
-        let temp_dir = TempDir::new().unwrap();
-        let config = Config::default();
-        let store = ChizuStore::open(temp_dir.path(), &config).unwrap();
-        (store, temp_dir)
+    fn create_test_store() -> (ChizuStore, tempfile::TempDir) {
+        ChizuStore::open_test(None)
     }
 
     #[test]
