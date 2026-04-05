@@ -76,22 +76,39 @@ pub fn retrieve(
         .collect();
 
     if !tokens.is_empty() {
-        let keyword_matches = keyword_search(store, &tokens)?;
-        for (entity_id, match_count) in keyword_matches {
-            let keyword_score = match_count as f64 / tokens.len() as f64;
-            let entry = candidates
-                .entry(entity_id.clone())
-                .or_insert_with(|| Candidate::placeholder(&entity_id));
-            entry.keyword_score = keyword_score.max(entry.keyword_score);
+        let like_patterns: Vec<String> = tokens.iter().map(|t| format!("%{t}%")).collect();
+
+        // Keyword search: push LIKE filtering into SQL instead of loading all summaries.
+        let matching_summaries = store.search_summaries_by_text(&like_patterns)?;
+        for summary in &matching_summaries {
+            let text = format!(
+                "{} {}",
+                summary.short_summary,
+                summary
+                    .keywords
+                    .as_ref()
+                    .map(|k| k.join(" "))
+                    .unwrap_or_default()
+            )
+            .to_lowercase();
+            let hit_count = tokens.iter().filter(|t| text.contains(*t)).count();
+            if hit_count > 0 {
+                let keyword_score = hit_count as f64 / tokens.len() as f64;
+                let entry = candidates
+                    .entry(summary.entity_id.clone())
+                    .or_insert_with(|| Candidate::placeholder(&summary.entity_id));
+                entry.keyword_score = keyword_score.max(entry.keyword_score);
+            }
         }
 
-        // Name and path matching across preferred entity kinds for this category.
-        for kind_str in category.preferred_kinds() {
-            let kind: chizu_core::EntityKind = match kind_str.parse() {
-                Ok(k) => k,
-                Err(_) => continue,
-            };
-            for entity in store.get_entities_by_kind(kind)? {
+        // Name and path matching: single SQL query across all preferred kinds.
+        let kinds: Vec<chizu_core::EntityKind> = category
+            .preferred_kinds()
+            .iter()
+            .filter_map(|k| k.parse().ok())
+            .collect();
+        if !kinds.is_empty() {
+            for entity in store.search_entities_by_name_or_path(&like_patterns, &kinds)? {
                 let name_lower = entity.name.to_lowercase();
                 let path_lower = entity.path.as_ref().map(|p| p.to_lowercase());
 
@@ -156,37 +173,6 @@ pub fn retrieve(
     }
 
     Ok(result)
-}
-
-/// Search summaries and entity metadata for query tokens.
-/// Returns map of entity_id -> number of distinct tokens matched.
-fn keyword_search(store: &dyn Store, tokens: &[String]) -> Result<HashMap<String, usize>> {
-    // We need access to the underlying SQLite store for a custom query.
-    // Since Store trait doesn't expose raw SQL, we'll use the trait methods.
-    // For simplicity, we iterate all summaries and entities. This is fine for
-    // test-sized stores and small-to-medium repos.
-    let mut matches: HashMap<String, usize> = HashMap::new();
-
-    let summaries = store.get_all_summaries()?;
-    for summary in summaries {
-        let text = format!(
-            "{} {}",
-            summary.short_summary,
-            summary
-                .keywords
-                .as_ref()
-                .map(|k| k.join(" "))
-                .unwrap_or_default()
-        )
-        .to_lowercase();
-
-        let hit_count = tokens.iter().filter(|t| text.contains(*t)).count();
-        if hit_count > 0 {
-            *matches.entry(summary.entity_id).or_insert(0) += hit_count;
-        }
-    }
-
-    Ok(matches)
 }
 
 #[cfg(test)]
