@@ -40,6 +40,9 @@ chizu routes --task debug
 
 # Generate SVG visualization
 chizu visualize --entity-id "component::cargo::." -o graph.svg
+
+# Generate interactive HTML tree explorer
+chizu visualize --interactive --entity-id "repo::." -o graph.html
 ```
 
 ## Commands
@@ -52,7 +55,7 @@ chizu visualize --entity-id "component::cargo::." -o graph.svg
 | `entities` | List entities | `--component`, `--kind` |
 | `routes` | List task route assignments | `--task`, `--entity` |
 | `edges` | List edges | `--from`, `--to`, `--rel` |
-| `visualize` | Generate SVG graph | `--entity-id`, `--depth`, `--kind`, `--exclude`, `--max-nodes`, `-o` |
+| `visualize` | Generate SVG graph or interactive HTML | `--entity-id`, `--depth`, `--kind`, `--exclude`, `--max-nodes`, `--interactive`, `-o` |
 | `config` | Initialize or validate config | subcommands: `init` (`-f`), `validate` |
 | `guide` | Show usage guide | none |
 
@@ -200,8 +203,9 @@ sqlite3 .chizu/graph.db "SELECT * FROM entities WHERE name LIKE '%handler%';"
 
 ```
 chizu/
-  chizu-cli/             CLI binary (command dispatch, output formatting, SVG generation)
-  chizu-core/            Core types, storage, config, LLM provider, query classifier
+  chizu-cli/             CLI binary (command dispatch, output formatting, visualization)
+    templates/           MiniJinja templates (interactive HTML explorer)
+  chizu-core/            Core types, storage, config, LLM provider, query classifier, graph traversal
   chizu-index/           Indexing pipeline and language adapters
   chizu-query/           Search pipeline (retrieval, expansion, reranking, reading plan)
   docs/                  Documentation (brief, PRD, article)
@@ -212,6 +216,8 @@ chizu/
 | File | Purpose |
 |------|---------|
 | `chizu-cli/src/main.rs` | CLI entry point and command dispatch |
+| `chizu-cli/src/visualize.rs` | SVG renderer and HTML template rendering |
+| `chizu-cli/templates/explorer.html.j2` | MiniJinja template for interactive HTML tree explorer |
 | `chizu-core/src/config/mod.rs` | TOML configuration parsing and validation |
 | `chizu-core/src/model/entity.rs` | Entity struct |
 | `chizu-core/src/model/entity_kind.rs` | EntityKind enum (20 kinds) |
@@ -219,6 +225,7 @@ chizu/
 | `chizu-core/src/model/id.rs` | Canonical ID construction |
 | `chizu-core/src/provider/openai.rs` | OpenAI-compatible HTTP provider (completions + embeddings) |
 | `chizu-core/src/query/classifier.rs` | TaskCategory classification heuristics |
+| `chizu-core/src/query/traversal.rs` | Reusable BFS graph traversal with filtering |
 | `chizu-core/src/store/sqlite.rs` | SQLite schema and queries |
 | `chizu-core/src/store/usearch.rs` | usearch HNSW vector index wrapper |
 | `chizu-index/src/indexer.rs` | Main IndexPipeline orchestration |
