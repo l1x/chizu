@@ -178,8 +178,9 @@ fn component_id_ecosystem_extraction() {
         .with_type::<(String, String)>()
         .for_each(|(ecosystem, path)| {
             let id = ComponentId::new(ecosystem, path);
-            // Ecosystem extraction works when ecosystem contains no `::`
-            if !ecosystem.contains("::") {
+            // Ecosystem extraction works when ecosystem contains no `:`
+            // (a trailing `:` merges with the `::` separator, causing ambiguity)
+            if !ecosystem.contains(':') {
                 assert_eq!(id.ecosystem(), Some(ecosystem.as_str()));
             }
         });
