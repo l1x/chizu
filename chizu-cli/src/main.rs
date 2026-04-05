@@ -438,104 +438,38 @@ fn cmd_visualize(repo: &Path, args: VisualizeArgs) -> Result<(), Box<dyn std::er
         .map(|e| e.split(',').map(|s| s.trim().to_string()).collect())
         .unwrap_or_default();
 
-    // Bulk-load entities, edges, and (if interactive) summaries upfront to
-    // avoid N+1 query patterns during BFS traversal.
+    // Bulk-load and traverse in-memory via chizu_core::graph_traversal.
     let all_entities: std::collections::HashMap<String, chizu_core::Entity> = store
         .get_all_entities()?
         .into_iter()
         .map(|e| (e.id.clone(), e))
         .collect();
+    let all_edges = store.get_all_edges()?;
 
-    let mut edges_from: std::collections::HashMap<String, Vec<chizu_core::Edge>> =
-        std::collections::HashMap::new();
-    let mut edges_to: std::collections::HashMap<String, Vec<chizu_core::Edge>> =
-        std::collections::HashMap::new();
-    for edge in store.get_all_edges()? {
-        edges_from
-            .entry(edge.src_id.clone())
-            .or_default()
-            .push(edge.clone());
-        edges_to.entry(edge.dst_id.clone()).or_default().push(edge);
-    }
-
-    let mut entity_cache: std::collections::HashMap<String, chizu_core::Entity> =
-        std::collections::HashMap::new();
-    let mut visited_edges: std::collections::HashSet<(String, chizu_core::EdgeKind, String)> =
-        std::collections::HashSet::new();
-    let mut queue: std::collections::VecDeque<(String, u32)> = std::collections::VecDeque::new();
-
-    if let Some(ref start_id) = args.entity_id {
-        queue.push_back((start_id.clone(), 0));
+    let seed_ids: Vec<String> = if let Some(ref start_id) = args.entity_id {
+        vec![start_id.clone()]
     } else if all_entities.contains_key("repo::.") {
-        queue.push_back(("repo::.".to_string(), 0));
+        vec!["repo::.".to_string()]
     } else {
-        for id in all_entities.keys() {
-            queue.push_back((id.clone(), 0));
-        }
-    }
+        all_entities.keys().cloned().collect()
+    };
 
-    while let Some((entity_id, depth)) = queue.pop_front() {
-        if entity_cache.contains_key(&entity_id) {
-            continue;
-        }
-        if entity_cache.len() >= args.max_nodes {
-            break;
-        }
+    let traversal = chizu_core::graph_traversal(
+        &all_entities,
+        &all_edges,
+        &seed_ids,
+        &chizu_core::TraversalOptions {
+            max_depth: args.depth,
+            max_nodes: args.max_nodes,
+            kind_filter: kind_filter.as_deref(),
+            exclude_patterns: &exclude_patterns,
+        },
+    );
 
-        let Some(entity) = all_entities.get(&entity_id) else {
-            continue;
-        };
-
-        if let Some(ref kinds) = kind_filter {
-            if !kinds.contains(&entity.kind.to_string()) {
-                continue;
-            }
-        }
-        if exclude_patterns.iter().any(|p| entity.id.contains(p)) {
-            continue;
-        }
-
-        entity_cache.insert(entity_id.clone(), entity.clone());
-
-        if depth < args.depth {
-            if let Some(out_edges) = edges_from.get(&entity_id) {
-                for edge in out_edges {
-                    let key = (edge.src_id.clone(), edge.rel, edge.dst_id.clone());
-                    if visited_edges.insert(key) {
-                        queue.push_back((edge.dst_id.clone(), depth + 1));
-                    }
-                }
-            }
-            if let Some(in_edges) = edges_to.get(&entity_id) {
-                for edge in in_edges {
-                    let key = (edge.src_id.clone(), edge.rel, edge.dst_id.clone());
-                    if visited_edges.insert(key) {
-                        queue.push_back((edge.src_id.clone(), depth + 1));
-                    }
-                }
-            }
-        }
-    }
-
-    if entity_cache.is_empty() {
+    if traversal.entities.is_empty() {
         println!("No entities to visualize.");
         store.close()?;
         return Ok(());
-    }
-
-    // Build render edges from the in-memory adjacency maps.
-    let selected_ids: std::collections::HashSet<&String> = entity_cache.keys().collect();
-    let mut render_edges: std::collections::HashSet<(String, chizu_core::EdgeKind, String)> =
-        std::collections::HashSet::new();
-    for entity_id in &selected_ids {
-        if let Some(out_edges) = edges_from.get(*entity_id) {
-            for edge in out_edges {
-                if selected_ids.contains(&edge.dst_id) {
-                    render_edges
-                        .insert((edge.src_id.clone(), edge.rel, edge.dst_id.clone()));
-                }
-            }
-        }
     }
 
     let output_text = if args.interactive {
@@ -544,20 +478,25 @@ fn cmd_visualize(repo: &Path, args: VisualizeArgs) -> Result<(), Box<dyn std::er
             .into_iter()
             .map(|s| (s.entity_id.clone(), s))
             .collect();
-        let summary_cache: std::collections::HashMap<String, chizu_core::Summary> = selected_ids
-            .iter()
-            .filter_map(|id| all_summaries.get(*id).map(|s| ((*id).clone(), s.clone())))
+        let summary_cache: std::collections::HashMap<String, chizu_core::Summary> = traversal
+            .entities
+            .keys()
+            .filter_map(|id| all_summaries.get(id).map(|s| (id.clone(), s.clone())))
             .collect();
         visualize::render_focus_graph_html(
-            &entity_cache,
+            &traversal.entities,
             &summary_cache,
-            &render_edges,
+            &traversal.edges,
             &repo_root,
             config.visualize.editor_link.as_deref(),
             args.entity_id.as_deref(),
         )
     } else {
-        visualize::render_focus_graph_svg(&entity_cache, &render_edges, args.entity_id.as_deref())
+        visualize::render_focus_graph_svg(
+            &traversal.entities,
+            &traversal.edges,
+            args.entity_id.as_deref(),
+        )
     };
 
     if let Some(ref path) = args.output {
