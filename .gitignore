@@ -5,3 +5,5 @@
 *.db
 *.db.usearch
 /.chizu/
+.beads/
+.agent-prompts/
