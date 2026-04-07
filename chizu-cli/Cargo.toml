@@ -21,6 +21,7 @@ chizu-index = { version = "0.3.0", path = "../chizu-index" }
 chizu-query = { version = "0.3.0", path = "../chizu-query" }
 argh = { workspace = true }
 serde_json = { workspace = true }
+toml = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 minijinja = "2.19.0"

@@ -53,6 +53,8 @@ enum Command {
     Index(IndexArgs),
     /// Search for entities
     Search(SearchArgs),
+    /// Evaluate search quality against a benchmark
+    Eval(EvalArgs),
     /// Look up a single entity
     Entity(EntityArgs),
     /// List entities
@@ -96,6 +98,31 @@ struct SearchArgs {
 
     /// output format (text, json)
     #[argh(option, default = "OutputFormat::Text")]
+    format: OutputFormat,
+
+    /// show all results, bypassing score-gap cutoff
+    #[argh(switch)]
+    show_all: bool,
+
+    /// show verbose output with per-signal score breakdown
+    #[argh(switch, short = 'v')]
+    verbose: bool,
+}
+
+/// Evaluate search quality against a labeled benchmark file
+#[derive(FromArgs, Debug)]
+#[argh(subcommand, name = "eval")]
+struct EvalArgs {
+    /// path to benchmark TOML file
+    #[argh(positional)]
+    benchmark: std::path::PathBuf,
+
+    /// maximum results per query (default 10)
+    #[argh(option, default = "10")]
+    limit: usize,
+
+    /// output format (text, json)
+    #[argh(option, default = "OutputFormat::Json")]
     format: OutputFormat,
 }
 
@@ -247,6 +274,7 @@ fn run(cli: Cli) -> Result<(), Box<dyn std::error::Error>> {
     match cli.command {
         Command::Index(args) => cmd_index(&cli.repo, args),
         Command::Search(args) => cmd_search(&cli.repo, args),
+        Command::Eval(args) => cmd_eval(&cli.repo, args),
         Command::Entity(args) => cmd_entity(&cli.repo, args),
         Command::Entities(args) => cmd_entities(&cli.repo, args),
         Command::Routes(args) => cmd_routes(&cli.repo, args),
@@ -607,17 +635,29 @@ fn cmd_search(repo: &Path, args: SearchArgs) -> Result<(), Box<dyn std::error::E
     let (config, store) = open_store(repo)?;
     let provider = build_provider(&config)?;
 
+    let options = chizu_query::SearchOptions {
+        limit: args.limit,
+        show_all: args.show_all,
+        verbose: args.verbose,
+    };
+
     let plan = chizu_query::SearchPipeline::run(
         &store,
         &args.query,
         args.category,
-        args.limit,
+        &options,
         &config,
         provider.as_deref(),
     )?;
 
     match args.format {
-        OutputFormat::Text => println!("{}", plan.to_text()),
+        OutputFormat::Text => {
+            if args.verbose {
+                println!("{}", plan.to_text_verbose());
+            } else {
+                println!("{}", plan.to_text());
+            }
+        }
         OutputFormat::Json => println!("{}", plan.to_json()?),
     }
 
@@ -626,6 +666,58 @@ fn cmd_search(repo: &Path, args: SearchArgs) -> Result<(), Box<dyn std::error::E
         eprintln!(
             "Warning: embeddings are configured but provider is unavailable; semantic search disabled."
         );
+    }
+
+    store.close()?;
+    Ok(())
+}
+
+fn cmd_eval(repo: &Path, args: EvalArgs) -> Result<(), Box<dyn std::error::Error>> {
+    let (config, store) = open_store(repo)?;
+    let provider = build_provider(&config)?;
+
+    let benchmark_str = std::fs::read_to_string(&args.benchmark).map_err(|e| {
+        format!(
+            "Failed to read benchmark file '{}': {}",
+            args.benchmark.display(),
+            e
+        )
+    })?;
+
+    let benchmark: chizu_query::eval::Benchmark =
+        toml::from_str(&benchmark_str).map_err(|e| format!("Failed to parse benchmark: {}", e))?;
+
+    let output =
+        chizu_query::eval::evaluate(&benchmark, &store, &config, provider.as_deref(), args.limit)?;
+
+    match args.format {
+        OutputFormat::Json => {
+            println!("{}", serde_json::to_string_pretty(&output)?);
+        }
+        OutputFormat::Text => {
+            println!("Evaluation Results");
+            println!("==================");
+            println!(
+                "Queries: {}  Recall@5: {:.3}  MRR@10: {:.3}  nDCG@10: {:.3}  Noise-tail: {:.3}",
+                output.overall.query_count,
+                output.overall.recall_at_5,
+                output.overall.mrr_at_10,
+                output.overall.ndcg_at_10,
+                output.overall.noise_tail_rate,
+            );
+            println!();
+            for (bucket, metrics) in &output.by_bucket {
+                println!(
+                    "  [{}] n={}  R@5={:.3}  MRR@10={:.3}  nDCG@10={:.3}  noise={:.3}",
+                    bucket,
+                    metrics.query_count,
+                    metrics.recall_at_5,
+                    metrics.mrr_at_10,
+                    metrics.ndcg_at_10,
+                    metrics.noise_tail_rate,
+                );
+            }
+        }
     }
 
     store.close()?;
@@ -680,6 +772,10 @@ exclude_patterns = [
 
 [search]
 default_limit = 15
+# cutoff = "none"              # or "relative_gap"
+# relative_gap_threshold = 0.80
+# min_results = 3
+# max_results = 8
 
 [search.rerank_weights]
 task_route = 0.00

@@ -1,0 +1,208 @@
+# Chizu self-evaluation benchmark
+#
+# Run against chizu's own indexed codebase:
+#   chizu index && chizu eval benchmarks/chizu-self.toml
+#
+# Entity IDs are predictions based on the codebase structure.
+# After indexing, verify IDs with: chizu entities --kind symbol
+# Update any mismatched IDs before trusting eval results.
+#
+# How to extend:
+#   1. Add a new [[queries]] entry below
+#   2. Set bucket to "identifier", "concept", or "task"
+#   3. List relevant entity IDs (primary matches that must appear in top-k)
+#   4. List acceptable entity IDs (useful supporting results)
+#   5. Re-run: chizu eval benchmarks/chizu-self.toml
+
+version = 1
+
+# ---------------------------------------------------------------------------
+# Identifier queries — exact function/type/module names
+# ---------------------------------------------------------------------------
+
+[[queries]]
+text = "SearchPipeline"
+bucket = "identifier"
+relevant = [
+    "symbol::chizu-query/src/pipeline.rs::SearchPipeline",
+]
+acceptable = [
+    "source_unit::chizu-query/src/pipeline.rs",
+]
+
+[[queries]]
+text = "Config"
+bucket = "identifier"
+relevant = [
+    "symbol::chizu-core/src/config/mod.rs::Config",
+]
+acceptable = [
+    "source_unit::chizu-core/src/config/mod.rs",
+]
+
+[[queries]]
+text = "classify_query"
+bucket = "identifier"
+relevant = [
+    "symbol::chizu-core/src/query/classifier.rs::classify_query",
+]
+acceptable = [
+    "source_unit::chizu-core/src/query/classifier.rs",
+]
+
+[[queries]]
+text = "ComponentId"
+bucket = "identifier"
+relevant = [
+    "symbol::chizu-core/src/model/id.rs::ComponentId",
+]
+acceptable = [
+    "source_unit::chizu-core/src/model/id.rs",
+]
+
+[[queries]]
+text = "graph_traversal"
+bucket = "identifier"
+relevant = [
+    "symbol::chizu-core/src/query/traversal.rs::graph_traversal",
+]
+acceptable = [
+    "source_unit::chizu-core/src/query/traversal.rs",
+]
+
+[[queries]]
+text = "Entity"
+bucket = "identifier"
+relevant = [
+    "symbol::chizu-core/src/model/entity.rs::Entity",
+]
+acceptable = [
+    "source_unit::chizu-core/src/model/entity.rs",
+    "symbol::chizu-core/src/model/entity.rs::EntityKind",
+]
+
+# ---------------------------------------------------------------------------
+# Concept queries — semantic / natural-language
+# ---------------------------------------------------------------------------
+
+[[queries]]
+text = "how are search results scored and ranked"
+bucket = "concept"
+category = "understand"
+relevant = [
+    "source_unit::chizu-query/src/rerank.rs",
+]
+acceptable = [
+    "source_unit::chizu-query/src/pipeline.rs",
+    "symbol::chizu-query/src/rerank.rs::score",
+]
+
+[[queries]]
+text = "vector similarity search"
+bucket = "concept"
+relevant = [
+    "source_unit::chizu-core/src/store/usearch.rs",
+]
+acceptable = [
+    "source_unit::chizu-query/src/retrieval.rs",
+]
+
+[[queries]]
+text = "configuration validation"
+bucket = "concept"
+relevant = [
+    "source_unit::chizu-core/src/config/mod.rs",
+]
+acceptable = [
+    "symbol::chizu-core/src/config/mod.rs::Config",
+]
+
+[[queries]]
+text = "entity relationship graph edges"
+bucket = "concept"
+relevant = [
+    "source_unit::chizu-core/src/model/edge_kind.rs",
+]
+acceptable = [
+    "source_unit::chizu-core/src/query/traversal.rs",
+    "symbol::chizu-core/src/model/entity.rs::Edge",
+]
+
+[[queries]]
+text = "LLM provider abstraction"
+bucket = "concept"
+category = "understand"
+relevant = [
+    "source_unit::chizu-core/src/provider/mod.rs",
+]
+acceptable = [
+    "source_unit::chizu-core/src/provider/openai.rs",
+]
+
+[[queries]]
+text = "how does graph expansion work for search results"
+bucket = "concept"
+category = "understand"
+relevant = [
+    "source_unit::chizu-query/src/expansion.rs",
+]
+acceptable = [
+    "source_unit::chizu-query/src/pipeline.rs",
+]
+
+# ---------------------------------------------------------------------------
+# Task / workflow queries — goal-oriented
+# ---------------------------------------------------------------------------
+
+[[queries]]
+text = "how to add a new CLI subcommand"
+bucket = "task"
+category = "build"
+relevant = [
+    "source_unit::chizu-cli/src/main.rs",
+]
+acceptable = []
+
+[[queries]]
+text = "how to add a new entity kind"
+bucket = "task"
+category = "build"
+relevant = [
+    "source_unit::chizu-core/src/model/entity_kind.rs",
+]
+acceptable = [
+    "source_unit::chizu-core/src/model/entity.rs",
+]
+
+[[queries]]
+text = "where are tests for the search pipeline"
+bucket = "task"
+category = "test"
+relevant = [
+    "source_unit::chizu-query/src/pipeline.rs",
+]
+acceptable = [
+    "source_unit::chizu-query/src/rerank.rs",
+    "source_unit::chizu-query/src/retrieval.rs",
+]
+
+[[queries]]
+text = "how does indexing discover components"
+bucket = "task"
+category = "understand"
+relevant = [
+    "source_unit::chizu-index/src/registry.rs",
+]
+acceptable = [
+    "source_unit::chizu-index/src/indexer.rs",
+    "source_unit::chizu-index/src/ownership.rs",
+]
+
+[[queries]]
+text = "debug task route assignment"
+bucket = "task"
+category = "debug"
+relevant = [
+    "source_unit::chizu-index/src/task_routes.rs",
+]
+acceptable = []

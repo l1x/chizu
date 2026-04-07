@@ -282,6 +282,7 @@ dependencies = [
  "minijinja",
  "serde_json",
  "tempfile",
+ "toml 0.8.2",
  "tracing",
  "tracing-subscriber",
 ]
@@ -340,6 +341,7 @@ dependencies = [
  "serde_json",
  "tempfile",
  "thiserror",
+ "toml 0.8.2",
  "tracing",
 ]
 

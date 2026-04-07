@@ -147,6 +147,17 @@ fn default_exclude_patterns() -> Vec<String> {
     ]
 }
 
+/// Score-gap cutoff mode for suppressing noisy tail results.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum CutoffMode {
+    /// No cutoff — return up to limit results (existing behavior).
+    #[default]
+    None,
+    /// Cut when adjacent score ratio drops below threshold.
+    RelativeGap,
+}
+
 /// Search configuration
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
@@ -155,6 +166,14 @@ pub struct SearchConfig {
     pub default_limit: usize,
     /// Reranking weights
     pub rerank_weights: RerankWeights,
+    /// Cutoff mode for suppressing noisy tail results
+    pub cutoff: CutoffMode,
+    /// Threshold for relative_gap cutoff: cut when score[i]/score[i-1] < this value
+    pub relative_gap_threshold: f64,
+    /// Minimum results to always return (cutoff cannot go below this)
+    pub min_results: usize,
+    /// Maximum results to return when cutoff is active
+    pub max_results: usize,
 }
 
 impl Default for SearchConfig {
@@ -162,17 +181,38 @@ impl Default for SearchConfig {
         Self {
             default_limit: 15,
             rerank_weights: RerankWeights::default(),
+            cutoff: CutoffMode::default(),
+            relative_gap_threshold: 0.80,
+            min_results: 3,
+            max_results: 8,
         }
     }
 }
 
 impl SearchConfig {
-    /// Validate that weights sum to 1.0
+    /// Validate search configuration
     pub fn validate_weights(&self) -> Result<(), ConfigError> {
         let sum = self.rerank_weights.sum();
         let epsilon = 0.001;
         if (sum - 1.0).abs() > epsilon {
             return Err(ConfigError::InvalidWeights { sum });
+        }
+        if !(0.0..=1.0).contains(&self.relative_gap_threshold) {
+            return Err(ConfigError::InvalidParam(format!(
+                "search.relative_gap_threshold must be 0.0..1.0, got {}",
+                self.relative_gap_threshold
+            )));
+        }
+        if self.min_results == 0 {
+            return Err(ConfigError::InvalidParam(
+                "search.min_results must be >= 1".into(),
+            ));
+        }
+        if self.max_results < self.min_results {
+            return Err(ConfigError::InvalidParam(format!(
+                "search.max_results ({}) must be >= min_results ({})",
+                self.max_results, self.min_results
+            )));
         }
         Ok(())
     }

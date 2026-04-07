@@ -1,32 +1,41 @@
 use chizu_core::{RerankWeights, TaskCategory};
 
+use crate::plan::ScoreBreakdown;
 use crate::retrieval::Candidate;
 
-pub fn score(candidates: &mut [Candidate], category: TaskCategory, weights: &RerankWeights) {
+/// Extract per-signal scores from a candidate for a given category.
+pub fn breakdown(candidate: &Candidate, category: TaskCategory) -> ScoreBreakdown {
     let preferred = category.preferred_kinds();
-
-    for candidate in candidates.iter_mut() {
-        let task_route_norm = candidate
+    let kind_str = candidate.entity.kind.to_string();
+    ScoreBreakdown {
+        keyword: candidate.keyword_score,
+        name_match: candidate.name_match_score,
+        path_match: candidate.path_match_score,
+        vector: candidate.vector_score,
+        task_route: candidate
             .task_route_priority
             .map(|p| p as f64 / 100.0)
-            .unwrap_or(0.0);
-
-        let kind_str = candidate.entity.kind.to_string();
-        let kind_boost = if preferred.contains(&kind_str.as_str()) {
+            .unwrap_or(0.0),
+        kind_preference: if preferred.contains(&kind_str.as_str()) {
             1.0
         } else {
             0.0
-        };
+        },
+        exported: if candidate.entity.exported { 1.0 } else { 0.0 },
+    }
+}
 
-        let exported_boost = if candidate.entity.exported { 1.0 } else { 0.0 };
+pub fn score(candidates: &mut [Candidate], category: TaskCategory, weights: &RerankWeights) {
+    for candidate in candidates.iter_mut() {
+        let bd = breakdown(candidate, category);
 
-        let mut score = weights.task_route * task_route_norm
-            + weights.keyword * candidate.keyword_score
-            + weights.name_match * candidate.name_match_score
-            + weights.vector * candidate.vector_score
-            + weights.kind_preference * kind_boost
-            + weights.exported * exported_boost
-            + weights.path_match * candidate.path_match_score;
+        let mut score = weights.task_route * bd.task_route
+            + weights.keyword * bd.keyword
+            + weights.name_match * bd.name_match
+            + weights.vector * bd.vector
+            + weights.kind_preference * bd.kind_preference
+            + weights.exported * bd.exported
+            + weights.path_match * bd.path_match;
 
         if candidate.is_context {
             score *= 0.5;

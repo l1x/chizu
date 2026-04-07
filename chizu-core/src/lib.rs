@@ -14,8 +14,8 @@ pub mod store;
 
 // Re-export commonly used types
 pub use config::{
-    Config, ConfigError, EmbeddingConfig, IndexConfig, ProviderConfig, RerankWeights, SearchConfig,
-    SummaryConfig,
+    Config, ConfigError, CutoffMode, EmbeddingConfig, IndexConfig, ProviderConfig, RerankWeights,
+    SearchConfig, SummaryConfig,
 };
 pub use model::{
     ComponentId, Edge, EdgeKind, EmbeddingMeta, Entity, EntityKind, FileKind, FileRecord, Summary,

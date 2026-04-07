@@ -1,6 +1,28 @@
-[visualize]
-editor_link = "zed://file/{abs_path}:{line}:{column}"
+[index]
+exclude_patterns = [
+    "**/target/**",
+    "**/.git/**",
+    "**/node_modules/**",
+    "**/.venv/**",
+    "**/fuzz/**",
+    "**/*.lock",
+]
 
+[search]
+default_limit = 15
+cutoff = "relative_gap"
+relative_gap_threshold = 0.80
+min_results = 3
+max_results = 8
+
+[search.rerank_weights]
+task_route = 0.00
+keyword = 0.25
+name_match = 0.20
+vector = 0.25
+kind_preference = 0.10
+exported = 0.10
+path_match = 0.10
 
 [providers.ollama]
 base_url = "http://localhost:11434/v1"
@@ -9,8 +31,8 @@ retry_attempts = 3
 
 [summary]
 provider = "ollama"
-model = "llama3:8b"
-max_tokens = 128
+model = "gemma3:latest"
+max_tokens = 256
 temperature = 0.2
 batch_size = 4
 concurrency = 1
@@ -20,3 +42,6 @@ provider = "ollama"
 model = "nomic-embed-text-v2-moe:latest"
 dimensions = 768
 batch_size = 32
+
+[visualize]
+editor_link = "zed://file/{abs_path}:{line}:{column}"
