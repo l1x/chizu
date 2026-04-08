@@ -10,6 +10,7 @@ use super::{RerankDocument, RerankScore, Reranker, RerankerError};
 pub struct HttpReranker {
     client: reqwest::blocking::Client,
     base_url: String,
+    api_key: Option<String>,
     model: String,
     batch_size: usize,
 }
@@ -31,9 +32,20 @@ impl HttpReranker {
         Ok(Self {
             client,
             base_url: base_url.trim_end_matches('/').to_string(),
+            api_key: config.api_key.clone(),
             model: model.to_string(),
             batch_size: config.batch_size,
         })
+    }
+
+    fn build_request(&self, path: &str) -> reqwest::blocking::RequestBuilder {
+        let url = format!("{}{}", self.base_url, path);
+        let req = self.client.post(url);
+        if let Some(ref key) = self.api_key {
+            req.bearer_auth(key)
+        } else {
+            req
+        }
     }
 }
 
@@ -83,11 +95,7 @@ impl Reranker for HttpReranker {
                 top_n: None,
             };
 
-            let response = self
-                .client
-                .post(format!("{}/rerank", self.base_url))
-                .json(&request)
-                .send()?;
+            let response = self.build_request("/rerank").json(&request).send()?;
 
             let status = response.status().as_u16();
             if status != 200 {
@@ -110,12 +118,6 @@ impl Reranker for HttpReranker {
             }
         }
 
-        all_scores.sort_by(|a, b| {
-            b.score
-                .partial_cmp(&a.score)
-                .unwrap_or(std::cmp::Ordering::Equal)
-        });
-
         Ok(all_scores)
     }
 }
@@ -134,7 +136,7 @@ mod tests {
             _query: &str,
             documents: &[RerankDocument],
         ) -> Result<Vec<RerankScore>, RerankerError> {
-            let mut results: Vec<RerankScore> = documents
+            let results: Vec<RerankScore> = documents
                 .iter()
                 .enumerate()
                 .map(|(i, _)| RerankScore {
@@ -142,17 +144,12 @@ mod tests {
                     score: self.scores.get(i).copied().unwrap_or(0.0),
                 })
                 .collect();
-            results.sort_by(|a, b| {
-                b.score
-                    .partial_cmp(&a.score)
-                    .unwrap_or(std::cmp::Ordering::Equal)
-            });
             Ok(results)
         }
     }
 
     #[test]
-    fn test_stub_reranker_reorders() {
+    fn test_stub_reranker_returns_scores() {
         let reranker = StubReranker {
             scores: vec![0.1, 0.9, 0.5],
         };
@@ -164,9 +161,8 @@ mod tests {
             RerankDocument { text: "mid".into() },
         ];
         let results = reranker.rerank("query", &docs).unwrap();
-        assert_eq!(results[0].index, 1); // "high" first
-        assert_eq!(results[1].index, 2); // "mid" second
-        assert_eq!(results[2].index, 0); // "low" third
+        assert_eq!(results.len(), 3);
+        assert!((results[1].score - 0.9).abs() < 0.001);
     }
 
     #[test]

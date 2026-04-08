@@ -177,17 +177,16 @@ impl SearchPipeline {
 fn apply_reranker(
     store: &dyn Store,
     query: &str,
-    candidates: &mut [retrieval::Candidate],
+    candidates: &mut Vec<retrieval::Candidate>,
     top_k: usize,
     reranker: &dyn Reranker,
-) -> std::result::Result<(), Box<dyn std::error::Error>> {
+) -> Result<()> {
     if top_k == 0 || candidates.is_empty() {
         return Ok(());
     }
 
     let top_k = top_k.min(candidates.len());
 
-    // Build document text from entity metadata + summary
     let mut documents = Vec::with_capacity(top_k);
     for candidate in candidates.iter().take(top_k) {
         let mut text = format!("Name: {}", candidate.entity.name);
@@ -203,34 +202,45 @@ fn apply_reranker(
         documents.push(RerankDocument { text });
     }
 
-    let scores = reranker.rerank(query, &documents)?;
+    let mut scores = reranker
+        .rerank(query, &documents)
+        .map_err(|e| crate::error::QueryError::Other(e.to_string()))?;
 
-    // Reorder the top_k candidates by reranker score.
-    // Candidates beyond top_k keep their original position (appended after).
-    let mut reranked: Vec<retrieval::Candidate> = Vec::with_capacity(candidates.len());
-    let mut top_pool: Vec<retrieval::Candidate> = candidates[..top_k].to_vec();
+    // Sort by descending score (trait returns unsorted)
+    scores.sort_by(|a, b| {
+        b.score
+            .partial_cmp(&a.score)
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
 
+    // Build the desired order: reranked top_k first, then the tail
+    let mut tail: Vec<retrieval::Candidate> = candidates.split_off(top_k);
+    let mut pool = std::mem::take(candidates);
+
+    // Place candidates in reranker-determined order with replaced scores
     for rs in &scores {
-        if rs.index < top_pool.len() {
-            let mut c = top_pool[rs.index].clone();
-            c.final_score = rs.score; // Replace score for cutoff
-            reranked.push(c);
+        if rs.index < pool.len() {
+            pool[rs.index].final_score = rs.score;
         }
     }
-
-    // Append any top_k candidates not in reranker output (shouldn't happen, but safe)
-    let reranked_indices: std::collections::HashSet<usize> =
-        scores.iter().map(|s| s.index).collect();
-    for (i, c) in top_pool.drain(..).enumerate() {
-        if !reranked_indices.contains(&i) {
-            reranked.push(c);
+    let order: Vec<usize> = scores.iter().map(|s| s.index).collect();
+    for idx in order {
+        if idx < pool.len() {
+            // swap-remove is O(1) but changes indices — safe since we use
+            // original indices from reranker and only visit each once
+            candidates.push(std::mem::replace(
+                &mut pool[idx],
+                retrieval::Candidate::placeholder(""),
+            ));
         }
     }
-
-    // Append candidates beyond top_k
-    reranked.extend_from_slice(&candidates[top_k..]);
-
-    candidates[..reranked.len()].clone_from_slice(&reranked);
+    // Append any candidates not returned by the reranker (defensive)
+    for c in pool {
+        if !c.entity.id.is_empty() {
+            candidates.push(c);
+        }
+    }
+    candidates.append(&mut tail);
 
     Ok(())
 }

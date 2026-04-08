@@ -112,6 +112,19 @@ impl Config {
             }
         }
 
+        if self.reranker.enabled {
+            if self.reranker.batch_size == 0 {
+                return Err(ConfigError::InvalidParam(
+                    "reranker.batch_size must be > 0".into(),
+                ));
+            }
+            if self.reranker.top_k == 0 {
+                return Err(ConfigError::InvalidParam(
+                    "reranker.top_k must be > 0".into(),
+                ));
+            }
+        }
+
         if let Some(template) = &self.visualize.editor_link
             && template.trim().is_empty()
         {
