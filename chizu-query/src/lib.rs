@@ -9,4 +9,4 @@ pub mod retrieval;
 
 pub use error::QueryError;
 pub use pipeline::{SearchOptions, SearchPipeline};
-pub use plan::{PlanEntry, ReadingPlan, ScoreBreakdown};
+pub use plan::{PipelineTimings, PlanEntry, ReadingPlan, ScoreBreakdown};

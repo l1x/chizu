@@ -1,9 +1,13 @@
-use chizu_core::{Config, CutoffMode, Provider, Store, TaskCategory, classify_query};
+use std::time::Instant;
+
+use chizu_core::{
+    Config, CutoffMode, Provider, RerankDocument, Reranker, Store, TaskCategory, classify_query,
+};
 
 use crate::cutoff;
 use crate::error::Result;
 use crate::expansion;
-use crate::plan::{PlanEntry, ReadingPlan};
+use crate::plan::{PipelineTimings, PlanEntry, ReadingPlan};
 use crate::rerank;
 use crate::retrieval;
 
@@ -13,7 +17,7 @@ pub struct SearchOptions {
     pub limit: usize,
     /// Bypass cutoff and return up to `limit` results.
     pub show_all: bool,
-    /// Include per-signal score breakdowns in output.
+    /// Include per-signal score breakdowns and timings in output.
     pub verbose: bool,
 }
 
@@ -37,21 +41,61 @@ impl SearchPipeline {
         options: &SearchOptions,
         config: &Config,
         provider: Option<&dyn Provider>,
+        reranker: Option<&dyn Reranker>,
     ) -> Result<ReadingPlan> {
+        let pipeline_start = Instant::now();
         let category = category.unwrap_or_else(|| classify_query(query));
 
+        // Retrieve
+        let t0 = Instant::now();
         let mut candidates = retrieval::retrieve(store, query, category, config, provider)?;
+        let retrieval_ms = t0.elapsed().as_millis() as u64;
 
         // Initial scoring for expansion seed selection
+        let t0 = Instant::now();
         rerank::score(&mut candidates, category, &config.search.rerank_weights);
+        let scoring_ms_1 = t0.elapsed().as_millis() as u64;
+
+        // Expand
+        let t0 = Instant::now();
         expansion::expand(store, &mut candidates, options.limit)?;
+        let expansion_ms = t0.elapsed().as_millis() as u64;
+
+        // Final first-stage scoring
+        let t0 = Instant::now();
         rerank::score(&mut candidates, category, &config.search.rerank_weights);
+        let scoring_ms_2 = t0.elapsed().as_millis() as u64;
 
         candidates.sort_by(|a, b| {
             b.final_score
                 .partial_cmp(&a.final_score)
                 .unwrap_or(std::cmp::Ordering::Equal)
         });
+
+        // Second-stage reranking (replaces ordering, does not blend scores)
+        let reranking_ms = if config.reranker.enabled {
+            if let Some(reranker) = reranker {
+                let t0 = Instant::now();
+                let top_k = config.reranker.top_k.min(candidates.len());
+                match apply_reranker(store, query, &mut candidates, top_k, reranker) {
+                    Ok(()) => {
+                        tracing::debug!("reranking applied to top {} candidates", top_k);
+                    }
+                    Err(e) => {
+                        tracing::warn!("reranker failed, falling back to first-stage order: {e}");
+                    }
+                }
+                Some(t0.elapsed().as_millis() as u64)
+            } else {
+                tracing::debug!("reranker enabled but no reranker instance provided");
+                None
+            }
+        } else {
+            None
+        };
+
+        // Cutoff
+        let t0 = Instant::now();
         let total_before_cutoff = candidates.len().min(options.limit);
         let effective_limit = if options.show_all || config.search.cutoff == CutoffMode::None {
             options.limit
@@ -67,10 +111,26 @@ impl SearchPipeline {
             )
         };
         candidates.truncate(effective_limit);
+        let cutoff_ms = t0.elapsed().as_millis() as u64;
 
         let cutoff_applied = !options.show_all
             && config.search.cutoff != CutoffMode::None
             && effective_limit < total_before_cutoff;
+
+        let total_ms = pipeline_start.elapsed().as_millis() as u64;
+
+        let timings = if options.verbose {
+            Some(PipelineTimings {
+                retrieval_ms,
+                scoring_ms: scoring_ms_1 + scoring_ms_2,
+                expansion_ms,
+                reranking_ms,
+                cutoff_ms,
+                total_ms,
+            })
+        } else {
+            None
+        };
 
         let entries: Vec<PlanEntry> = candidates
             .into_iter()
@@ -105,8 +165,74 @@ impl SearchPipeline {
             } else {
                 None
             },
+            timings,
         })
     }
+}
+
+/// Apply second-stage reranking to the top_k candidates.
+///
+/// Fetches summaries to build document text, calls the reranker, then
+/// reorders candidates by reranker score (replacing first-stage ordering).
+fn apply_reranker(
+    store: &dyn Store,
+    query: &str,
+    candidates: &mut [retrieval::Candidate],
+    top_k: usize,
+    reranker: &dyn Reranker,
+) -> std::result::Result<(), Box<dyn std::error::Error>> {
+    if top_k == 0 || candidates.is_empty() {
+        return Ok(());
+    }
+
+    let top_k = top_k.min(candidates.len());
+
+    // Build document text from entity metadata + summary
+    let mut documents = Vec::with_capacity(top_k);
+    for candidate in candidates.iter().take(top_k) {
+        let mut text = format!("Name: {}", candidate.entity.name);
+        if let Some(ref path) = candidate.entity.path {
+            text.push_str(&format!("\nPath: {path}"));
+        }
+        if let Ok(Some(summary)) = store.get_summary(&candidate.entity.id) {
+            text.push_str(&format!("\nSummary: {}", summary.short_summary));
+            if let Some(ref kw) = summary.keywords {
+                text.push_str(&format!("\nKeywords: {}", kw.join(", ")));
+            }
+        }
+        documents.push(RerankDocument { text });
+    }
+
+    let scores = reranker.rerank(query, &documents)?;
+
+    // Reorder the top_k candidates by reranker score.
+    // Candidates beyond top_k keep their original position (appended after).
+    let mut reranked: Vec<retrieval::Candidate> = Vec::with_capacity(candidates.len());
+    let mut top_pool: Vec<retrieval::Candidate> = candidates[..top_k].to_vec();
+
+    for rs in &scores {
+        if rs.index < top_pool.len() {
+            let mut c = top_pool[rs.index].clone();
+            c.final_score = rs.score; // Replace score for cutoff
+            reranked.push(c);
+        }
+    }
+
+    // Append any top_k candidates not in reranker output (shouldn't happen, but safe)
+    let reranked_indices: std::collections::HashSet<usize> =
+        scores.iter().map(|s| s.index).collect();
+    for (i, c) in top_pool.drain(..).enumerate() {
+        if !reranked_indices.contains(&i) {
+            reranked.push(c);
+        }
+    }
+
+    // Append candidates beyond top_k
+    reranked.extend_from_slice(&candidates[top_k..]);
+
+    candidates[..reranked.len()].clone_from_slice(&reranked);
+
+    Ok(())
 }
 
 fn build_reasons(candidate: &retrieval::Candidate) -> Vec<String> {
@@ -172,7 +298,7 @@ mod tests {
         let config = Config::default();
         let options = default_options(5);
         let plan =
-            SearchPipeline::run(&store, "auth debug", None, &options, &config, None).unwrap();
+            SearchPipeline::run(&store, "auth debug", None, &options, &config, None, None).unwrap();
 
         assert_eq!(plan.category, TaskCategory::Debug);
         assert!(!plan.entries.is_empty());
@@ -198,7 +324,8 @@ mod tests {
 
         let config = Config::default();
         let options = default_options(3);
-        let plan = SearchPipeline::run(&store, "common", None, &options, &config, None).unwrap();
+        let plan =
+            SearchPipeline::run(&store, "common", None, &options, &config, None, None).unwrap();
 
         assert_eq!(plan.entries.len(), 3);
         assert_eq!(plan.entries[0].rank, 1);
@@ -209,7 +336,6 @@ mod tests {
     fn test_pipeline_cutoff() {
         let (store, _temp) = create_test_store();
 
-        // Create entities with varying relevance
         let entities = [
             ("a", "auth handler login flow"),
             ("b", "auth middleware"),
@@ -231,9 +357,9 @@ mod tests {
         config.search.max_results = 5;
 
         let options = default_options(10);
-        let plan = SearchPipeline::run(&store, "auth", None, &options, &config, None).unwrap();
+        let plan =
+            SearchPipeline::run(&store, "auth", None, &options, &config, None, None).unwrap();
 
-        // With cutoff active, should get fewer results than total
         assert!(plan.entries.len() <= 5);
     }
 
@@ -259,13 +385,14 @@ mod tests {
             show_all: true,
             verbose: false,
         };
-        let plan = SearchPipeline::run(&store, "common", None, &options, &config, None).unwrap();
+        let plan =
+            SearchPipeline::run(&store, "common", None, &options, &config, None, None).unwrap();
 
         assert!(plan.total_before_cutoff.is_none());
     }
 
     #[test]
-    fn test_pipeline_verbose_includes_breakdown() {
+    fn test_pipeline_verbose_includes_breakdown_and_timings() {
         let (store, _temp) = create_test_store();
 
         store
@@ -281,9 +408,39 @@ mod tests {
             show_all: false,
             verbose: true,
         };
-        let plan = SearchPipeline::run(&store, "handler", None, &options, &config, None).unwrap();
+        let plan =
+            SearchPipeline::run(&store, "handler", None, &options, &config, None, None).unwrap();
 
         assert!(!plan.entries.is_empty());
         assert!(plan.entries[0].score_breakdown.is_some());
+        assert!(plan.timings.is_some());
+        let t = plan.timings.unwrap();
+        assert!(t.total_ms >= t.retrieval_ms);
+        assert!(t.reranking_ms.is_none()); // Reranker not enabled
+    }
+
+    #[test]
+    fn test_pipeline_reranker_disabled_by_default() {
+        let (store, _temp) = create_test_store();
+
+        store
+            .insert_entity(&Entity::new("a", EntityKind::Symbol, "foo"))
+            .unwrap();
+        store
+            .insert_summary(&Summary::new("a", "A function"))
+            .unwrap();
+
+        let config = Config::default();
+        assert!(!config.reranker.enabled);
+
+        let options = SearchOptions {
+            limit: 5,
+            show_all: false,
+            verbose: true,
+        };
+        let plan = SearchPipeline::run(&store, "foo", None, &options, &config, None, None).unwrap();
+
+        let t = plan.timings.unwrap();
+        assert!(t.reranking_ms.is_none());
     }
 }

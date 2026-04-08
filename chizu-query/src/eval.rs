@@ -1,6 +1,6 @@
 use std::collections::{HashMap, HashSet};
 
-use chizu_core::{Config, Provider, Store, TaskCategory};
+use chizu_core::{Config, Provider, Reranker, Store, TaskCategory};
 use serde::{Deserialize, Serialize};
 
 use crate::error::Result;
@@ -171,6 +171,7 @@ pub fn evaluate(
     store: &dyn Store,
     config: &Config,
     provider: Option<&dyn Provider>,
+    reranker: Option<&dyn Reranker>,
     limit: usize,
 ) -> Result<EvalOutput> {
     let mut query_results = Vec::new();
@@ -187,7 +188,9 @@ pub fn evaluate(
             verbose: false,
         };
 
-        let plan = SearchPipeline::run(store, &bq.text, category, &options, config, provider)?;
+        let plan = SearchPipeline::run(
+            store, &bq.text, category, &options, config, provider, reranker,
+        )?;
 
         let results: Vec<String> = plan.entries.iter().map(|e| e.entity_id.clone()).collect();
         let relevant: HashSet<String> = bq.relevant.iter().cloned().collect();

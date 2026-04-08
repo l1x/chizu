@@ -1,0 +1,374 @@
+{
+  "overall": {
+    "recall_at_5": 0.7941176470588235,
+    "mrr_at_10": 0.7397759103641457,
+    "ndcg_at_10": 0.7963637326481636,
+    "noise_tail_rate": 0.8705882352941178,
+    "query_count": 17
+  },
+  "by_bucket": {
+    "identifier": {
+      "recall_at_5": 1.0,
+      "mrr_at_10": 1.0,
+      "ndcg_at_10": 0.9836109304915607,
+      "noise_tail_rate": 0.9,
+      "query_count": 6
+    },
+    "concept": {
+      "recall_at_5": 0.6666666666666666,
+      "mrr_at_10": 0.49603174603174605,
+      "ndcg_at_10": 0.6280976627934672,
+      "noise_tail_rate": 0.8666666666666667,
+      "query_count": 6
+    },
+    "task": {
+      "recall_at_5": 0.7,
+      "mrr_at_10": 0.72,
+      "ndcg_at_10": 0.7735863790617239,
+      "noise_tail_rate": 0.8400000000000001,
+      "query_count": 5
+    }
+  },
+  "queries": [
+    {
+      "text": "SearchPipeline",
+      "bucket": "identifier",
+      "results": [
+        "symbol::chizu-query/src/pipeline.rs::SearchPipeline",
+        "symbol::chizu-index/src/indexer.rs::IndexPipeline",
+        "symbol::chizu-core/src/store/mod.rs::ChizuStore",
+        "symbol::chizu-core/src/store/mod.rs::close",
+        "symbol::chizu-core/src/store/mod.rs::sqlite",
+        "symbol::chizu-core/src/store/usearch.rs::create",
+        "symbol::chizu-core/src/store/usearch.rs::len",
+        "symbol::chizu-core/src/store/mod.rs::open",
+        "symbol::chizu-core/src/store/sqlite.rs::search_entities_by_name_or_path",
+        "symbol::chizu-query/src/retrieval.rs::retrieve"
+      ],
+      "recall_at_5": 1.0,
+      "mrr_at_10": 1.0,
+      "ndcg_at_10": 0.9489376033325803,
+      "noise_tail_rate": 0.8
+    },
+    {
+      "text": "Config",
+      "bucket": "identifier",
+      "results": [
+        "symbol::chizu-core/src/config/mod.rs::Config",
+        "symbol::chizu-core/src/config/mod.rs::SearchConfig",
+        "symbol::chizu-core/src/config/mod.rs::ConfigError",
+        "symbol::chizu-core/src/config/mod.rs::ProviderConfig",
+        "symbol::chizu-core/src/config/mod.rs::EmbeddingConfig",
+        "symbol::chizu-core/src/config/mod.rs::from_toml",
+        "symbol::chizu-core/src/config/mod.rs::IndexConfig",
+        "symbol::chizu-core/src/config/mod.rs::SummaryConfig",
+        "symbol::chizu-core/src/config/mod.rs::to_toml",
+        "symbol::chizu-core/src/config/mod.rs::VisualizeConfig"
+      ],
+      "recall_at_5": 1.0,
+      "mrr_at_10": 1.0,
+      "ndcg_at_10": 0.9836747483501007,
+      "noise_tail_rate": 0.8
+    },
+    {
+      "text": "classify_query",
+      "bucket": "identifier",
+      "results": [
+        "symbol::chizu-core/src/query/classifier.rs::classify_query",
+        "symbol::chizu-core/src/query/classifier.rs::preferred_kinds",
+        "symbol::chizu-core/src/query/classifier.rs::TaskCategory",
+        "symbol::chizu-index/src/ownership.rs::discover_all_components",
+        "symbol::chizu-index/src/task_routes.rs::generate_task_routes",
+        "symbol::chizu-core/src/model/entity_kind.rs::EntityKind",
+        "symbol::chizu-core/src/store/sqlite.rs::search_entities_by_name_or_path",
+        "symbol::chizu-core/src/config/mod.rs::IndexConfig",
+        "symbol::chizu-index/src/ownership.rs::discover_cargo_components",
+        "symbol::chizu-core/src/store/sqlite.rs::get_entities_by_kind"
+      ],
+      "recall_at_5": 1.0,
+      "mrr_at_10": 1.0,
+      "ndcg_at_10": 1.0,
+      "noise_tail_rate": 1.0
+    },
+    {
+      "text": "ComponentId",
+      "bucket": "identifier",
+      "results": [
+        "symbol::chizu-core/src/model/id.rs::ComponentId",
+        "symbol::chizu-core/src/model/id.rs::as_str",
+        "symbol::chizu-core/src/model/id.rs::ecosystem",
+        "symbol::chizu-core/src/model/entity.rs::with_component",
+        "symbol::chizu-index/src/registry.rs::ComponentRegistry",
+        "symbol::chizu-core/src/store/sqlite.rs::delete_entities_by_component",
+        "symbol::chizu-core/src/store/sqlite.rs::get_entities_by_component",
+        "symbol::chizu-core/src/store/sqlite.rs::delete_edges_by_component",
+        "symbol::chizu-index/src/registry.rs::component_for_path",
+        "symbol::chizu-core/src/store/sqlite.rs::delete_files_by_component"
+      ],
+      "recall_at_5": 1.0,
+      "mrr_at_10": 1.0,
+      "ndcg_at_10": 0.9903929125301808,
+      "noise_tail_rate": 1.0
+    },
+    {
+      "text": "graph_traversal",
+      "bucket": "identifier",
+      "results": [
+        "symbol::chizu-core/src/query/traversal.rs::graph_traversal",
+        "symbol::chizu-core/src/query/traversal.rs::TraversalResult",
+        "symbol::chizu-core/src/query/traversal.rs::TraversalOptions",
+        "symbol::chizu-index/src/walk.rs::walk",
+        "symbol::chizu-index/src/walk.rs::FileWalker",
+        "symbol::chizu-index/src/walk.rs::WalkedFile",
+        "symbol::chizu-query/src/expansion.rs::expand",
+        "symbol::chizu-cli/src/visualize.rs::render_focus_graph_svg",
+        "symbol::chizu-index/src/walk.rs::new",
+        "symbol::chizu-cli/src/visualize.rs::render_focus_graph_html"
+      ],
+      "recall_at_5": 1.0,
+      "mrr_at_10": 1.0,
+      "ndcg_at_10": 0.9786603187365024,
+      "noise_tail_rate": 0.8
+    },
+    {
+      "text": "Entity",
+      "bucket": "identifier",
+      "results": [
+        "symbol::chizu-core/src/model/entity.rs::Entity",
+        "symbol::chizu-core/src/model/entity_kind.rs::EntityKind",
+        "symbol::chizu-core/src/store/sqlite.rs::get_entity",
+        "symbol::chizu-core/src/store/sqlite.rs::insert_entity",
+        "symbol::chizu-core/src/store/sqlite.rs::delete_entity",
+        "symbol::chizu-core/src/model/id.rs::entity_id",
+        "symbol::chizu-query/src/retrieval.rs::from_entity",
+        "symbol::chizu-core/src/model/id.rs::entity_id_to_usearch_key",
+        "symbol::chizu-core/src/store/sqlite.rs::get_entity_task_routes",
+        "symbol::chizu-index/src/cleanup.rs::cascade_delete_entity"
+      ],
+      "recall_at_5": 1.0,
+      "mrr_at_10": 1.0,
+      "ndcg_at_10": 1.0,
+      "noise_tail_rate": 1.0
+    },
+    {
+      "text": "how are search results scored and ranked",
+      "bucket": "concept",
+      "results": [
+        "symbol::chizu-core/src/store/usearch.rs::search",
+        "symbol::chizu-core/src/config/mod.rs::SearchConfig",
+        "symbol::chizu-query/src/eval.rs::BenchmarkQuery",
+        "doc::docs/brief.md",
+        "symbol::chizu-core/src/store/usearch.rs::UsearchIndex",
+        "symbol::chizu-core/src/store/sqlite.rs::search_summaries_by_text",
+        "symbol::chizu-query/src/retrieval.rs::retrieve",
+        "symbol::chizu-core/src/store/mod.rs::close",
+        "symbol::chizu-query/src/retrieval.rs::Candidate",
+        "symbol::chizu-query/src/plan.rs::ReadingPlan"
+      ],
+      "recall_at_5": 0.0,
+      "mrr_at_10": 0.0,
+      "ndcg_at_10": 0.19268835889424368,
+      "noise_tail_rate": 0.6
+    },
+    {
+      "text": "vector similarity search",
+      "bucket": "concept",
+      "results": [
+        "symbol::chizu-core/src/store/mod.rs::vector_dimensions",
+        "symbol::chizu-core/src/store/usearch.rs::add",
+        "symbol::chizu-core/src/store/usearch.rs::search",
+        "symbol::chizu-core/src/store/usearch.rs::UsearchIndex",
+        "symbol::chizu-query/src/retrieval.rs::retrieve",
+        "symbol::chizu-core/src/store/sqlite.rs::search_summaries_by_text",
+        "symbol::chizu-core/src/store/sqlite.rs::search_entities_by_name_or_path",
+        "symbol::chizu-query/src/pipeline.rs::SearchPipeline",
+        "symbol::chizu-core/src/config/mod.rs::SearchConfig",
+        "symbol::chizu-query/src/pipeline.rs::SearchOptions"
+      ],
+      "recall_at_5": 1.0,
+      "mrr_at_10": 0.3333333333333333,
+      "ndcg_at_10": 0.654217325829388,
+      "noise_tail_rate": 1.0
+    },
+    {
+      "text": "configuration validation",
+      "bucket": "concept",
+      "results": [
+        "symbol::chizu-core/src/config/mod.rs::validate",
+        "symbol::chizu-core/src/config/mod.rs::validate_weights",
+        "symbol::chizu-core/src/config/mod.rs::ConfigError",
+        "symbol::chizu-core/src/config/mod.rs::from_toml",
+        "symbol::chizu-core/src/config/mod.rs::Config",
+        "symbol::chizu-core/src/config/mod.rs::EmbeddingConfig",
+        "symbol::chizu-core/src/provider/openai.rs::new",
+        "symbol::chizu-index/src/embedder.rs::Embedder",
+        "symbol::chizu-core/src/config/mod.rs::RerankWeights",
+        "symbol::chizu-query/src/pipeline.rs::SearchOptions"
+      ],
+      "recall_at_5": 1.0,
+      "mrr_at_10": 1.0,
+      "ndcg_at_10": 0.9213963208540731,
+      "noise_tail_rate": 1.0
+    },
+    {
+      "text": "entity relationship graph edges",
+      "bucket": "concept",
+      "results": [
+        "symbol::chizu-cli/src/visualize.rs::render_focus_graph_svg",
+        "symbol::chizu-core/src/store/sqlite.rs::delete_edges_for_entity_ids",
+        "symbol::chizu-core/src/store/sqlite.rs::get_edges_by_rel",
+        "symbol::chizu-cli/src/visualize.rs::render_focus_graph_html",
+        "symbol::chizu-core/src/query/traversal.rs::graph_traversal",
+        "symbol::chizu-index/src/cleanup.rs::cascade_delete_entity",
+        "symbol::chizu-core/src/model/edge_kind.rs::EdgeKind",
+        "symbol::chizu-core/src/model/entity.rs::Entity",
+        "symbol::chizu-core/src/model/entity_kind.rs::EntityKind",
+        "symbol::chizu-index/src/adapter/site.rs::index_sites"
+      ],
+      "recall_at_5": 0.0,
+      "mrr_at_10": 0.14285714285714285,
+      "ndcg_at_10": 0.48279433461809335,
+      "noise_tail_rate": 0.6
+    },
+    {
+      "text": "LLM provider abstraction",
+      "bucket": "concept",
+      "results": [
+        "symbol::chizu-core/src/provider/mod.rs::Provider",
+        "symbol::chizu-core/src/provider/mod.rs::ProviderError",
+        "symbol::chizu-core/src/provider/openai.rs::OpenAiProvider",
+        "symbol::chizu-core/src/config/mod.rs::ProviderConfig",
+        "symbol::chizu-core/src/provider/openai.rs::new",
+        "symbol::chizu-core/src/config/mod.rs::SummaryConfig",
+        "symbol::chizu-index/src/summarizer.rs::Summarizer",
+        "symbol::chizu-index/src/embedder.rs::Embedder",
+        "symbol::chizu-index/src/embedder.rs::new",
+        "symbol::chizu-core/src/config/mod.rs::EmbeddingConfig"
+      ],
+      "recall_at_5": 1.0,
+      "mrr_at_10": 1.0,
+      "ndcg_at_10": 0.9550337350142764,
+      "noise_tail_rate": 1.0
+    },
+    {
+      "text": "how does graph expansion work for search results",
+      "bucket": "concept",
+      "results": [
+        "symbol::chizu-core/src/store/usearch.rs::search",
+        "symbol::chizu-query/src/expansion.rs::expand",
+        "doc::docs/brief.md",
+        "symbol::chizu-core/src/query/traversal.rs::graph_traversal",
+        "symbol::chizu-query/src/pipeline.rs::SearchOptions",
+        "symbol::chizu-core/src/store/usearch.rs::UsearchIndex",
+        "symbol::chizu-core/src/config/mod.rs::SearchConfig",
+        "symbol::chizu-core/src/config/mod.rs::RerankWeights",
+        "symbol::chizu-core/src/store/sqlite.rs::search_entities_by_name_or_path",
+        "symbol::chizu-query/src/eval.rs::BenchmarkQuery"
+      ],
+      "recall_at_5": 1.0,
+      "mrr_at_10": 0.5,
+      "ndcg_at_10": 0.562455901550729,
+      "noise_tail_rate": 1.0
+    },
+    {
+      "text": "how to add a new CLI subcommand",
+      "bucket": "task",
+      "results": [
+        "symbol::chizu-core/src/store/usearch.rs::add",
+        "symbol::chizu-core/src/store/usearch.rs::open_or_create",
+        "symbol::chizu-core/src/provider/openai.rs::new",
+        "symbol::chizu-index/src/walk.rs::new",
+        "symbol::chizu-query/src/expansion.rs::expand",
+        "symbol::chizu-query/src/cutoff.rs::apply_cutoff",
+        "symbol::chizu-index/src/embedder.rs::new",
+        "symbol::chizu-core/src/store/usearch.rs::create",
+        "symbol::chizu-index/src/summarizer.rs::new",
+        "component::cargo::chizu-cli"
+      ],
+      "recall_at_5": 0.0,
+      "mrr_at_10": 0.1,
+      "ndcg_at_10": 0.2388353776606868,
+      "noise_tail_rate": 0.8
+    },
+    {
+      "text": "how to add a new entity kind",
+      "bucket": "task",
+      "results": [
+        "symbol::chizu-core/src/model/entity_kind.rs::EntityKind",
+        "symbol::chizu-core/src/model/id.rs::entity_id_to_usearch_key",
+        "symbol::chizu-core/src/store/usearch.rs::add",
+        "symbol::chizu-core/src/model/entity.rs::new",
+        "symbol::chizu-index/src/cleanup.rs::cascade_delete_entity",
+        "symbol::chizu-core/src/model/entity.rs::with_component",
+        "symbol::chizu-core/src/model/entity.rs::Entity",
+        "symbol::chizu-core/src/store/sqlite.rs::get_entities_by_kind",
+        "symbol::chizu-query/src/retrieval.rs::from_entity",
+        "symbol::chizu-core/src/query/classifier.rs::preferred_kinds"
+      ],
+      "recall_at_5": 1.0,
+      "mrr_at_10": 1.0,
+      "ndcg_at_10": 0.9111774142739887,
+      "noise_tail_rate": 0.8
+    },
+    {
+      "text": "where are tests for the search pipeline",
+      "bucket": "task",
+      "results": [
+        "symbol::chizu-query/src/pipeline.rs::SearchPipeline",
+        "symbol::chizu-core/src/store/usearch.rs::search",
+        "symbol::chizu-index/src/indexer.rs::IndexPipeline",
+        "symbol::chizu-query/src/pipeline.rs::SearchOptions",
+        "doc::docs/brief.md",
+        "symbol::chizu-core/src/store/usearch.rs::close",
+        "symbol::chizu-core/src/store/usearch.rs::create",
+        "symbol::chizu-core/src/store/sqlite.rs::get_embedding_meta_by_usearch_key",
+        "symbol::chizu-core/src/store/mod.rs::close",
+        "symbol::chizu-core/src/store/mod.rs::open"
+      ],
+      "recall_at_5": 1.0,
+      "mrr_at_10": 1.0,
+      "ndcg_at_10": 0.9515234565959557,
+      "noise_tail_rate": 1.0
+    },
+    {
+      "text": "how does indexing discover components",
+      "bucket": "task",
+      "results": [
+        "symbol::chizu-index/src/ownership.rs::discover_npm_components",
+        "symbol::chizu-index/src/ownership.rs::discover_all_components",
+        "symbol::chizu-index/src/ownership.rs::discover_cargo_components",
+        "symbol::chizu-index/src/indexer.rs::run",
+        "symbol::chizu-index/src/registry.rs::all_components",
+        "symbol::chizu-index/src/registry.rs::ComponentRegistry",
+        "symbol::chizu-index/src/adapter/npm.rs::index_npm_workspace",
+        "symbol::chizu-core/src/store/usearch.rs::UsearchIndex",
+        "symbol::chizu-core/src/config/mod.rs::IndexConfig",
+        "symbol::chizu-index/src/indexer.rs::IndexStats"
+      ],
+      "recall_at_5": 0.5,
+      "mrr_at_10": 0.5,
+      "ndcg_at_10": 0.7877353280414859,
+      "noise_tail_rate": 0.8
+    },
+    {
+      "text": "debug task route assignment",
+      "bucket": "task",
+      "results": [
+        "symbol::chizu-index/src/task_routes.rs::generate_task_routes",
+        "symbol::chizu-core/src/model/entity.rs::TaskRoute",
+        "symbol::chizu-core/src/store/sqlite.rs::insert_task_route",
+        "symbol::chizu-core/src/store/sqlite.rs::get_task_routes",
+        "symbol::chizu-core/src/store/sqlite.rs::get_entity_task_routes",
+        "symbol::chizu-core/src/store/sqlite.rs::delete_entity_task_routes",
+        "symbol::chizu-core/src/query/classifier.rs::route_names",
+        "symbol::chizu-core/src/query/classifier.rs::TaskCategory",
+        "symbol::chizu-index/src/adapter/mise.rs::index_mise_file",
+        "symbol::chizu-index/src/ownership.rs::assign_ownership"
+      ],
+      "recall_at_5": 1.0,
+      "mrr_at_10": 1.0,
+      "ndcg_at_10": 0.9786603187365024,
+      "noise_tail_rate": 0.8
+    }
+  ]
+}

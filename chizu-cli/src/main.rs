@@ -631,9 +631,25 @@ fn build_provider(
     Ok(Some(Box::new(provider)))
 }
 
+fn build_reranker(
+    config: &chizu_core::Config,
+) -> Result<Option<Box<dyn chizu_core::Reranker>>, Box<dyn std::error::Error>> {
+    if !config.reranker.enabled {
+        return Ok(None);
+    }
+    match chizu_core::HttpReranker::new(&config.reranker) {
+        Ok(r) => Ok(Some(Box::new(r))),
+        Err(e) => {
+            eprintln!("Warning: failed to create reranker: {e}");
+            Ok(None)
+        }
+    }
+}
+
 fn cmd_search(repo: &Path, args: SearchArgs) -> Result<(), Box<dyn std::error::Error>> {
     let (config, store) = open_store(repo)?;
     let provider = build_provider(&config)?;
+    let reranker = build_reranker(&config)?;
 
     let options = chizu_query::SearchOptions {
         limit: args.limit,
@@ -648,6 +664,7 @@ fn cmd_search(repo: &Path, args: SearchArgs) -> Result<(), Box<dyn std::error::E
         &options,
         &config,
         provider.as_deref(),
+        reranker.as_deref(),
     )?;
 
     match args.format {
@@ -675,6 +692,7 @@ fn cmd_search(repo: &Path, args: SearchArgs) -> Result<(), Box<dyn std::error::E
 fn cmd_eval(repo: &Path, args: EvalArgs) -> Result<(), Box<dyn std::error::Error>> {
     let (config, store) = open_store(repo)?;
     let provider = build_provider(&config)?;
+    let reranker = build_reranker(&config)?;
 
     let benchmark_str = std::fs::read_to_string(&args.benchmark).map_err(|e| {
         format!(
@@ -687,8 +705,14 @@ fn cmd_eval(repo: &Path, args: EvalArgs) -> Result<(), Box<dyn std::error::Error
     let benchmark: chizu_query::eval::Benchmark =
         toml::from_str(&benchmark_str).map_err(|e| format!("Failed to parse benchmark: {}", e))?;
 
-    let output =
-        chizu_query::eval::evaluate(&benchmark, &store, &config, provider.as_deref(), args.limit)?;
+    let output = chizu_query::eval::evaluate(
+        &benchmark,
+        &store,
+        &config,
+        provider.as_deref(),
+        reranker.as_deref(),
+        args.limit,
+    )?;
 
     match args.format {
         OutputFormat::Json => {
@@ -785,6 +809,14 @@ vector = 0.25
 kind_preference = 0.10
 exported = 0.10
 path_match = 0.10
+
+# [reranker]
+# enabled = false
+# base_url = "http://localhost:8080"
+# model = "BAAI/bge-reranker-v2-m3"
+# top_k = 25
+# batch_size = 25
+# timeout_secs = 30
 
 [providers.ollama]
 base_url = "http://localhost:11434/v1"

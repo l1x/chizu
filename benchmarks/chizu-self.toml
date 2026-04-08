@@ -3,15 +3,13 @@
 # Run against chizu's own indexed codebase:
 #   chizu index && chizu eval benchmarks/chizu-self.toml
 #
-# Entity IDs are predictions based on the codebase structure.
-# After indexing, verify IDs with: chizu entities --kind symbol
-# Update any mismatched IDs before trusting eval results.
+# Entity IDs verified against actual index output (2026-04-08).
 #
 # How to extend:
 #   1. Add a new [[queries]] entry below
 #   2. Set bucket to "identifier", "concept", or "task"
-#   3. List relevant entity IDs (primary matches that must appear in top-k)
-#   4. List acceptable entity IDs (useful supporting results)
+#   3. Run `chizu search "<query>" --show-all --format json` to see actual IDs
+#   4. Label relevant (must appear in top-k) and acceptable (useful supporting)
 #   5. Re-run: chizu eval benchmarks/chizu-self.toml
 
 version = 1
@@ -27,7 +25,8 @@ relevant = [
     "symbol::chizu-query/src/pipeline.rs::SearchPipeline",
 ]
 acceptable = [
-    "source_unit::chizu-query/src/pipeline.rs",
+    "symbol::chizu-index/src/indexer.rs::IndexPipeline",
+    "symbol::chizu-query/src/retrieval.rs::retrieve",
 ]
 
 [[queries]]
@@ -37,7 +36,9 @@ relevant = [
     "symbol::chizu-core/src/config/mod.rs::Config",
 ]
 acceptable = [
-    "source_unit::chizu-core/src/config/mod.rs",
+    "symbol::chizu-core/src/config/mod.rs::SearchConfig",
+    "symbol::chizu-core/src/config/mod.rs::ConfigError",
+    "symbol::chizu-core/src/config/mod.rs::from_toml",
 ]
 
 [[queries]]
@@ -47,7 +48,8 @@ relevant = [
     "symbol::chizu-core/src/query/classifier.rs::classify_query",
 ]
 acceptable = [
-    "source_unit::chizu-core/src/query/classifier.rs",
+    "symbol::chizu-core/src/query/classifier.rs::TaskCategory",
+    "symbol::chizu-core/src/query/classifier.rs::preferred_kinds",
 ]
 
 [[queries]]
@@ -57,7 +59,9 @@ relevant = [
     "symbol::chizu-core/src/model/id.rs::ComponentId",
 ]
 acceptable = [
-    "source_unit::chizu-core/src/model/id.rs",
+    "symbol::chizu-core/src/model/id.rs::as_str",
+    "symbol::chizu-core/src/model/id.rs::ecosystem",
+    "symbol::chizu-index/src/registry.rs::ComponentRegistry",
 ]
 
 [[queries]]
@@ -67,7 +71,9 @@ relevant = [
     "symbol::chizu-core/src/query/traversal.rs::graph_traversal",
 ]
 acceptable = [
-    "source_unit::chizu-core/src/query/traversal.rs",
+    "symbol::chizu-core/src/query/traversal.rs::TraversalResult",
+    "symbol::chizu-core/src/query/traversal.rs::TraversalOptions",
+    "symbol::chizu-query/src/expansion.rs::expand",
 ]
 
 [[queries]]
@@ -77,8 +83,9 @@ relevant = [
     "symbol::chizu-core/src/model/entity.rs::Entity",
 ]
 acceptable = [
-    "source_unit::chizu-core/src/model/entity.rs",
-    "symbol::chizu-core/src/model/entity.rs::EntityKind",
+    "symbol::chizu-core/src/model/entity_kind.rs::EntityKind",
+    "symbol::chizu-core/src/store/sqlite.rs::get_entity",
+    "symbol::chizu-core/src/store/sqlite.rs::insert_entity",
 ]
 
 # ---------------------------------------------------------------------------
@@ -90,42 +97,51 @@ text = "how are search results scored and ranked"
 bucket = "concept"
 category = "understand"
 relevant = [
-    "source_unit::chizu-query/src/rerank.rs",
+    "symbol::chizu-query/src/rerank.rs::score",
+    "symbol::chizu-query/src/rerank.rs::breakdown",
 ]
 acceptable = [
-    "source_unit::chizu-query/src/pipeline.rs",
-    "symbol::chizu-query/src/rerank.rs::score",
+    "symbol::chizu-query/src/retrieval.rs::retrieve",
+    "symbol::chizu-query/src/retrieval.rs::Candidate",
+    "symbol::chizu-query/src/pipeline.rs::SearchPipeline",
+    "symbol::chizu-core/src/config/mod.rs::SearchConfig",
 ]
 
 [[queries]]
 text = "vector similarity search"
 bucket = "concept"
 relevant = [
-    "source_unit::chizu-core/src/store/usearch.rs",
+    "symbol::chizu-core/src/store/usearch.rs::search",
+    "symbol::chizu-core/src/store/usearch.rs::UsearchIndex",
 ]
 acceptable = [
-    "source_unit::chizu-query/src/retrieval.rs",
+    "symbol::chizu-core/src/store/usearch.rs::add",
+    "symbol::chizu-query/src/retrieval.rs::retrieve",
 ]
 
 [[queries]]
 text = "configuration validation"
 bucket = "concept"
 relevant = [
-    "source_unit::chizu-core/src/config/mod.rs",
+    "symbol::chizu-core/src/config/mod.rs::validate",
+    "symbol::chizu-core/src/config/mod.rs::Config",
 ]
 acceptable = [
-    "symbol::chizu-core/src/config/mod.rs::Config",
+    "symbol::chizu-core/src/config/mod.rs::validate_weights",
+    "symbol::chizu-core/src/config/mod.rs::ConfigError",
+    "symbol::chizu-core/src/config/mod.rs::from_toml",
 ]
 
 [[queries]]
 text = "entity relationship graph edges"
 bucket = "concept"
 relevant = [
-    "source_unit::chizu-core/src/model/edge_kind.rs",
+    "symbol::chizu-core/src/model/edge_kind.rs::EdgeKind",
 ]
 acceptable = [
-    "source_unit::chizu-core/src/query/traversal.rs",
-    "symbol::chizu-core/src/model/entity.rs::Edge",
+    "symbol::chizu-core/src/store/sqlite.rs::get_edges_by_rel",
+    "symbol::chizu-core/src/query/traversal.rs::graph_traversal",
+    "symbol::chizu-core/src/model/entity.rs::Entity",
 ]
 
 [[queries]]
@@ -133,10 +149,12 @@ text = "LLM provider abstraction"
 bucket = "concept"
 category = "understand"
 relevant = [
-    "source_unit::chizu-core/src/provider/mod.rs",
+    "symbol::chizu-core/src/provider/mod.rs::Provider",
+    "symbol::chizu-core/src/provider/openai.rs::OpenAiProvider",
 ]
 acceptable = [
-    "source_unit::chizu-core/src/provider/openai.rs",
+    "symbol::chizu-core/src/provider/mod.rs::ProviderError",
+    "symbol::chizu-core/src/config/mod.rs::ProviderConfig",
 ]
 
 [[queries]]
@@ -144,10 +162,11 @@ text = "how does graph expansion work for search results"
 bucket = "concept"
 category = "understand"
 relevant = [
-    "source_unit::chizu-query/src/expansion.rs",
+    "symbol::chizu-query/src/expansion.rs::expand",
 ]
 acceptable = [
-    "source_unit::chizu-query/src/pipeline.rs",
+    "symbol::chizu-query/src/pipeline.rs::SearchPipeline",
+    "symbol::chizu-core/src/query/traversal.rs::graph_traversal",
 ]
 
 # ---------------------------------------------------------------------------
@@ -159,19 +178,22 @@ text = "how to add a new CLI subcommand"
 bucket = "task"
 category = "build"
 relevant = [
-    "source_unit::chizu-cli/src/main.rs",
+    "component::cargo::chizu-cli",
 ]
-acceptable = []
+acceptable = [
+    "symbol::chizu-query/src/pipeline.rs::SearchPipeline",
+]
 
 [[queries]]
 text = "how to add a new entity kind"
 bucket = "task"
 category = "build"
 relevant = [
-    "source_unit::chizu-core/src/model/entity_kind.rs",
+    "symbol::chizu-core/src/model/entity_kind.rs::EntityKind",
 ]
 acceptable = [
-    "source_unit::chizu-core/src/model/entity.rs",
+    "symbol::chizu-core/src/model/entity.rs::Entity",
+    "symbol::chizu-core/src/model/entity.rs::new",
 ]
 
 [[queries]]
@@ -179,11 +201,11 @@ text = "where are tests for the search pipeline"
 bucket = "task"
 category = "test"
 relevant = [
-    "source_unit::chizu-query/src/pipeline.rs",
+    "symbol::chizu-query/src/pipeline.rs::SearchPipeline",
 ]
 acceptable = [
-    "source_unit::chizu-query/src/rerank.rs",
-    "source_unit::chizu-query/src/retrieval.rs",
+    "symbol::chizu-query/src/pipeline.rs::SearchOptions",
+    "symbol::chizu-index/src/indexer.rs::IndexPipeline",
 ]
 
 [[queries]]
@@ -191,11 +213,13 @@ text = "how does indexing discover components"
 bucket = "task"
 category = "understand"
 relevant = [
-    "source_unit::chizu-index/src/registry.rs",
+    "symbol::chizu-index/src/ownership.rs::discover_all_components",
+    "symbol::chizu-index/src/registry.rs::ComponentRegistry",
 ]
 acceptable = [
-    "source_unit::chizu-index/src/indexer.rs",
-    "source_unit::chizu-index/src/ownership.rs",
+    "symbol::chizu-index/src/ownership.rs::discover_cargo_components",
+    "symbol::chizu-index/src/ownership.rs::discover_npm_components",
+    "symbol::chizu-index/src/indexer.rs::run",
 ]
 
 [[queries]]
@@ -203,6 +227,10 @@ text = "debug task route assignment"
 bucket = "task"
 category = "debug"
 relevant = [
-    "source_unit::chizu-index/src/task_routes.rs",
+    "symbol::chizu-index/src/task_routes.rs::generate_task_routes",
 ]
-acceptable = []
+acceptable = [
+    "symbol::chizu-core/src/model/entity.rs::TaskRoute",
+    "symbol::chizu-core/src/store/sqlite.rs::insert_task_route",
+    "symbol::chizu-core/src/query/classifier.rs::route_names",
+]

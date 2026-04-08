@@ -10,6 +10,20 @@ pub struct ReadingPlan {
     /// Total candidates before cutoff (None if cutoff was not applied).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub total_before_cutoff: Option<usize>,
+    /// Per-stage timing breakdown (populated in verbose mode).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub timings: Option<PipelineTimings>,
+}
+
+/// Per-stage latency breakdown in milliseconds.
+#[derive(Debug, Clone, Serialize)]
+pub struct PipelineTimings {
+    pub retrieval_ms: u64,
+    pub scoring_ms: u64,
+    pub expansion_ms: u64,
+    pub reranking_ms: Option<u64>,
+    pub cutoff_ms: u64,
+    pub total_ms: u64,
 }
 
 /// A single entry in the reading plan.
@@ -71,6 +85,16 @@ impl ReadingPlan {
         } else {
             lines.push(format!("Results: {}", self.entries.len()));
         }
+        if verbose && let Some(ref t) = self.timings {
+            let rerank_part = t
+                .reranking_ms
+                .map(|r| format!(" reranking={r}ms"))
+                .unwrap_or_default();
+            lines.push(format!(
+                "Timings: retrieval={}ms scoring={}ms expansion={}ms{} cutoff={}ms total={}ms",
+                t.retrieval_ms, t.scoring_ms, t.expansion_ms, rerank_part, t.cutoff_ms, t.total_ms
+            ));
+        }
         lines.push(String::from("---"));
 
         for entry in &self.entries {
@@ -122,6 +146,7 @@ mod tests {
                 score_breakdown: None,
             }],
             total_before_cutoff: None,
+            timings: None,
         };
         let json = plan.to_json().unwrap();
         assert!(json.contains("handle"));
@@ -145,6 +170,7 @@ mod tests {
                 score_breakdown: None,
             }],
             total_before_cutoff: None,
+            timings: None,
         };
         let text = plan.to_text();
         assert!(text.contains("test_foo"));
@@ -169,6 +195,7 @@ mod tests {
                 score_breakdown: None,
             }],
             total_before_cutoff: Some(5),
+            timings: None,
         };
         let text = plan.to_text();
         assert!(text.contains("Results: 1 (cutoff from 5)"));
@@ -199,6 +226,7 @@ mod tests {
                 }),
             }],
             total_before_cutoff: None,
+            timings: None,
         };
         let text = plan.to_text_verbose();
         assert!(text.contains("Scores:"));
@@ -231,6 +259,7 @@ mod tests {
                 }),
             }],
             total_before_cutoff: None,
+            timings: None,
         };
         let text = plan.to_text();
         assert!(!text.contains("Scores:"));

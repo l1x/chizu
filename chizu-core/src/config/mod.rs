@@ -15,6 +15,8 @@ pub struct Config {
     pub summary: SummaryConfig,
     /// Embedding configuration
     pub embedding: EmbeddingConfig,
+    /// Reranker configuration
+    pub reranker: RerankerConfig,
     /// Visualization configuration
     pub visualize: VisualizeConfig,
 }
@@ -27,6 +29,7 @@ impl Default for Config {
             providers: default_providers(),
             summary: SummaryConfig::default(),
             embedding: EmbeddingConfig::default(),
+            reranker: RerankerConfig::default(),
             visualize: VisualizeConfig::default(),
         }
     }
@@ -344,6 +347,40 @@ impl Default for EmbeddingConfig {
             model: Some("nomic-embed-text-v2-moe:latest".to_string()),
             dimensions: Some(768),
             batch_size: Some(32),
+        }
+    }
+}
+
+/// Second-stage reranker configuration
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct RerankerConfig {
+    /// Enable reranking (default false — opt-in)
+    pub enabled: bool,
+    /// Base URL for the reranker API (e.g., TEI, Jina)
+    pub base_url: Option<String>,
+    /// Reranker model identifier
+    pub model: Option<String>,
+    /// API key (if required)
+    pub api_key: Option<String>,
+    /// Number of top candidates to rerank
+    pub top_k: usize,
+    /// Batch size for reranking requests
+    pub batch_size: usize,
+    /// Timeout in seconds
+    pub timeout_secs: u64,
+}
+
+impl Default for RerankerConfig {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            base_url: None,
+            model: None,
+            api_key: None,
+            top_k: 25,
+            batch_size: 25,
+            timeout_secs: 30,
         }
     }
 }

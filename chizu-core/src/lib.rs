@@ -10,12 +10,13 @@ pub mod config;
 pub mod model;
 pub mod provider;
 pub mod query;
+pub mod reranker;
 pub mod store;
 
 // Re-export commonly used types
 pub use config::{
     Config, ConfigError, CutoffMode, EmbeddingConfig, IndexConfig, ProviderConfig, RerankWeights,
-    SearchConfig, SummaryConfig,
+    RerankerConfig, SearchConfig, SummaryConfig,
 };
 pub use model::{
     ComponentId, Edge, EdgeKind, EmbeddingMeta, Entity, EntityKind, FileKind, FileRecord, Summary,
@@ -24,4 +25,5 @@ pub use model::{
 pub use model::{doc_id, entity_id, entity_id_to_usearch_key, source_unit_id, symbol_id, test_id};
 pub use provider::{OpenAiProvider, Provider, ProviderError, with_retry};
 pub use query::{TaskCategory, TraversalOptions, TraversalResult, classify_query, graph_traversal};
+pub use reranker::{HttpReranker, RerankDocument, RerankScore, Reranker, RerankerError};
 pub use store::{ChizuStore, Store, StoreError};
