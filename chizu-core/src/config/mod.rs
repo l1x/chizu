@@ -123,6 +123,54 @@ impl Config {
                     "reranker.top_k must be > 0".into(),
                 ));
             }
+            match self.reranker.flavor {
+                RerankerFlavor::Http => {}
+                RerankerFlavor::AwsBedrock => {
+                    let provider_name = self.reranker.provider.as_ref().ok_or_else(|| {
+                        ConfigError::InvalidParam(
+                            "reranker.provider is required when reranker.flavor = \"aws_bedrock\""
+                                .into(),
+                        )
+                    })?;
+                    let provider = self
+                        .providers
+                        .get(provider_name)
+                        .ok_or_else(|| ConfigError::MissingProvider(provider_name.clone()))?;
+                    if provider.flavor != ProviderFlavor::AwsBedrock {
+                        return Err(ConfigError::InvalidParam(format!(
+                            "reranker.provider '{}' must use flavor \"aws_bedrock\"",
+                            provider_name
+                        )));
+                    }
+                    if self.reranker.model.as_deref().unwrap_or_default().trim().is_empty() {
+                        return Err(ConfigError::InvalidParam(
+                            "reranker.model is required when reranker.flavor = \"aws_bedrock\""
+                                .into(),
+                        ));
+                    }
+                }
+            }
+        }
+
+        for (name, provider) in &self.providers {
+            match provider.flavor {
+                ProviderFlavor::OpenAiCompatible => {
+                    if provider.base_url.trim().is_empty() {
+                        return Err(ConfigError::InvalidParam(format!(
+                            "providers.{name}.base_url must not be empty for flavor \"openai_compatible\""
+                        )));
+                    }
+                }
+                ProviderFlavor::AwsBedrock => {
+                    if let Some(url) = &provider.endpoint_url
+                        && url.trim().is_empty()
+                    {
+                        return Err(ConfigError::InvalidParam(format!(
+                            "providers.{name}.endpoint_url must not be empty when set"
+                        )));
+                    }
+                }
+            }
         }
 
         if let Some(template) = &self.visualize.editor_link
@@ -274,14 +322,34 @@ impl RerankWeights {
     }
 }
 
+/// API flavor for summary/embedding providers.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum ProviderFlavor {
+    #[default]
+    #[serde(rename = "openai_compatible")]
+    OpenAiCompatible,
+    AwsBedrock,
+}
+
 /// Provider connection configuration
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct ProviderConfig {
+    /// API flavor for this provider.
+    pub flavor: ProviderFlavor,
+    /// Provider API version identifier.
+    pub api_version: Option<String>,
     /// Base URL for the provider API
     pub base_url: String,
     /// API key (empty for local providers like Ollama)
     pub api_key: String,
+    /// AWS region for Bedrock providers.
+    pub region: Option<String>,
+    /// Optional AWS profile name.
+    pub profile: Option<String>,
+    /// Optional custom endpoint URL for AWS SDK clients.
+    pub endpoint_url: Option<String>,
     /// Timeout in seconds
     pub timeout_secs: u64,
     /// Number of retry attempts
@@ -291,8 +359,13 @@ pub struct ProviderConfig {
 impl Default for ProviderConfig {
     fn default() -> Self {
         Self {
+            flavor: ProviderFlavor::OpenAiCompatible,
+            api_version: Some("v1".to_string()),
             base_url: "http://localhost:11434/v1".to_string(),
             api_key: String::new(),
+            region: None,
+            profile: None,
+            endpoint_url: None,
             timeout_secs: 120,
             retry_attempts: 3,
         }
@@ -364,12 +437,27 @@ impl Default for EmbeddingConfig {
     }
 }
 
+/// API flavor for second-stage rerankers.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum RerankerFlavor {
+    #[default]
+    Http,
+    AwsBedrock,
+}
+
 /// Second-stage reranker configuration
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct RerankerConfig {
     /// Enable reranking (default false — opt-in)
     pub enabled: bool,
+    /// API flavor for the reranker.
+    pub flavor: RerankerFlavor,
+    /// Reranker API version identifier.
+    pub api_version: Option<String>,
+    /// Provider name for rerankers that reuse a provider config.
+    pub provider: Option<String>,
     /// Base URL for the reranker API (e.g., TEI, Jina)
     pub base_url: Option<String>,
     /// Reranker model identifier
@@ -388,6 +476,9 @@ impl Default for RerankerConfig {
     fn default() -> Self {
         Self {
             enabled: false,
+            flavor: RerankerFlavor::Http,
+            api_version: Some("v1".to_string()),
+            provider: None,
             base_url: None,
             model: None,
             api_key: None,
@@ -431,6 +522,10 @@ mod tests {
         let config = Config::default();
         assert_eq!(config.search.default_limit, 15);
         assert!(config.providers.contains_key("ollama"));
+        assert_eq!(
+            config.providers.get("ollama").unwrap().flavor,
+            ProviderFlavor::OpenAiCompatible
+        );
     }
 
     #[test]
@@ -536,6 +631,7 @@ retry_attempts = 5
         let custom = config.providers.get("custom").unwrap();
         assert_eq!(custom.base_url, "https://api.example.com/v1");
         assert_eq!(custom.api_key, "secret");
+        assert_eq!(custom.flavor, ProviderFlavor::OpenAiCompatible);
     }
 
     #[test]
@@ -615,5 +711,65 @@ editor_link = "   "
 "#;
         let result = Config::from_toml(toml);
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_bedrock_provider_config() {
+        let toml = r#"
+[providers.bedrock]
+flavor = "aws_bedrock"
+api_version = "bedrock-runtime-2023-09-30"
+region = "eu-central-1"
+profile = "default"
+timeout_secs = 60
+retry_attempts = 4
+
+[summary]
+provider = "bedrock"
+model = "amazon.nova-micro-v1:0"
+
+[embedding]
+provider = "bedrock"
+model = "amazon.titan-embed-text-v2:0"
+dimensions = 256
+"#;
+        let config = Config::from_toml(toml).unwrap();
+        let bedrock = config.providers.get("bedrock").unwrap();
+        assert_eq!(bedrock.flavor, ProviderFlavor::AwsBedrock);
+        assert_eq!(bedrock.api_version.as_deref(), Some("bedrock-runtime-2023-09-30"));
+        assert_eq!(bedrock.region.as_deref(), Some("eu-central-1"));
+        assert_eq!(bedrock.profile.as_deref(), Some("default"));
+    }
+
+    #[test]
+    fn test_bedrock_reranker_requires_provider_name() {
+        let toml = r#"
+[providers.bedrock]
+flavor = "aws_bedrock"
+region = "eu-central-1"
+
+[reranker]
+enabled = true
+flavor = "aws_bedrock"
+model = "arn:aws:bedrock:eu-central-1::foundation-model/amazon.rerank-v1:0"
+"#;
+        let err = Config::from_toml(toml).unwrap_err();
+        assert!(err.to_string().contains("reranker.provider is required"));
+    }
+
+    #[test]
+    fn test_bedrock_reranker_requires_bedrock_provider() {
+        let toml = r#"
+[reranker]
+enabled = true
+flavor = "aws_bedrock"
+provider = "ollama"
+model = "arn:aws:bedrock:eu-central-1::foundation-model/amazon.rerank-v1:0"
+"#;
+        let err = Config::from_toml(toml).unwrap_err();
+        assert!(
+            err.to_string()
+                .contains("must use flavor \"aws_bedrock\"")
+        );
     }
 }

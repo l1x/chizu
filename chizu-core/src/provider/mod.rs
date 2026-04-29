@@ -1,7 +1,11 @@
 use std::time::Duration;
 
+use async_trait::async_trait;
+
+pub mod bedrock;
 pub mod openai;
 
+pub use bedrock::BedrockProvider;
 pub use openai::OpenAiProvider;
 
 /// Errors that can occur when calling a provider.
@@ -30,22 +34,32 @@ impl From<reqwest::Error> for ProviderError {
 }
 
 /// Abstraction over LLM/embedding providers.
+#[async_trait]
 pub trait Provider: Send + Sync {
     /// Generate a text completion for the given prompt.
-    fn complete(&self, prompt: &str, max_tokens: Option<u32>) -> Result<String, ProviderError>;
+    async fn complete(
+        &self,
+        prompt: &str,
+        max_tokens: Option<u32>,
+    ) -> Result<String, ProviderError>;
 
     /// Generate embeddings for a batch of texts.
-    fn embed(&self, texts: &[String]) -> Result<Vec<Vec<f32>>, ProviderError>;
+    async fn embed(&self, texts: &[String]) -> Result<Vec<Vec<f32>>, ProviderError>;
 }
 
 /// Retry a closure with exponential backoff.
-pub fn with_retry<T, F>(attempts: u32, base_delay: Duration, mut f: F) -> Result<T, ProviderError>
+pub async fn with_retry<T, F, Fut>(
+    attempts: u32,
+    base_delay: Duration,
+    mut f: F,
+) -> Result<T, ProviderError>
 where
-    F: FnMut() -> Result<T, ProviderError>,
+    F: FnMut() -> Fut,
+    Fut: std::future::Future<Output = Result<T, ProviderError>>,
 {
     let mut last_err = None;
     for attempt in 0..attempts {
-        match f() {
+        match f().await {
             Ok(val) => return Ok(val),
             Err(err) => {
                 let should_retry = match &err {
@@ -58,7 +72,7 @@ where
                 }
                 last_err = Some(err);
                 let delay = base_delay * 2_u32.pow(attempt);
-                std::thread::sleep(delay);
+                tokio::time::sleep(delay).await;
             }
         }
     }
@@ -68,33 +82,36 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::atomic::{AtomicUsize, Ordering};
 
-    #[test]
-    fn retry_succeeds_eventually() {
-        let mut calls = 0;
-        let result = with_retry(3, Duration::from_millis(1), || {
-            calls += 1;
-            if calls < 3 {
+    #[tokio::test]
+    async fn retry_succeeds_eventually() {
+        let calls = AtomicUsize::new(0);
+        let result = with_retry(3, Duration::from_millis(1), || async {
+            let call = calls.fetch_add(1, Ordering::Relaxed) + 1;
+            if call < 3 {
                 Err(ProviderError::Timeout)
             } else {
                 Ok("success")
             }
-        });
+        })
+        .await;
         assert_eq!(result.unwrap(), "success");
-        assert_eq!(calls, 3);
+        assert_eq!(calls.load(Ordering::Relaxed), 3);
     }
 
-    #[test]
-    fn retry_gives_up_on_non_retryable_error() {
-        let mut calls = 0;
-        let result: Result<&str, _> = with_retry(3, Duration::from_millis(1), || {
-            calls += 1;
+    #[tokio::test]
+    async fn retry_gives_up_on_non_retryable_error() {
+        let calls = AtomicUsize::new(0);
+        let result: Result<&str, _> = with_retry(3, Duration::from_millis(1), || async {
+            calls.fetch_add(1, Ordering::Relaxed);
             Err(ProviderError::Api {
                 status: 400,
                 message: "bad request".into(),
             })
-        });
+        })
+        .await;
         assert!(result.is_err());
-        assert_eq!(calls, 1);
+        assert_eq!(calls.load(Ordering::Relaxed), 1);
     }
 }

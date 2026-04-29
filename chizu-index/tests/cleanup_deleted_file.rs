@@ -4,8 +4,8 @@ use chizu_core::{Config, Store};
 use chizu_index::IndexPipeline;
 use tempfile::TempDir;
 
-#[test]
-fn cleanup_deleted_file_removes_all_traces() {
+#[tokio::test]
+async fn cleanup_deleted_file_removes_all_traces() {
     let tmp = TempDir::new().unwrap();
     let root = tmp.path();
 
@@ -36,7 +36,9 @@ fn test_helper() {
     let store = chizu_core::ChizuStore::open(&root.join(".chizu"), &config).unwrap();
 
     // First index
-    IndexPipeline::run(root, &store, &config, None).unwrap();
+    IndexPipeline::run(root, &store, &config, None)
+        .await
+        .unwrap();
 
     // Verify entities exist
     assert!(
@@ -62,7 +64,9 @@ fn test_helper() {
     fs::remove_file(root.join("src/lib.rs")).unwrap();
 
     // Re-index
-    IndexPipeline::run(root, &store, &config, None).unwrap();
+    IndexPipeline::run(root, &store, &config, None)
+        .await
+        .unwrap();
 
     // Verify all traces are gone
     assert!(

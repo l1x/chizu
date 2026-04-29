@@ -13,6 +13,7 @@ categories = ["development-tools", "algorithms"]
 
 [dependencies]
 chizu-core = { version = "0.3.0", path = "../chizu-core" }
+tokio = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 toml = { workspace = true }
@@ -20,5 +21,7 @@ tracing = { workspace = true }
 thiserror = { workspace = true }
 
 [dev-dependencies]
+async-trait = { workspace = true }
 chizu-core = { version = "0.3.0", path = "../chizu-core", features = ["test-support"] }
 tempfile = "3"
+tokio = { workspace = true }

@@ -249,7 +249,8 @@ struct ConfigValidateArgs {}
 #[argh(subcommand, name = "guide")]
 struct GuideArgs {}
 
-fn main() {
+#[tokio::main]
+async fn main() {
     let cli: Cli = argh::from_env();
 
     tracing_subscriber::fmt()
@@ -259,7 +260,7 @@ fn main() {
         )
         .init();
 
-    match run(cli) {
+    match run(cli).await {
         Ok(()) => std::process::exit(0),
         Err(e) => {
             eprintln!("Error: {}", e);
@@ -268,13 +269,13 @@ fn main() {
     }
 }
 
-fn run(cli: Cli) -> Result<(), Box<dyn std::error::Error>> {
+async fn run(cli: Cli) -> Result<(), Box<dyn std::error::Error>> {
     tracing::debug!("Running command: {:?}", cli.command);
 
     match cli.command {
-        Command::Index(args) => cmd_index(&cli.repo, args),
-        Command::Search(args) => cmd_search(&cli.repo, args),
-        Command::Eval(args) => cmd_eval(&cli.repo, args),
+        Command::Index(args) => cmd_index(&cli.repo, args).await,
+        Command::Search(args) => cmd_search(&cli.repo, args).await,
+        Command::Eval(args) => cmd_eval(&cli.repo, args).await,
         Command::Entity(args) => cmd_entity(&cli.repo, args),
         Command::Entities(args) => cmd_entities(&cli.repo, args),
         Command::Routes(args) => cmd_routes(&cli.repo, args),
@@ -539,7 +540,7 @@ fn truncate(s: &str, max_len: usize) -> std::borrow::Cow<'_, str> {
     }
 }
 
-fn cmd_index(repo: &Path, args: IndexArgs) -> Result<(), Box<dyn std::error::Error>> {
+async fn cmd_index(repo: &Path, args: IndexArgs) -> Result<(), Box<dyn std::error::Error>> {
     if args.force {
         let chizu_dir = repo.join(".chizu");
         if chizu_dir.exists() {
@@ -548,8 +549,9 @@ fn cmd_index(repo: &Path, args: IndexArgs) -> Result<(), Box<dyn std::error::Err
     }
 
     let (config, store) = open_store(repo)?;
-    let provider = build_provider(&config)?;
-    let stats = chizu_index::IndexPipeline::run(repo, &store, &config, provider.as_deref())?;
+    let provider = build_provider(&config).await?;
+    let stats = chizu_index::IndexPipeline::run(repo, &store, &config, provider.as_deref())
+        .await?;
 
     println!(
         "Indexed {} files ({} walked)",
@@ -585,7 +587,7 @@ fn cmd_index(repo: &Path, args: IndexArgs) -> Result<(), Box<dyn std::error::Err
     Ok(())
 }
 
-fn build_provider(
+async fn build_provider(
     config: &chizu_core::Config,
 ) -> Result<Option<Box<dyn chizu_core::Provider>>, Box<dyn std::error::Error>> {
     let summary_provider = config.summary.provider.as_ref();
@@ -624,21 +626,61 @@ fn build_provider(
         .clone()
         .unwrap_or_else(|| "nomic-embed-text-v2-moe:latest".to_string());
 
-    let provider =
-        chizu_core::OpenAiProvider::new(provider_config, completion_model, embedding_model)
-            .map_err(|e| format!("Failed to create provider: {e}"))?;
+    let embedding_dimensions = config.embedding.dimensions;
 
-    Ok(Some(Box::new(provider)))
+    let provider: Box<dyn chizu_core::Provider> = match provider_config.flavor {
+        chizu_core::ProviderFlavor::OpenAiCompatible => Box::new(
+            chizu_core::OpenAiProvider::new(
+                provider_config,
+                completion_model,
+                embedding_model,
+                embedding_dimensions,
+            )
+            .map_err(|e| format!("Failed to create provider: {e}"))?,
+        ),
+        chizu_core::ProviderFlavor::AwsBedrock => Box::new(
+            chizu_core::BedrockProvider::new(
+                provider_config,
+                completion_model,
+                embedding_model,
+                embedding_dimensions,
+            )
+            .await
+            .map_err(|e| format!("Failed to create Bedrock provider: {e}"))?,
+        ),
+    };
+
+    Ok(Some(provider))
 }
 
-fn build_reranker(
+async fn build_reranker(
     config: &chizu_core::Config,
 ) -> Result<Option<Box<dyn chizu_core::Reranker>>, Box<dyn std::error::Error>> {
     if !config.reranker.enabled {
         return Ok(None);
     }
-    match chizu_core::HttpReranker::new(&config.reranker) {
-        Ok(r) => Ok(Some(Box::new(r))),
+
+    let reranker: Result<Box<dyn chizu_core::Reranker>, String> = match config.reranker.flavor {
+        chizu_core::RerankerFlavor::Http => chizu_core::HttpReranker::new(&config.reranker)
+            .map(|reranker| Box::new(reranker) as Box<dyn chizu_core::Reranker>)
+            .map_err(|e| e.to_string()),
+        chizu_core::RerankerFlavor::AwsBedrock => {
+            let provider_name = config.reranker.provider.as_deref().ok_or_else(|| {
+                "reranker.provider must be set for aws_bedrock rerankers".to_string()
+            })?;
+            let provider_config = config
+                .providers
+                .get(provider_name)
+                .ok_or_else(|| format!("Provider '{}' not found in config", provider_name))?;
+            chizu_core::BedrockReranker::new(provider_config, &config.reranker)
+                .await
+                .map(|reranker| Box::new(reranker) as Box<dyn chizu_core::Reranker>)
+                .map_err(|e| e.to_string())
+        }
+    };
+
+    match reranker {
+        Ok(reranker) => Ok(Some(reranker)),
         Err(e) => {
             eprintln!("Warning: failed to create reranker: {e}");
             Ok(None)
@@ -646,10 +688,10 @@ fn build_reranker(
     }
 }
 
-fn cmd_search(repo: &Path, args: SearchArgs) -> Result<(), Box<dyn std::error::Error>> {
+async fn cmd_search(repo: &Path, args: SearchArgs) -> Result<(), Box<dyn std::error::Error>> {
     let (config, store) = open_store(repo)?;
-    let provider = build_provider(&config)?;
-    let reranker = build_reranker(&config)?;
+    let provider = build_provider(&config).await?;
+    let reranker = build_reranker(&config).await?;
 
     let options = chizu_query::SearchOptions {
         limit: args.limit,
@@ -665,7 +707,8 @@ fn cmd_search(repo: &Path, args: SearchArgs) -> Result<(), Box<dyn std::error::E
         &config,
         provider.as_deref(),
         reranker.as_deref(),
-    )?;
+    )
+    .await?;
 
     match args.format {
         OutputFormat::Text => {
@@ -689,10 +732,10 @@ fn cmd_search(repo: &Path, args: SearchArgs) -> Result<(), Box<dyn std::error::E
     Ok(())
 }
 
-fn cmd_eval(repo: &Path, args: EvalArgs) -> Result<(), Box<dyn std::error::Error>> {
+async fn cmd_eval(repo: &Path, args: EvalArgs) -> Result<(), Box<dyn std::error::Error>> {
     let (config, store) = open_store(repo)?;
-    let provider = build_provider(&config)?;
-    let reranker = build_reranker(&config)?;
+    let provider = build_provider(&config).await?;
+    let reranker = build_reranker(&config).await?;
 
     let benchmark_str = std::fs::read_to_string(&args.benchmark).map_err(|e| {
         format!(
@@ -712,7 +755,8 @@ fn cmd_eval(repo: &Path, args: EvalArgs) -> Result<(), Box<dyn std::error::Error
         provider.as_deref(),
         reranker.as_deref(),
         args.limit,
-    )?;
+    )
+    .await?;
 
     match args.format {
         OutputFormat::Json => {
@@ -812,6 +856,8 @@ path_match = 0.10
 
 # [reranker]
 # enabled = false
+# flavor = "http"
+# api_version = "v1"
 # base_url = "http://localhost:8080"
 # model = "BAAI/bge-reranker-v2-m3"
 # top_k = 25
@@ -819,9 +865,20 @@ path_match = 0.10
 # timeout_secs = 30
 
 [providers.ollama]
+flavor = "openai_compatible"
+api_version = "v1"
 base_url = "http://localhost:11434/v1"
 timeout_secs = 120
 retry_attempts = 3
+
+# [providers.bedrock]
+# flavor = "aws_bedrock"
+# api_version = "bedrock-runtime-2023-09-30"
+# region = "eu-central-1"
+# profile = "default"
+# timeout_secs = 60
+# retry_attempts = 3
+# endpoint_url = "http://localhost:4566"
 
 [summary]
 provider = "ollama"
@@ -836,6 +893,31 @@ provider = "ollama"
 model = "nomic-embed-text-v2-moe:latest"
 dimensions = 768
 batch_size = 32
+
+# Bedrock example:
+# [summary]
+# provider = "bedrock"
+# model = "amazon.nova-micro-v1:0"
+# max_tokens = 512
+# temperature = 0.2
+# batch_size = 4
+# concurrency = 1
+#
+# [embedding]
+# provider = "bedrock"
+# model = "amazon.titan-embed-text-v2:0"
+# dimensions = 256
+# batch_size = 16
+#
+# [reranker]
+# enabled = true
+# flavor = "aws_bedrock"
+# api_version = "bedrock-rerank-2023-09-30"
+# provider = "bedrock"
+# model = "arn:aws:bedrock:eu-central-1::foundation-model/amazon.rerank-v1:0"
+# top_k = 25
+# batch_size = 25
+# timeout_secs = 30
 
 [visualize]
 # Example:

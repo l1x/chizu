@@ -2,6 +2,7 @@ use std::path::Path;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::{Duration, Instant};
 
+use async_trait::async_trait;
 use chizu_core::{ChizuStore, Config, Provider, ProviderError};
 use chizu_index::IndexPipeline;
 use tempfile::TempDir;
@@ -27,14 +28,15 @@ impl DelayedSummaryProvider {
     }
 }
 
+#[async_trait]
 impl Provider for DelayedSummaryProvider {
-    fn complete(
+    async fn complete(
         &self,
         prompt: &str,
         _max_tokens: Option<u32>,
     ) -> std::result::Result<String, ProviderError> {
         self.calls.fetch_add(1, Ordering::Relaxed);
-        std::thread::sleep(self.per_call_delay);
+        tokio::time::sleep(self.per_call_delay).await;
 
         let entity_ids = prompt_entity_ids(prompt);
         if entity_ids.len() > 1 {
@@ -58,7 +60,10 @@ impl Provider for DelayedSummaryProvider {
         )
     }
 
-    fn embed(&self, _texts: &[String]) -> std::result::Result<Vec<Vec<f32>>, ProviderError> {
+    async fn embed(
+        &self,
+        _texts: &[String],
+    ) -> std::result::Result<Vec<Vec<f32>>, ProviderError> {
         Ok(Vec::new())
     }
 }
@@ -69,13 +74,13 @@ struct PerfRun {
     summary_calls: usize,
 }
 
-#[test]
+#[tokio::test]
 #[ignore = "performance comparison against the current workspace"]
-fn compare_repo_index_time_for_summary_batch_sizes() {
+async fn compare_repo_index_time_for_summary_batch_sizes() {
     let repo_root = workspace_root();
 
-    let single = run_index(repo_root, 1);
-    let batched = run_index(repo_root, PERF_BATCH_SIZE);
+    let single = run_index(repo_root, 1).await;
+    let batched = run_index(repo_root, PERF_BATCH_SIZE).await;
 
     println!(
         "repo={} batch_size=1 elapsed_ms={:.1} summaries={} calls={}",
@@ -99,7 +104,7 @@ fn compare_repo_index_time_for_summary_batch_sizes() {
     assert!(batched.elapsed < single.elapsed);
 }
 
-fn run_index(repo_root: &Path, batch_size: usize) -> PerfRun {
+async fn run_index(repo_root: &Path, batch_size: usize) -> PerfRun {
     let temp_dir = TempDir::new().unwrap();
     let mut config = Config::default();
     config.summary.provider = Some("ollama".to_string());
@@ -112,7 +117,9 @@ fn run_index(repo_root: &Path, batch_size: usize) -> PerfRun {
     let store = ChizuStore::open(temp_dir.path(), &config).unwrap();
 
     let start = Instant::now();
-    let stats = IndexPipeline::run(repo_root, &store, &config, Some(&provider)).unwrap();
+    let stats = IndexPipeline::run(repo_root, &store, &config, Some(&provider))
+        .await
+        .unwrap();
     let elapsed = start.elapsed();
 
     let expected_calls = div_ceil(stats.summaries_generated, batch_size);

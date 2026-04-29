@@ -1,5 +1,6 @@
 use std::time::Duration;
 
+use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 
 use crate::config::RerankerConfig;
@@ -8,7 +9,7 @@ use super::{RerankDocument, RerankScore, Reranker, RerankerError};
 
 /// HTTP-based reranker compatible with Jina, Cohere, and TEI `/rerank` APIs.
 pub struct HttpReranker {
-    client: reqwest::blocking::Client,
+    client: reqwest::Client,
     base_url: String,
     api_key: Option<String>,
     model: String,
@@ -24,7 +25,7 @@ impl HttpReranker {
         let model = config.model.as_deref().unwrap_or("BAAI/bge-reranker-v2-m3");
         let timeout = Duration::from_secs(config.timeout_secs);
 
-        let client = reqwest::blocking::Client::builder()
+        let client = reqwest::Client::builder()
             .timeout(timeout)
             .build()
             .map_err(|e| RerankerError::Http(format!("failed to build HTTP client: {e}")))?;
@@ -38,7 +39,7 @@ impl HttpReranker {
         })
     }
 
-    fn build_request(&self, path: &str) -> reqwest::blocking::RequestBuilder {
+    fn build_request(&self, path: &str) -> reqwest::RequestBuilder {
         let url = format!("{}{}", self.base_url, path);
         let req = self.client.post(url);
         if let Some(ref key) = self.api_key {
@@ -69,8 +70,9 @@ struct RerankResultItem {
     relevance_score: f64,
 }
 
+#[async_trait]
 impl Reranker for HttpReranker {
-    fn rerank(
+    async fn rerank(
         &self,
         query: &str,
         documents: &[RerankDocument],
@@ -95,11 +97,11 @@ impl Reranker for HttpReranker {
                 top_n: None,
             };
 
-            let response = self.build_request("/rerank").json(&request).send()?;
+            let response = self.build_request("/rerank").json(&request).send().await?;
 
             let status = response.status().as_u16();
             if status != 200 {
-                let body = response.text().unwrap_or_default();
+                let body = response.text().await.unwrap_or_default();
                 return Err(RerankerError::Api {
                     status,
                     message: body,
@@ -108,6 +110,7 @@ impl Reranker for HttpReranker {
 
             let parsed: RerankResponse = response
                 .json()
+                .await
                 .map_err(|e| RerankerError::Json(e.to_string()))?;
 
             for item in parsed.results {
@@ -122,7 +125,7 @@ impl Reranker for HttpReranker {
     }
 }
 
-#[cfg(test)]
+    #[cfg(test)]
 mod tests {
     use super::*;
 
@@ -130,8 +133,9 @@ mod tests {
         scores: Vec<f64>,
     }
 
+    #[async_trait]
     impl Reranker for StubReranker {
-        fn rerank(
+        async fn rerank(
             &self,
             _query: &str,
             documents: &[RerankDocument],
@@ -148,8 +152,8 @@ mod tests {
         }
     }
 
-    #[test]
-    fn test_stub_reranker_returns_scores() {
+    #[tokio::test]
+    async fn test_stub_reranker_returns_scores() {
         let reranker = StubReranker {
             scores: vec![0.1, 0.9, 0.5],
         };
@@ -160,15 +164,15 @@ mod tests {
             },
             RerankDocument { text: "mid".into() },
         ];
-        let results = reranker.rerank("query", &docs).unwrap();
+        let results = reranker.rerank("query", &docs).await.unwrap();
         assert_eq!(results.len(), 3);
         assert!((results[1].score - 0.9).abs() < 0.001);
     }
 
-    #[test]
-    fn test_stub_reranker_empty() {
+    #[tokio::test]
+    async fn test_stub_reranker_empty() {
         let reranker = StubReranker { scores: vec![] };
-        let results = reranker.rerank("query", &[]).unwrap();
+        let results = reranker.rerank("query", &[]).await.unwrap();
         assert!(results.is_empty());
     }
 }

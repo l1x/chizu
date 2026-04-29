@@ -24,7 +24,7 @@ impl<'a> Embedder<'a> {
         Self { provider, config }
     }
 
-    pub fn run(&self, store: &ChizuStore) -> Result<EmbeddingStats> {
+    pub async fn run(&self, store: &ChizuStore) -> Result<EmbeddingStats> {
         let mut stats = EmbeddingStats::default();
 
         let Some(ref model) = self.config.model else {
@@ -79,20 +79,22 @@ impl<'a> Embedder<'a> {
             batch.push((entity.id.clone(), text));
 
             if batch.len() >= batch_size {
-                self.flush_batch(store, model, dimensions, &batch, &mut stats);
+                self.flush_batch(store, model, dimensions, &batch, &mut stats)
+                    .await;
                 batch.clear();
             }
         }
 
         if !batch.is_empty() {
-            self.flush_batch(store, model, dimensions, &batch, &mut stats);
+            self.flush_batch(store, model, dimensions, &batch, &mut stats)
+                .await;
         }
 
         Ok(stats)
     }
 
     /// Try to embed a batch; on failure, fall back to embedding each item individually.
-    fn flush_batch(
+    async fn flush_batch(
         &self,
         store: &ChizuStore,
         model: &str,
@@ -100,10 +102,10 @@ impl<'a> Embedder<'a> {
         batch: &[(String, String)],
         stats: &mut EmbeddingStats,
     ) {
-        if let Err(e) = self.process_batch(store, model, dimensions, batch) {
+        if let Err(e) = self.process_batch(store, model, dimensions, batch).await {
             error!("Batch embedding failed: {e}; falling back to singles");
             for (id, text) in batch {
-                if let Err(e) = self.process_single(store, model, dimensions, id, text) {
+                if let Err(e) = self.process_single(store, model, dimensions, id, text).await {
                     error!("Single embedding failed for {id}: {e}");
                     stats.failed += 1;
                 } else {
@@ -115,7 +117,7 @@ impl<'a> Embedder<'a> {
         }
     }
 
-    fn process_batch(
+    async fn process_batch(
         &self,
         store: &ChizuStore,
         model: &str,
@@ -125,7 +127,7 @@ impl<'a> Embedder<'a> {
         let texts: Vec<String> = batch.iter().map(|(_, t)| t.clone()).collect();
         info!("  embedding batch of {} items", texts.len());
         let llm_start = Instant::now();
-        let vectors = self.provider.embed(&texts)?;
+        let vectors = self.provider.embed(&texts).await?;
         info!(
             "  llm latency: {:.1}ms",
             llm_start.elapsed().as_secs_f64() * 1000.0
@@ -182,7 +184,7 @@ impl<'a> Embedder<'a> {
         Ok(())
     }
 
-    fn process_single(
+    async fn process_single(
         &self,
         store: &ChizuStore,
         model: &str,
@@ -191,7 +193,7 @@ impl<'a> Embedder<'a> {
         text: &str,
     ) -> Result<()> {
         let llm_start = Instant::now();
-        let vectors = self.provider.embed(&[text.to_string()])?;
+        let vectors = self.provider.embed(&[text.to_string()]).await?;
         info!(
             "  llm latency (single): {:.1}ms",
             llm_start.elapsed().as_secs_f64() * 1000.0
@@ -227,14 +229,16 @@ fn build_embedding_text(entity: &chizu_core::Entity, summary: &chizu_core::Summa
 #[cfg(test)]
 mod tests {
     use super::*;
+    use async_trait::async_trait;
     use chizu_core::{ChizuStore, Entity, EntityKind, Provider, ProviderError, Store, Summary};
 
     struct MockProvider {
         vectors: Vec<Vec<f32>>,
     }
 
+    #[async_trait]
     impl Provider for MockProvider {
-        fn complete(
+        async fn complete(
             &self,
             _prompt: &str,
             _max_tokens: Option<u32>,
@@ -242,7 +246,10 @@ mod tests {
             unimplemented!()
         }
 
-        fn embed(&self, texts: &[String]) -> std::result::Result<Vec<Vec<f32>>, ProviderError> {
+        async fn embed(
+            &self,
+            texts: &[String],
+        ) -> std::result::Result<Vec<Vec<f32>>, ProviderError> {
             Ok((0..texts.len())
                 .map(|i| self.vectors[i % self.vectors.len()].clone())
                 .collect())
@@ -263,8 +270,8 @@ mod tests {
         assert!(text.contains("Keywords: rust, test"));
     }
 
-    #[test]
-    fn test_embedder_generates_and_skips() {
+    #[tokio::test]
+    async fn test_embedder_generates_and_skips() {
         let (store, _temp) = create_test_store(4);
 
         store
@@ -289,7 +296,7 @@ mod tests {
         };
         let embedder = Embedder::new(&provider, &config);
 
-        let stats1 = embedder.run(&store).unwrap();
+        let stats1 = embedder.run(&store).await.unwrap();
         assert_eq!(stats1.generated, 1);
         assert_eq!(stats1.skipped, 0);
 
@@ -305,13 +312,13 @@ mod tests {
         let vector = store.get_vector(key).unwrap().unwrap();
         assert_eq!(vector, vec![1.0, 0.0, 0.0, 0.0]);
 
-        let stats2 = embedder.run(&store).unwrap();
+        let stats2 = embedder.run(&store).await.unwrap();
         assert_eq!(stats2.generated, 0);
         assert_eq!(stats2.skipped, 1);
     }
 
-    #[test]
-    fn test_embedder_search_returns_correct_entity() {
+    #[tokio::test]
+    async fn test_embedder_search_returns_correct_entity() {
         let (store, _temp) = create_test_store(4);
 
         store
@@ -334,7 +341,7 @@ mod tests {
             dimensions: Some(4),
             batch_size: Some(2),
         };
-        Embedder::new(&provider, &config).run(&store).unwrap();
+        Embedder::new(&provider, &config).run(&store).await.unwrap();
 
         let results = store.search_vectors(&[1.0, 0.0, 0.0, 0.0], 1).unwrap();
         assert_eq!(results.len(), 1);

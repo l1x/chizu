@@ -15,11 +15,13 @@ categories = ["development-tools", "parser-implementations"]
 chizu-core = { version = "0.3.0", path = "../chizu-core" }
 blake3 = { workspace = true }
 cargo_toml = { workspace = true }
+futures = { workspace = true }
 globset = { workspace = true }
 ignore = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
+tokio = { workspace = true }
 toml = { workspace = true }
 tracing = { workspace = true }
 tree-sitter = { workspace = true }
@@ -30,7 +32,9 @@ rustc-hash = { workspace = true }
 ruzstd = { workspace = true }
 
 [dev-dependencies]
+async-trait = { workspace = true }
 chizu-core = { version = "0.3.0", path = "../chizu-core", features = ["test-support"] }
 bolero = { workspace = true }
 bolero-generator = { workspace = true }
 tempfile = { workspace = true }
+tokio = { workspace = true }

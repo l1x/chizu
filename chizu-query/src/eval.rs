@@ -166,7 +166,7 @@ pub fn noise_tail_rate(
 // ---------------------------------------------------------------------------
 
 /// Run the full benchmark evaluation.
-pub fn evaluate(
+pub async fn evaluate(
     benchmark: &Benchmark,
     store: &dyn Store,
     config: &Config,
@@ -188,9 +188,9 @@ pub fn evaluate(
             verbose: false,
         };
 
-        let plan = SearchPipeline::run(
-            store, &bq.text, category, &options, config, provider, reranker,
-        )?;
+        let plan =
+            SearchPipeline::run(store, &bq.text, category, &options, config, provider, reranker)
+                .await?;
 
         let results: Vec<String> = plan.entries.iter().map(|e| e.entity_id.clone()).collect();
         let relevant: HashSet<String> = bq.relevant.iter().cloned().collect();

@@ -1,5 +1,7 @@
 use std::time::Duration;
 
+use async_trait::async_trait;
+
 use crate::config::ProviderConfig;
 use crate::provider::{Provider, ProviderError, with_retry};
 
@@ -7,7 +9,7 @@ const RETRY_BASE_DELAY_MS: u64 = 500;
 
 /// OpenAI-compatible HTTP provider.
 pub struct OpenAiProvider {
-    client: reqwest::blocking::Client,
+    client: reqwest::Client,
     base_url: String,
     api_key: String,
     completion_model: String,
@@ -20,9 +22,10 @@ impl OpenAiProvider {
         config: &ProviderConfig,
         completion_model: String,
         embedding_model: String,
+        _embedding_dimensions: Option<u32>,
     ) -> Result<Self, ProviderError> {
         let timeout = Duration::from_secs(config.timeout_secs);
-        let client = reqwest::blocking::Client::builder()
+        let client = reqwest::Client::builder()
             .timeout(timeout)
             .build()
             .map_err(|e| ProviderError::Http(format!("failed to build HTTP client: {e}")))?;
@@ -37,7 +40,7 @@ impl OpenAiProvider {
         })
     }
 
-    fn build_request(&self, path: &str) -> reqwest::blocking::RequestBuilder {
+    fn build_request(&self, path: &str) -> reqwest::RequestBuilder {
         let url = format!("{}/{}", self.base_url, path);
         let mut req = self.client.post(&url);
         req = req.header("Content-Type", "application/json");
@@ -48,12 +51,17 @@ impl OpenAiProvider {
     }
 }
 
+#[async_trait]
 impl Provider for OpenAiProvider {
-    fn complete(&self, prompt: &str, max_tokens: Option<u32>) -> Result<String, ProviderError> {
+    async fn complete(
+        &self,
+        prompt: &str,
+        max_tokens: Option<u32>,
+    ) -> Result<String, ProviderError> {
         with_retry(
             self.retry_attempts,
             Duration::from_millis(RETRY_BASE_DELAY_MS),
-            || {
+            || async {
                 let mut body = serde_json::json!({
                     "model": self.completion_model,
                     "messages": [
@@ -70,10 +78,11 @@ impl Provider for OpenAiProvider {
                     .build_request("chat/completions")
                     .json(&body)
                     .send()
+                    .await
                     .map_err(ProviderError::from)?;
 
                 let status = response.status();
-                let text = response.text().map_err(ProviderError::from)?;
+                let text = response.text().await.map_err(ProviderError::from)?;
 
                 if !status.is_success() {
                     return Err(ProviderError::Api {
@@ -94,9 +103,10 @@ impl Provider for OpenAiProvider {
                 Ok(content.trim().to_string())
             },
         )
+        .await
     }
 
-    fn embed(&self, texts: &[String]) -> Result<Vec<Vec<f32>>, ProviderError> {
+    async fn embed(&self, texts: &[String]) -> Result<Vec<Vec<f32>>, ProviderError> {
         if texts.is_empty() {
             return Ok(Vec::new());
         }
@@ -104,7 +114,7 @@ impl Provider for OpenAiProvider {
         with_retry(
             self.retry_attempts,
             Duration::from_millis(RETRY_BASE_DELAY_MS),
-            || {
+            || async {
                 let body = serde_json::json!({
                     "model": self.embedding_model,
                     "input": texts,
@@ -114,10 +124,11 @@ impl Provider for OpenAiProvider {
                     .build_request("embeddings")
                     .json(&body)
                     .send()
+                    .await
                     .map_err(ProviderError::from)?;
 
                 let status = response.status();
-                let text = response.text().map_err(ProviderError::from)?;
+                let text = response.text().await.map_err(ProviderError::from)?;
 
                 if !status.is_success() {
                     return Err(ProviderError::Api {
@@ -152,6 +163,7 @@ impl Provider for OpenAiProvider {
                 Ok(vectors)
             },
         )
+        .await
     }
 }
 
@@ -169,13 +181,14 @@ mod tests {
             config,
             completion_model.to_string(),
             embedding_model.to_string(),
+            None,
         )
         .unwrap()
     }
 
-    #[test]
-    fn test_complete_success() {
-        let mut server = mockito::Server::new();
+    #[tokio::test]
+    async fn test_complete_success() {
+        let mut server = mockito::Server::new_async().await;
         let url = server.url();
 
         let mock = server
@@ -183,51 +196,55 @@ mod tests {
             .with_status(200)
             .with_header("content-type", "application/json")
             .with_body(r#"{"choices":[{"message":{"content":"  Hello!  "}}]}"#)
-            .create();
+            .create_async()
+            .await;
 
         let config = ProviderConfig {
             base_url: url,
             api_key: "test-key".to_string(),
             timeout_secs: 5,
             retry_attempts: 1,
+            ..Default::default()
         };
         let provider = create_provider(&config, "llama3", "nomic");
-        let result = provider.complete("Say hi", None).unwrap();
+        let result = provider.complete("Say hi", None).await.unwrap();
 
         assert_eq!(result, "Hello!");
-        mock.assert();
+        mock.assert_async().await;
     }
 
-    #[test]
-    fn test_complete_api_error() {
-        let mut server = mockito::Server::new();
+    #[tokio::test]
+    async fn test_complete_api_error() {
+        let mut server = mockito::Server::new_async().await;
         let url = server.url();
 
         let mock = server
             .mock("POST", "/chat/completions")
             .with_status(400)
             .with_body("bad request")
-            .create();
+            .create_async()
+            .await;
 
         let config = ProviderConfig {
             base_url: url,
             api_key: "".to_string(),
             timeout_secs: 5,
             retry_attempts: 1,
+            ..Default::default()
         };
         let provider = create_provider(&config, "llama3", "nomic");
-        let result = provider.complete("Say hi", None);
+        let result = provider.complete("Say hi", None).await;
 
         assert!(matches!(
             result,
             Err(ProviderError::Api { status: 400, .. })
         ));
-        mock.assert();
+        mock.assert_async().await;
     }
 
-    #[test]
-    fn test_complete_retries_on_500() {
-        let mut server = mockito::Server::new();
+    #[tokio::test]
+    async fn test_complete_retries_on_500() {
+        let mut server = mockito::Server::new_async().await;
         let url = server.url();
 
         let mock = server
@@ -235,24 +252,26 @@ mod tests {
             .with_status(500)
             .with_body("server error")
             .expect_at_least(2)
-            .create();
+            .create_async()
+            .await;
 
         let config = ProviderConfig {
             base_url: url,
             api_key: "".to_string(),
             timeout_secs: 5,
             retry_attempts: 2,
+            ..Default::default()
         };
         let provider = create_provider(&config, "llama3", "nomic");
-        let result = provider.complete("Say hi", None);
+        let result = provider.complete("Say hi", None).await;
 
         assert!(result.is_err());
-        mock.assert();
+        mock.assert_async().await;
     }
 
-    #[test]
-    fn test_embed_success() {
-        let mut server = mockito::Server::new();
+    #[tokio::test]
+    async fn test_embed_success() {
+        let mut server = mockito::Server::new_async().await;
         let url = server.url();
 
         let mock = server
@@ -260,38 +279,44 @@ mod tests {
             .with_status(200)
             .with_header("content-type", "application/json")
             .with_body(r#"{"data":[{"embedding":[0.1,0.2,0.3]},{"embedding":[0.4,0.5,0.6]}]}"#)
-            .create();
+            .create_async()
+            .await;
 
         let config = ProviderConfig {
             base_url: url,
             api_key: "".to_string(),
             timeout_secs: 5,
             retry_attempts: 1,
+            ..Default::default()
         };
         let provider = create_provider(&config, "llama3", "nomic");
-        let result = provider.embed(&["hello".into(), "world".into()]).unwrap();
+        let result = provider
+            .embed(&["hello".into(), "world".into()])
+            .await
+            .unwrap();
 
         assert_eq!(result.len(), 2);
         assert_eq!(result[0], vec![0.1_f32, 0.2_f32, 0.3_f32]);
         assert_eq!(result[1], vec![0.4_f32, 0.5_f32, 0.6_f32]);
-        mock.assert();
+        mock.assert_async().await;
     }
 
-    #[test]
-    fn test_embed_empty_input() {
+    #[tokio::test]
+    async fn test_embed_empty_input() {
         let config = ProviderConfig {
             base_url: "http://localhost".to_string(),
             api_key: "".to_string(),
             timeout_secs: 5,
             retry_attempts: 1,
+            ..Default::default()
         };
         let provider = create_provider(&config, "llama3", "nomic");
-        let result = provider.embed(&[]).unwrap();
+        let result = provider.embed(&[]).await.unwrap();
         assert!(result.is_empty());
     }
 
-    #[test]
-    fn test_complete_timeout_handling() {
+    #[tokio::test]
+    async fn test_complete_timeout_handling() {
         // Verify that connection failures produce the expected error variant
         // and don't panic. Uses a non-routable address to trigger a timeout.
         let config = ProviderConfig {
@@ -299,10 +324,11 @@ mod tests {
             api_key: "".to_string(),
             timeout_secs: 1,
             retry_attempts: 1,
+            ..Default::default()
         };
         let provider = create_provider(&config, "llama3", "nomic");
 
-        let result = provider.complete("Say hi", None);
+        let result = provider.complete("Say hi", None).await;
         assert!(result.is_err());
         match result.unwrap_err() {
             ProviderError::Http(_) | ProviderError::Timeout => {}
@@ -310,9 +336,9 @@ mod tests {
         }
     }
 
-    #[test]
-    fn test_complete_sends_max_tokens() {
-        let mut server = mockito::Server::new();
+    #[tokio::test]
+    async fn test_complete_sends_max_tokens() {
+        let mut server = mockito::Server::new_async().await;
         let url = server.url();
 
         let mock = server
@@ -323,23 +349,25 @@ mod tests {
             .with_status(200)
             .with_header("content-type", "application/json")
             .with_body(r#"{"choices":[{"message":{"content":"ok"}}]}"#)
-            .create();
+            .create_async()
+            .await;
 
         let config = ProviderConfig {
             base_url: url,
             api_key: "".to_string(),
             timeout_secs: 5,
             retry_attempts: 1,
+            ..Default::default()
         };
         let provider = create_provider(&config, "llama3", "nomic");
-        let result = provider.complete("test", Some(512)).unwrap();
+        let result = provider.complete("test", Some(512)).await.unwrap();
         assert_eq!(result, "ok");
-        mock.assert();
+        mock.assert_async().await;
     }
 
-    #[test]
-    fn test_complete_omits_max_tokens_when_none() {
-        let mut server = mockito::Server::new();
+    #[tokio::test]
+    async fn test_complete_omits_max_tokens_when_none() {
+        let mut server = mockito::Server::new_async().await;
         let url = server.url();
 
         let mock = server
@@ -347,18 +375,20 @@ mod tests {
             .with_status(200)
             .with_header("content-type", "application/json")
             .with_body(r#"{"choices":[{"message":{"content":"ok"}}]}"#)
-            .create();
+            .create_async()
+            .await;
 
         let config = ProviderConfig {
             base_url: url,
             api_key: "".to_string(),
             timeout_secs: 5,
             retry_attempts: 1,
+            ..Default::default()
         };
         let provider = create_provider(&config, "llama3", "nomic");
-        let result = provider.complete("test", None).unwrap();
+        let result = provider.complete("test", None).await.unwrap();
         assert_eq!(result, "ok");
-        mock.assert();
+        mock.assert_async().await;
 
         // Verify via a second request that max_tokens is absent by checking
         // the mock matched (it would fail if body was unexpected).
@@ -372,9 +402,10 @@ mod tests {
             .with_status(200)
             .with_header("content-type", "application/json")
             .with_body(r#"{"choices":[{"message":{"content":"with tokens"}}]}"#)
-            .create();
-        let result = provider.complete("test", Some(256)).unwrap();
+            .create_async()
+            .await;
+        let result = provider.complete("test", Some(256)).await.unwrap();
         assert_eq!(result, "with tokens");
-        mock_with_tokens.assert();
+        mock_with_tokens.assert_async().await;
     }
 }

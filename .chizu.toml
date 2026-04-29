@@ -24,23 +24,36 @@ kind_preference = 0.10
 exported = 0.10
 path_match = 0.10
 
-[providers.ollama]
-base_url = "http://localhost:11434/v1"
-timeout_secs = 120
+[reranker]
+enabled = true
+flavor = "aws_bedrock"
+api_version = "bedrock-rerank-2023-09-30"
+provider = "bedrock"
+model = "arn:aws:bedrock:eu-central-1::foundation-model/amazon.rerank-v1:0"
+top_k = 25
+batch_size = 25
+timeout_secs = 30
+
+[providers.bedrock]
+flavor = "aws_bedrock"
+api_version = "bedrock-runtime-2023-09-30"
+region = "eu-central-1"
+profile = "datadeft-dev"
+timeout_secs = 60
 retry_attempts = 3
 
 [summary]
-provider = "ollama"
-model = "gemma3:latest"
-max_tokens = 256
+provider = "bedrock"
+model = "eu.amazon.nova-micro-v1:0"
+max_tokens = 512
 temperature = 0.2
 batch_size = 4
 concurrency = 1
 
 [embedding]
-provider = "ollama"
-model = "nomic-embed-text-v2-moe:latest"
-dimensions = 768
+provider = "bedrock"
+model = "amazon.titan-embed-text-v2:0"
+dimensions = 256
 batch_size = 32
 
 [visualize]

@@ -34,7 +34,7 @@ impl Default for SearchOptions {
 pub struct SearchPipeline;
 
 impl SearchPipeline {
-    pub fn run(
+    pub async fn run(
         store: &dyn Store,
         query: &str,
         category: Option<TaskCategory>,
@@ -48,7 +48,7 @@ impl SearchPipeline {
 
         // Retrieve
         let t0 = Instant::now();
-        let mut candidates = retrieval::retrieve(store, query, category, config, provider)?;
+        let mut candidates = retrieval::retrieve(store, query, category, config, provider).await?;
         let retrieval_ms = t0.elapsed().as_millis() as u64;
 
         // Initial scoring for expansion seed selection
@@ -77,7 +77,7 @@ impl SearchPipeline {
             if let Some(reranker) = reranker {
                 let t0 = Instant::now();
                 let top_k = config.reranker.top_k.min(candidates.len());
-                match apply_reranker(store, query, &mut candidates, top_k, reranker) {
+                match apply_reranker(store, query, &mut candidates, top_k, reranker).await {
                     Ok(()) => {
                         tracing::debug!("reranking applied to top {} candidates", top_k);
                     }
@@ -174,7 +174,7 @@ impl SearchPipeline {
 ///
 /// Fetches summaries to build document text, calls the reranker, then
 /// reorders candidates by reranker score (replacing first-stage ordering).
-fn apply_reranker(
+async fn apply_reranker(
     store: &dyn Store,
     query: &str,
     candidates: &mut Vec<retrieval::Candidate>,
@@ -204,6 +204,7 @@ fn apply_reranker(
 
     let mut scores = reranker
         .rerank(query, &documents)
+        .await
         .map_err(|e| crate::error::QueryError::Other(e.to_string()))?;
 
     // Sort by descending score (trait returns unsorted)
@@ -285,8 +286,8 @@ mod tests {
         }
     }
 
-    #[test]
-    fn test_pipeline_end_to_end() {
+    #[tokio::test]
+    async fn test_pipeline_end_to_end() {
         let (store, _temp) = create_test_store();
 
         store
@@ -307,8 +308,9 @@ mod tests {
 
         let config = Config::default();
         let options = default_options(5);
-        let plan =
-            SearchPipeline::run(&store, "auth debug", None, &options, &config, None, None).unwrap();
+        let plan = SearchPipeline::run(&store, "auth debug", None, &options, &config, None, None)
+            .await
+            .unwrap();
 
         assert_eq!(plan.category, TaskCategory::Debug);
         assert!(!plan.entries.is_empty());
@@ -318,8 +320,8 @@ mod tests {
         assert!(top.score > 0.0);
     }
 
-    #[test]
-    fn test_pipeline_respects_limit() {
+    #[tokio::test]
+    async fn test_pipeline_respects_limit() {
         let (store, _temp) = create_test_store();
 
         for i in 0..10 {
@@ -334,16 +336,17 @@ mod tests {
 
         let config = Config::default();
         let options = default_options(3);
-        let plan =
-            SearchPipeline::run(&store, "common", None, &options, &config, None, None).unwrap();
+        let plan = SearchPipeline::run(&store, "common", None, &options, &config, None, None)
+            .await
+            .unwrap();
 
         assert_eq!(plan.entries.len(), 3);
         assert_eq!(plan.entries[0].rank, 1);
         assert_eq!(plan.entries[2].rank, 3);
     }
 
-    #[test]
-    fn test_pipeline_cutoff() {
+    #[tokio::test]
+    async fn test_pipeline_cutoff() {
         let (store, _temp) = create_test_store();
 
         let entities = [
@@ -367,14 +370,15 @@ mod tests {
         config.search.max_results = 5;
 
         let options = default_options(10);
-        let plan =
-            SearchPipeline::run(&store, "auth", None, &options, &config, None, None).unwrap();
+        let plan = SearchPipeline::run(&store, "auth", None, &options, &config, None, None)
+            .await
+            .unwrap();
 
         assert!(plan.entries.len() <= 5);
     }
 
-    #[test]
-    fn test_pipeline_show_all_bypasses_cutoff() {
+    #[tokio::test]
+    async fn test_pipeline_show_all_bypasses_cutoff() {
         let (store, _temp) = create_test_store();
 
         for i in 0..5 {
@@ -395,14 +399,15 @@ mod tests {
             show_all: true,
             verbose: false,
         };
-        let plan =
-            SearchPipeline::run(&store, "common", None, &options, &config, None, None).unwrap();
+        let plan = SearchPipeline::run(&store, "common", None, &options, &config, None, None)
+            .await
+            .unwrap();
 
         assert!(plan.total_before_cutoff.is_none());
     }
 
-    #[test]
-    fn test_pipeline_verbose_includes_breakdown_and_timings() {
+    #[tokio::test]
+    async fn test_pipeline_verbose_includes_breakdown_and_timings() {
         let (store, _temp) = create_test_store();
 
         store
@@ -418,8 +423,9 @@ mod tests {
             show_all: false,
             verbose: true,
         };
-        let plan =
-            SearchPipeline::run(&store, "handler", None, &options, &config, None, None).unwrap();
+        let plan = SearchPipeline::run(&store, "handler", None, &options, &config, None, None)
+            .await
+            .unwrap();
 
         assert!(!plan.entries.is_empty());
         assert!(plan.entries[0].score_breakdown.is_some());
@@ -429,8 +435,8 @@ mod tests {
         assert!(t.reranking_ms.is_none()); // Reranker not enabled
     }
 
-    #[test]
-    fn test_pipeline_reranker_disabled_by_default() {
+    #[tokio::test]
+    async fn test_pipeline_reranker_disabled_by_default() {
         let (store, _temp) = create_test_store();
 
         store
@@ -448,7 +454,9 @@ mod tests {
             show_all: false,
             verbose: true,
         };
-        let plan = SearchPipeline::run(&store, "foo", None, &options, &config, None, None).unwrap();
+        let plan = SearchPipeline::run(&store, "foo", None, &options, &config, None, None)
+            .await
+            .unwrap();
 
         let t = plan.timings.unwrap();
         assert!(t.reranking_ms.is_none());

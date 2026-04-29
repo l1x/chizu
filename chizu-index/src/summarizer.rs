@@ -3,7 +3,7 @@ use std::hash::BuildHasherDefault;
 use std::io::Read;
 use std::ops::Range;
 use std::path::Path;
-use std::sync::{Mutex, OnceLock};
+use std::sync::{Arc, OnceLock};
 use std::time::Instant;
 
 use base64::{Engine as _, engine::general_purpose::STANDARD};
@@ -11,6 +11,7 @@ use chizu_core::{
     ChizuStore, ComponentId, EdgeKind, Entity, EntityKind, Provider, ProviderError, Store, Summary,
     SummaryConfig,
 };
+use futures::stream::{self, StreamExt};
 use rustc_hash::FxHasher;
 use tiktoken_rs::{CoreBPE, Rank};
 use tracing::{debug, error, info, warn};
@@ -140,7 +141,7 @@ impl<'a> Summarizer<'a> {
         Self { provider, config }
     }
 
-    pub fn run(&self, store: &ChizuStore, repo_root: &Path) -> Result<SummaryStats> {
+    pub async fn run(&self, store: &ChizuStore, repo_root: &Path) -> Result<SummaryStats> {
         let mut stats = SummaryStats::default();
         let entities =
             collect_entities_to_summarize(store, self.config.exported_only.unwrap_or(true))?;
@@ -185,6 +186,8 @@ impl<'a> Summarizer<'a> {
             return Ok(stats);
         }
 
+        let work_items = Arc::new(work_items);
+
         let batch_size = self.config.batch_size.unwrap_or(4).max(1);
         let concurrency = self.config.concurrency.unwrap_or(1).max(1);
         let batch_planner = match ExactBatchPlanner::for_summary_model(self.config.model.as_deref())
@@ -216,80 +219,64 @@ impl<'a> Summarizer<'a> {
             concurrency
         );
 
-        // Phase 2: call LLM in parallel
-        let next_batch = Mutex::new(0usize);
+        // Phase 2: call LLM concurrently
+        let outcomes: Vec<BatchOutcome> = stream::iter(batch_ranges.into_iter())
+            .map(|range| {
+                let work_items = Arc::clone(&work_items);
+                async move {
+                let start = range.start;
+                let end = range.end;
+                let batch = &work_items[start..end];
+                let max_tokens = scale_max_tokens(self.config.max_tokens, batch.len());
+                let prompt = if batch.len() == 1 {
+                    build_single_prompt(&batch[0].prompt_input, self.config.max_tokens)
+                } else {
+                    build_batch_prompt(batch, self.config.max_tokens, max_tokens)
+                };
+                let prompt_tokens =
+                    exact_tokenizer.map(|tokenizer| count_llama3_chat_tokens(tokenizer, &prompt));
 
-        std::thread::scope(|s| {
-            let handles: Vec<_> = (0..concurrency)
-                .map(|_| {
-                    s.spawn(|| {
-                        let mut results = Vec::new();
-                        loop {
-                            let batch_index = {
-                                let mut next = next_batch.lock().unwrap();
-                                if *next >= batch_ranges.len() {
-                                    break;
-                                }
-                                let batch_index = *next;
-                                *next += 1;
-                                batch_index
-                            };
-                            let range = batch_ranges[batch_index].clone();
-                            let start = range.start;
-                            let end = range.end;
-                            let batch = &work_items[start..end];
-                            let max_tokens = scale_max_tokens(self.config.max_tokens, batch.len());
-                            let prompt = if batch.len() == 1 {
-                                build_single_prompt(&batch[0].prompt_input, self.config.max_tokens)
-                            } else {
-                                build_batch_prompt(batch, self.config.max_tokens, max_tokens)
-                            };
-                            let prompt_tokens =
-                                exact_tokenizer.map(|tokenizer| count_llama3_chat_tokens(tokenizer, &prompt));
+                info!(
+                    "  summarizing batch of {} entities (prompt_tokens={:?}, requested_max_tokens={:?})",
+                    batch.len(),
+                    prompt_tokens,
+                    max_tokens,
+                );
+                let llm_start = Instant::now();
+                let result = self.provider.complete(&prompt, max_tokens).await;
+                let elapsed = llm_start.elapsed().as_secs_f64() * 1000.0;
+                let response_tokens = match &result {
+                    Ok(response) => exact_tokenizer
+                        .map(|tokenizer| count_llama3_text_tokens(tokenizer, response)),
+                    Err(_) => None,
+                };
+                info!(
+                    "  llm latency: {:.1}ms ({} entities, prompt_tokens={:?}, response_tokens={:?}, requested_max_tokens={:?})",
+                    elapsed,
+                    batch.len(),
+                    prompt_tokens,
+                    response_tokens,
+                    max_tokens,
+                );
 
-                            info!(
-                                "  summarizing batch of {} entities (prompt_tokens={:?}, requested_max_tokens={:?})",
-                                batch.len(),
-                                prompt_tokens,
-                                max_tokens,
-                            );
-                            let llm_start = Instant::now();
-                            let result = self.provider.complete(&prompt, max_tokens);
-                            let elapsed = llm_start.elapsed().as_secs_f64() * 1000.0;
-                            let response_tokens = match &result {
-                                Ok(response) => exact_tokenizer
-                                    .map(|tokenizer| count_llama3_text_tokens(tokenizer, response)),
-                                Err(_) => None,
-                            };
-                            info!(
-                                "  llm latency: {:.1}ms ({} entities, prompt_tokens={:?}, response_tokens={:?}, requested_max_tokens={:?})",
-                                elapsed,
-                                batch.len(),
-                                prompt_tokens,
-                                response_tokens,
-                                max_tokens,
-                            );
-
-                            results.push(BatchOutcome { start, end, result });
-                        }
-                        results
-                    })
-                })
-                .collect();
-
-            // Phase 3: collect results and write to store (single-threaded)
-            for handle in handles {
-                for outcome in handle.join().unwrap() {
-                    let batch = &work_items[outcome.start..outcome.end];
-                    self.store_batch_result(store, batch, outcome.result, &mut stats);
+                BatchOutcome { start, end, result }
                 }
-            }
-        });
+            })
+            .buffer_unordered(concurrency)
+            .collect()
+            .await;
+
+        // Phase 3: write to store (single-threaded)
+        for outcome in outcomes {
+            let batch = &work_items[outcome.start..outcome.end];
+            self.store_batch_result(store, batch, outcome.result, &mut stats)
+                .await;
+        }
 
         Ok(stats)
     }
 
-    fn store_batch_result(
+    async fn store_batch_result(
         &self,
         store: &ChizuStore,
         batch: &[SummaryWork],
@@ -315,7 +302,7 @@ impl<'a> Summarizer<'a> {
                             "Batched summary response omitted {} entities; falling back to singles",
                             missing.join(", ")
                         );
-                        self.fallback_to_singles(store, batch, stats);
+                        self.fallback_to_singles(store, batch, stats).await;
                         return;
                     }
 
@@ -325,7 +312,7 @@ impl<'a> Summarizer<'a> {
                                 "Batched summary response lost {} during processing; falling back to singles",
                                 item.entity_id
                             );
-                            self.fallback_to_singles(store, batch, stats);
+                            self.fallback_to_singles(store, batch, stats).await;
                             return;
                         };
                         self.insert_summary(store, item, summary, stats);
@@ -333,28 +320,33 @@ impl<'a> Summarizer<'a> {
                 }
                 Err(e) => {
                     warn!("Failed to parse batched summary response: {e}; falling back to singles");
-                    self.fallback_to_singles(store, batch, stats);
+                    self.fallback_to_singles(store, batch, stats).await;
                 }
             },
             Err(e) => {
                 warn!("Batched LLM call failed: {e}; falling back to singles");
-                self.fallback_to_singles(store, batch, stats);
+                self.fallback_to_singles(store, batch, stats).await;
             }
         }
     }
 
-    fn fallback_to_singles(
+    async fn fallback_to_singles(
         &self,
         store: &ChizuStore,
         batch: &[SummaryWork],
         stats: &mut SummaryStats,
     ) {
         for item in batch {
-            self.run_single_request(store, item, stats);
+            self.run_single_request(store, item, stats).await;
         }
     }
 
-    fn run_single_request(&self, store: &ChizuStore, item: &SummaryWork, stats: &mut SummaryStats) {
+    async fn run_single_request(
+        &self,
+        store: &ChizuStore,
+        item: &SummaryWork,
+        stats: &mut SummaryStats,
+    ) {
         let prompt = build_single_prompt(&item.prompt_input, self.config.max_tokens);
         let prompt_tokens = exact_tokenizer_for_model(self.config.model.as_deref())
             .map(|tokenizer| count_llama3_chat_tokens(tokenizer, &prompt));
@@ -363,7 +355,10 @@ impl<'a> Summarizer<'a> {
             item.entity_id, prompt_tokens, self.config.max_tokens,
         );
         let llm_start = Instant::now();
-        let result = self.provider.complete(&prompt, self.config.max_tokens);
+        let result = self
+            .provider
+            .complete(&prompt, self.config.max_tokens)
+            .await;
         let elapsed = llm_start.elapsed().as_secs_f64() * 1000.0;
         let response_tokens = match &result {
             Ok(response) => exact_tokenizer_for_model(self.config.model.as_deref())
@@ -1283,6 +1278,7 @@ fn salvage_summary_from_raw(entity_id: &str, response: &str) -> Option<Summary> 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use async_trait::async_trait;
     use chizu_core::{
         ChizuStore, ComponentId, Edge, EdgeKind, Entity, EntityKind, Provider, ProviderError,
     };
@@ -1294,8 +1290,9 @@ mod tests {
         calls: AtomicUsize,
     }
 
+    #[async_trait]
     impl Provider for MockProvider {
-        fn complete(
+        async fn complete(
             &self,
             prompt: &str,
             _max_tokens: Option<u32>,
@@ -1325,7 +1322,10 @@ mod tests {
             Ok(r#"{"short_summary": "default summary", "detailed_summary": "default detailed", "keywords": ["default"]}"#.to_string())
         }
 
-        fn embed(&self, _texts: &[String]) -> std::result::Result<Vec<Vec<f32>>, ProviderError> {
+        async fn embed(
+            &self,
+            _texts: &[String],
+        ) -> std::result::Result<Vec<Vec<f32>>, ProviderError> {
             unimplemented!()
         }
     }
@@ -1357,8 +1357,8 @@ mod tests {
         assert_eq!(summary.keywords, Some(vec!["a".to_string()]));
     }
 
-    #[test]
-    fn test_summarizer_generates_and_caches() {
+    #[tokio::test]
+    async fn test_summarizer_generates_and_caches() {
         let (store, temp_dir) = create_test_store();
         let repo_root = temp_dir.path().join("repo");
         std::fs::create_dir_all(repo_root.join("src")).unwrap();
@@ -1377,7 +1377,7 @@ mod tests {
         let config = SummaryConfig::default();
         let summarizer = Summarizer::new(&provider, &config);
 
-        let stats1 = summarizer.run(&store, &repo_root).unwrap();
+        let stats1 = summarizer.run(&store, &repo_root).await.unwrap();
         assert_eq!(stats1.generated, 1);
         assert_eq!(stats1.skipped, 0);
 
@@ -1394,13 +1394,13 @@ mod tests {
         assert!(summary.source_hash.is_some());
 
         // Re-run should skip unchanged entity.
-        let stats2 = summarizer.run(&store, &repo_root).unwrap();
+        let stats2 = summarizer.run(&store, &repo_root).await.unwrap();
         assert_eq!(stats2.generated, 0);
         assert_eq!(stats2.skipped, 1);
     }
 
-    #[test]
-    fn test_summarizer_generates_repo_component_and_doc_summaries() {
+    #[tokio::test]
+    async fn test_summarizer_generates_repo_component_and_doc_summaries() {
         let (store, temp_dir) = create_test_store();
         let repo_root = temp_dir.path().join("repo");
         std::fs::create_dir_all(repo_root.join("crate-a/src")).unwrap();
@@ -1487,7 +1487,7 @@ mod tests {
         let config = SummaryConfig::default();
         let summarizer = Summarizer::new(&provider, &config);
 
-        let stats = summarizer.run(&store, &repo_root).unwrap();
+        let stats = summarizer.run(&store, &repo_root).await.unwrap();
         assert!(stats.generated >= 4);
         assert!(store.get_summary("repo::.").unwrap().is_some());
         assert!(
@@ -1499,8 +1499,8 @@ mod tests {
         assert!(store.get_summary("doc::README.md").unwrap().is_some());
     }
 
-    #[test]
-    fn test_summarizer_batches_requests() {
+    #[tokio::test]
+    async fn test_summarizer_batches_requests() {
         let (store, temp_dir) = create_test_store();
         let repo_root = temp_dir.path().join("repo");
         std::fs::create_dir_all(repo_root.join("src")).unwrap();
@@ -1533,7 +1533,7 @@ mod tests {
         };
         let summarizer = Summarizer::new(&provider, &config);
 
-        let stats = summarizer.run(&store, &repo_root).unwrap();
+        let stats = summarizer.run(&store, &repo_root).await.unwrap();
         assert_eq!(stats.generated, 3);
         assert_eq!(provider.calls.load(Ordering::Relaxed), 2);
     }

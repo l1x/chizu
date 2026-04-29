@@ -4,8 +4,8 @@ use chizu_core::{Config, Store, Summary, TaskRoute};
 use chizu_index::IndexPipeline;
 use tempfile::TempDir;
 
-#[test]
-fn cleanup_renamed_component_removes_old_data() {
+#[tokio::test]
+async fn cleanup_renamed_component_removes_old_data() {
     let tmp = TempDir::new().unwrap();
     let root = tmp.path();
 
@@ -35,7 +35,9 @@ edition = "2021"
     let store = chizu_core::ChizuStore::open(&root.join(".chizu"), &config).unwrap();
 
     // First index
-    IndexPipeline::run(root, &store, &config, None).unwrap();
+    IndexPipeline::run(root, &store, &config, None)
+        .await
+        .unwrap();
 
     // Verify old component exists
     assert!(
@@ -88,7 +90,9 @@ edition = "2021"
     .unwrap();
 
     // Re-index
-    IndexPipeline::run(root, &store, &config, None).unwrap();
+    IndexPipeline::run(root, &store, &config, None)
+        .await
+        .unwrap();
 
     // Old component, entities, files, AND derived data should all be gone
     assert!(

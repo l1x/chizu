@@ -2,6 +2,7 @@ use std::path::Path;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Instant;
 
+use async_trait::async_trait;
 use chizu_core::{
     ChizuStore, Config, Entity, EntityKind, OpenAiProvider, Provider, ProviderError, Store,
 };
@@ -35,19 +36,20 @@ impl<P> CountingProvider<P> {
     }
 }
 
+#[async_trait]
 impl<P: Provider> Provider for CountingProvider<P> {
-    fn complete(
+    async fn complete(
         &self,
         prompt: &str,
         max_tokens: Option<u32>,
     ) -> std::result::Result<String, ProviderError> {
         self.completion_calls.fetch_add(1, Ordering::Relaxed);
-        self.inner.complete(prompt, max_tokens)
+        self.inner.complete(prompt, max_tokens).await
     }
 
-    fn embed(&self, texts: &[String]) -> std::result::Result<Vec<Vec<f32>>, ProviderError> {
+    async fn embed(&self, texts: &[String]) -> std::result::Result<Vec<Vec<f32>>, ProviderError> {
         self.embedding_calls.fetch_add(1, Ordering::Relaxed);
-        self.inner.embed(texts)
+        self.inner.embed(texts).await
     }
 }
 
@@ -59,16 +61,16 @@ struct LiveRun {
     embedding_calls: usize,
 }
 
-#[test]
+#[tokio::test]
 #[ignore = "requires a local Ollama server and can take many minutes"]
-fn live_ollama_repo_batch_sweep() {
+async fn live_ollama_repo_batch_sweep() {
     let repo_root = workspace_root();
     let mut runs = Vec::new();
-    let first = run_live(repo_root, 1);
+    let first = run_live(repo_root, 1).await;
     let expected_summaries = first.summaries_generated;
     runs.push(first);
     for batch_size in BATCH_SIZES.into_iter().skip(1) {
-        let run = run_live(repo_root, batch_size);
+        let run = run_live(repo_root, batch_size).await;
         assert_eq!(run.summaries_generated, expected_summaries);
         runs.push(run);
     }
@@ -97,16 +99,16 @@ fn live_ollama_repo_batch_sweep() {
     );
 }
 
-#[test]
+#[tokio::test]
 #[ignore = "requires a local Ollama server but completes much faster than the full repo sweep"]
-fn live_ollama_sampled_summary_batch_sweep() {
+async fn live_ollama_sampled_summary_batch_sweep() {
     let repo_root = workspace_root();
-    let sample_entities = prepare_symbol_sample(repo_root, SAMPLE_SIZE);
+    let sample_entities = prepare_symbol_sample(repo_root, SAMPLE_SIZE).await;
     assert!(!sample_entities.is_empty(), "expected sampled symbols");
 
     let mut runs = Vec::new();
     for batch_size in BATCH_SIZES {
-        runs.push(run_live_sample(repo_root, &sample_entities, batch_size));
+        runs.push(run_live_sample(repo_root, &sample_entities, batch_size).await);
     }
 
     for run in &runs {
@@ -134,7 +136,7 @@ fn live_ollama_sampled_summary_batch_sweep() {
     );
 }
 
-fn run_live(repo_root: &Path, batch_size: usize) -> LiveRun {
+async fn run_live(repo_root: &Path, batch_size: usize) -> LiveRun {
     let mut config = Config::default();
     config
         .index
@@ -171,6 +173,7 @@ fn run_live(repo_root: &Path, batch_size: usize) -> LiveRun {
             .clone()
             .expect("summary model should be configured"),
         config.embedding.model.clone().unwrap_or_default(),
+        config.embedding.dimensions,
     )
     .expect("provider should initialize");
     let provider = CountingProvider::new(provider);
@@ -178,13 +181,16 @@ fn run_live(repo_root: &Path, batch_size: usize) -> LiveRun {
     // Warm the local model once before timing the full index run.
     provider
         .complete("Reply with ok.", Some(8))
+        .await
         .expect("Ollama warmup should succeed");
 
     let temp_dir = TempDir::new().unwrap();
     let store = ChizuStore::open(temp_dir.path(), &config).unwrap();
 
     let start = Instant::now();
-    let stats = IndexPipeline::run(repo_root, &store, &config, Some(&provider)).unwrap();
+    let stats = IndexPipeline::run(repo_root, &store, &config, Some(&provider))
+        .await
+        .unwrap();
     let elapsed_ms = start.elapsed().as_secs_f64() * 1000.0;
 
     store.close().unwrap();
@@ -198,7 +204,7 @@ fn run_live(repo_root: &Path, batch_size: usize) -> LiveRun {
     }
 }
 
-fn run_live_sample(repo_root: &Path, sample_entities: &[Entity], batch_size: usize) -> LiveRun {
+async fn run_live_sample(repo_root: &Path, sample_entities: &[Entity], batch_size: usize) -> LiveRun {
     let mut config = Config::default();
     config.summary.provider = Some("ollama".to_string());
     config.summary.model = Some("llama3:8b".to_string());
@@ -211,6 +217,7 @@ fn run_live_sample(repo_root: &Path, sample_entities: &[Entity], batch_size: usi
     // Warm the local model once before timing the sampled summary run.
     provider
         .complete("Reply with ok.", Some(8))
+        .await
         .expect("Ollama warmup should succeed");
 
     let temp_dir = TempDir::new().unwrap();
@@ -227,6 +234,7 @@ fn run_live_sample(repo_root: &Path, sample_entities: &[Entity], batch_size: usi
     let start = Instant::now();
     let stats = Summarizer::new(&provider, &config.summary)
         .run(&store, repo_root)
+        .await
         .unwrap();
     let elapsed_ms = start.elapsed().as_secs_f64() * 1000.0;
 
@@ -241,7 +249,7 @@ fn run_live_sample(repo_root: &Path, sample_entities: &[Entity], batch_size: usi
     }
 }
 
-fn prepare_symbol_sample(repo_root: &Path, sample_size: usize) -> Vec<Entity> {
+async fn prepare_symbol_sample(repo_root: &Path, sample_size: usize) -> Vec<Entity> {
     let mut config = Config::default();
     config
         .index
@@ -260,7 +268,9 @@ fn prepare_symbol_sample(repo_root: &Path, sample_size: usize) -> Vec<Entity> {
 
     let temp_dir = TempDir::new().unwrap();
     let store = ChizuStore::open(temp_dir.path(), &config).unwrap();
-    IndexPipeline::run(repo_root, &store, &config, None).unwrap();
+    IndexPipeline::run(repo_root, &store, &config, None)
+        .await
+        .unwrap();
 
     let mut symbols = store.get_entities_by_kind(EntityKind::Symbol).unwrap();
     symbols.retain(|entity| entity.exported);
@@ -289,6 +299,7 @@ fn build_counting_provider(config: &Config) -> CountingProvider<OpenAiProvider> 
             .clone()
             .expect("summary model should be configured"),
         config.embedding.model.clone().unwrap_or_default(),
+        config.embedding.dimensions,
     )
     .expect("provider should initialize");
     CountingProvider::new(provider)

@@ -46,7 +46,7 @@ impl Candidate {
 }
 
 /// Retrieve candidates from all three sources: task routes, keyword SQL, and vectors.
-pub fn retrieve(
+pub async fn retrieve(
     store: &dyn Store,
     query: &str,
     category: TaskCategory,
@@ -139,6 +139,7 @@ pub fn retrieve(
 
             let query_embedding = provider
                 .embed(&[query.to_string()])
+                .await
                 .map_err(|e| QueryError::Provider(e.to_string()))?;
 
             if let Some(vector) = query_embedding.into_iter().next() {
@@ -178,6 +179,7 @@ pub fn retrieve(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use async_trait::async_trait;
     use chizu_core::{
         ChizuStore, Entity, EntityKind, Provider, ProviderError, Store, Summary, TaskRoute,
         entity_id_to_usearch_key,
@@ -187,15 +189,19 @@ mod tests {
         vector: Vec<f32>,
     }
 
+    #[async_trait]
     impl Provider for MockProvider {
-        fn complete(
+        async fn complete(
             &self,
             _prompt: &str,
             _max_tokens: Option<u32>,
         ) -> std::result::Result<String, ProviderError> {
             unimplemented!()
         }
-        fn embed(&self, _texts: &[String]) -> std::result::Result<Vec<Vec<f32>>, ProviderError> {
+        async fn embed(
+            &self,
+            _texts: &[String],
+        ) -> std::result::Result<Vec<Vec<f32>>, ProviderError> {
             Ok(vec![self.vector.clone()])
         }
     }
@@ -204,8 +210,8 @@ mod tests {
         ChizuStore::open_test(Some(dimensions))
     }
 
-    #[test]
-    fn test_retrieval_merges_sources() {
+    #[tokio::test]
+    async fn test_retrieval_merges_sources() {
         let (store, _temp) = create_test_store(4);
 
         let entity = Entity::new("symbol::src/lib.rs::foo", EntityKind::Symbol, "foo");
@@ -221,8 +227,9 @@ mod tests {
             .unwrap();
 
         let config = Config::default();
-        let candidates =
-            retrieve(&store, "auth debug", TaskCategory::Debug, &config, None).unwrap();
+        let candidates = retrieve(&store, "auth debug", TaskCategory::Debug, &config, None)
+            .await
+            .unwrap();
 
         assert_eq!(candidates.len(), 1);
         let c = &candidates[0];
@@ -232,8 +239,8 @@ mod tests {
         assert!(c.name_match_score >= 0.0);
     }
 
-    #[test]
-    fn test_retrieval_vector_search() {
+    #[tokio::test]
+    async fn test_retrieval_vector_search() {
         let (store, _temp) = create_test_store(4);
 
         let entity = Entity::new("symbol::src/lib.rs::bar", EntityKind::Symbol, "bar");
@@ -268,6 +275,7 @@ mod tests {
             &config,
             Some(&provider),
         )
+        .await
         .unwrap();
 
         assert_eq!(candidates.len(), 1);

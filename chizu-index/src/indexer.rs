@@ -57,7 +57,7 @@ fn insert_facts(
 pub struct IndexPipeline;
 
 impl IndexPipeline {
-    pub fn run(
+    pub async fn run(
         repo_root: &Path,
         store: &ChizuStore,
         config: &Config,
@@ -154,7 +154,9 @@ impl IndexPipeline {
             if config.summary.provider.is_some() {
                 info!("step: generating summaries");
                 let summary_stats =
-                    Summarizer::new(provider, &config.summary).run(store, repo_root)?;
+                    Summarizer::new(provider, &config.summary)
+                        .run(store, repo_root)
+                        .await?;
                 stats.summaries_generated = summary_stats.generated;
                 stats.summaries_skipped = summary_stats.skipped;
                 stats.summaries_failed = summary_stats.failed;
@@ -163,7 +165,8 @@ impl IndexPipeline {
             // Embedding generation
             if config.embedding.provider.is_some() {
                 info!("step: generating embeddings");
-                let embedding_stats = Embedder::new(provider, &config.embedding).run(store)?;
+                let embedding_stats =
+                    Embedder::new(provider, &config.embedding).run(store).await?;
                 stats.embeddings_generated = embedding_stats.generated;
                 stats.embeddings_skipped = embedding_stats.skipped;
                 stats.embeddings_failed = embedding_stats.failed;

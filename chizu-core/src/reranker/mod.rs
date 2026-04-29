@@ -1,5 +1,9 @@
+pub mod bedrock;
 pub mod http;
 
+use async_trait::async_trait;
+
+pub use bedrock::BedrockReranker;
 pub use http::HttpReranker;
 
 /// A document to be reranked.
@@ -44,8 +48,9 @@ impl From<reqwest::Error> for RerankerError {
 /// A reranker takes a query and a list of documents, and returns relevance
 /// scores that determine the final ordering. The scores from a reranker
 /// replace (not blend with) the first-stage scores.
+#[async_trait]
 pub trait Reranker: Send + Sync {
-    fn rerank(
+    async fn rerank(
         &self,
         query: &str,
         documents: &[RerankDocument],

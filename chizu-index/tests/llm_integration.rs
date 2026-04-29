@@ -1,3 +1,4 @@
+use async_trait::async_trait;
 use chizu_core::{ChizuStore, Config, Provider, ProviderError, Store};
 use chizu_index::IndexPipeline;
 use tempfile::TempDir;
@@ -7,8 +8,9 @@ struct MockProvider {
     vectors: Vec<Vec<f32>>,
 }
 
+#[async_trait]
 impl Provider for MockProvider {
-    fn complete(
+    async fn complete(
         &self,
         _prompt: &str,
         _max_tokens: Option<u32>,
@@ -16,7 +18,7 @@ impl Provider for MockProvider {
         Ok(self.summary_response.clone())
     }
 
-    fn embed(&self, texts: &[String]) -> std::result::Result<Vec<Vec<f32>>, ProviderError> {
+    async fn embed(&self, texts: &[String]) -> std::result::Result<Vec<Vec<f32>>, ProviderError> {
         let mut result = Vec::with_capacity(texts.len());
         for i in 0..texts.len() {
             result.push(self.vectors[i % self.vectors.len()].clone());
@@ -25,8 +27,8 @@ impl Provider for MockProvider {
     }
 }
 
-#[test]
-fn index_pipeline_with_llm_populates_summaries_and_embeddings() {
+#[tokio::test]
+async fn index_pipeline_with_llm_populates_summaries_and_embeddings() {
     let temp_dir = TempDir::new().unwrap();
     let root = temp_dir.path().join("repo");
     std::fs::create_dir(&root).unwrap();
@@ -60,7 +62,9 @@ edition = "2021"
     };
 
     let store = ChizuStore::open(&temp_dir.path().join(".chizu"), &config).unwrap();
-    let stats = IndexPipeline::run(root.as_path(), &store, &config, Some(&provider)).unwrap();
+    let stats = IndexPipeline::run(root.as_path(), &store, &config, Some(&provider))
+        .await
+        .unwrap();
 
     assert!(stats.entities_inserted > 0);
     assert!(stats.summaries_generated > 0);
@@ -105,8 +109,8 @@ edition = "2021"
     store.close().unwrap();
 }
 
-#[test]
-fn index_pipeline_skips_llm_when_not_configured() {
+#[tokio::test]
+async fn index_pipeline_skips_llm_when_not_configured() {
     let temp_dir = TempDir::new().unwrap();
     let root = temp_dir.path().join("repo");
     std::fs::create_dir(&root).unwrap();
@@ -123,7 +127,9 @@ version = "0.1.0"
 
     let config = Config::default();
     let store = ChizuStore::open(&temp_dir.path().join(".chizu"), &config).unwrap();
-    let stats = IndexPipeline::run(root.as_path(), &store, &config, None).unwrap();
+    let stats = IndexPipeline::run(root.as_path(), &store, &config, None)
+        .await
+        .unwrap();
 
     assert!(stats.entities_inserted > 0);
     assert_eq!(stats.summaries_generated, 0);

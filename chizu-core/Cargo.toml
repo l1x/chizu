@@ -12,6 +12,10 @@ keywords = ["code-search", "knowledge-graph", "agents", "sqlite", "usearch"]
 categories = ["development-tools", "data-structures"]
 
 [dependencies]
+async-trait = { workspace = true }
+aws-config = { workspace = true }
+aws-sdk-bedrockagentruntime = { workspace = true }
+aws-sdk-bedrockruntime = { workspace = true }
 reqwest = { workspace = true }
 rusqlite = { workspace = true }
 thiserror = { workspace = true }
@@ -19,6 +23,7 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 blake3 = { workspace = true }
 time = { workspace = true }
+tokio = { workspace = true }
 toml = { workspace = true }
 tracing = { workspace = true }
 usearch = { workspace = true }

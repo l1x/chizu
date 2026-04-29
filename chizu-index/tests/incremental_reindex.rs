@@ -4,8 +4,8 @@ use chizu_core::{Config, EntityKind, Store};
 use chizu_index::IndexPipeline;
 use tempfile::TempDir;
 
-#[test]
-fn incremental_reindex_skips_unchanged() {
+#[tokio::test]
+async fn incremental_reindex_skips_unchanged() {
     let tmp = TempDir::new().unwrap();
     let root = tmp.path();
 
@@ -27,7 +27,9 @@ edition = "2021"
     let store = chizu_core::ChizuStore::open(&root.join(".chizu"), &config).unwrap();
 
     // First index
-    let stats1 = IndexPipeline::run(root, &store, &config, None).unwrap();
+    let stats1 = IndexPipeline::run(root, &store, &config, None)
+        .await
+        .unwrap();
     assert!(stats1.entities_inserted > 0);
 
     let symbols_after_first: Vec<_> = store
@@ -47,7 +49,9 @@ edition = "2021"
     .unwrap();
 
     // Second index
-    let stats2 = IndexPipeline::run(root, &store, &config, None).unwrap();
+    let stats2 = IndexPipeline::run(root, &store, &config, None)
+        .await
+        .unwrap();
     assert!(stats2.entities_inserted > 0);
 
     let symbols_after_second: Vec<_> = store
@@ -74,8 +78,8 @@ edition = "2021"
 
 /// A file whose content is unchanged but whose component_id changes
 /// (because a new Cargo.toml appeared) must be re-indexed.
-#[test]
-fn incremental_reindex_detects_component_change() {
+#[tokio::test]
+async fn incremental_reindex_detects_component_change() {
     let tmp = TempDir::new().unwrap();
     let root = tmp.path();
 
@@ -95,7 +99,9 @@ edition = "2021"
     let config = Config::default();
     let store = chizu_core::ChizuStore::open(&root.join(".chizu"), &config).unwrap();
 
-    IndexPipeline::run(root, &store, &config, None).unwrap();
+    IndexPipeline::run(root, &store, &config, None)
+        .await
+        .unwrap();
 
     let file = store.get_file("src/lib.rs").unwrap().unwrap();
     assert_eq!(
@@ -125,7 +131,9 @@ edition = "2021"
     )
     .unwrap();
 
-    IndexPipeline::run(root, &store, &config, None).unwrap();
+    IndexPipeline::run(root, &store, &config, None)
+        .await
+        .unwrap();
 
     // File should now be owned by the new component
     let file = store.get_file("inner/src/lib.rs").unwrap().unwrap();

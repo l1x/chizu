@@ -8,8 +8,8 @@ fn comp_id(ecosystem: &str, path: &str) -> String {
     ComponentId::new(ecosystem, path).to_string()
 }
 
-#[test]
-fn index_rust_workspace_end_to_end() {
+#[tokio::test]
+async fn index_rust_workspace_end_to_end() {
     let tmp = TempDir::new().unwrap();
     let root = tmp.path();
 
@@ -71,7 +71,9 @@ foo = { path = "../foo" }
         .exclude_patterns
         .push("**/.chizu/**".to_string());
     let store = chizu_core::ChizuStore::open(&root.join(".chizu"), &config).unwrap();
-    let stats = IndexPipeline::run(root, &store, &config, None).unwrap();
+    let stats = IndexPipeline::run(root, &store, &config, None)
+        .await
+        .unwrap();
 
     assert_eq!(stats.components_discovered, 2);
     assert_eq!(stats.files_indexed, 5); // 3 Cargo.toml + 2 source files
