@@ -1148,7 +1148,8 @@ fn render_edges(
         }
 
         if !overview_mode && should_label_edge(src, dst, focus_edge_count) {
-            let (label_x, label_y) = cubic_midpoint(src.x, src.y, c1x, c1y, c2x, c2y, dst.x, dst.y);
+            let (label_x, label_y) =
+                cubic_midpoint((src.x, src.y), (c1x, c1y), (c2x, c2y), (dst.x, dst.y));
             let rel_str = edge.rel.to_string();
             let label = truncate_label(&rel_str, 18);
             let label_width = estimate_text_width(&label, 11.0) + 18.0;
@@ -1415,18 +1416,14 @@ fn edge_control_points(
 }
 
 fn cubic_midpoint(
-    x1: f64,
-    y1: f64,
-    c1x: f64,
-    c1y: f64,
-    c2x: f64,
-    c2y: f64,
-    x2: f64,
-    y2: f64,
+    start: (f64, f64),
+    control1: (f64, f64),
+    control2: (f64, f64),
+    end: (f64, f64),
 ) -> (f64, f64) {
     (
-        0.125 * x1 + 0.375 * c1x + 0.375 * c2x + 0.125 * x2,
-        0.125 * y1 + 0.375 * c1y + 0.375 * c2y + 0.125 * y2,
+        0.125 * start.0 + 0.375 * control1.0 + 0.375 * control2.0 + 0.125 * end.0,
+        0.125 * start.1 + 0.375 * control1.1 + 0.375 * control2.1 + 0.125 * end.1,
     )
 }
 

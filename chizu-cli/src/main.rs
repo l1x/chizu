@@ -366,7 +366,7 @@ fn cmd_entities(repo: &Path, args: EntitiesArgs) -> Result<(), Box<dyn std::erro
         store.get_all_entities()?
     };
 
-    println!("{:<40} {:<15} {:<30} {}", "ID", "Kind", "Name", "Path");
+    println!("{:<40} {:<15} {:<30} Path", "ID", "Kind", "Name");
     println!("{}", "-".repeat(100));
     for entity in entities {
         let path = entity.path.as_deref().unwrap_or("-");
@@ -394,7 +394,7 @@ fn cmd_routes(repo: &Path, args: RoutesArgs) -> Result<(), Box<dyn std::error::E
         return Err("Provide --task or --entity".into());
     };
 
-    println!("{:<20} {:<40} {}", "Task", "Entity ID", "Priority");
+    println!("{:<20} {:<40} Priority", "Task", "Entity ID");
     println!("{}", "-".repeat(80));
     for route in routes {
         println!(
@@ -418,20 +418,20 @@ fn cmd_edges(repo: &Path, args: EdgesArgs) -> Result<(), Box<dyn std::error::Err
     };
 
     // Cross-filter: if multiple criteria given, narrow the primary result.
-    if let Some(ref to) = args.to {
-        if args.from.is_some() {
-            edges.retain(|e| &e.dst_id == to);
-        }
+    if let Some(ref to) = args.to
+        && args.from.is_some()
+    {
+        edges.retain(|e| &e.dst_id == to);
     }
-    if let Some(rel) = args.rel {
-        if args.from.is_some() || args.to.is_some() {
-            edges.retain(|e| e.rel == rel);
-        }
+    if let Some(rel) = args.rel
+        && (args.from.is_some() || args.to.is_some())
+    {
+        edges.retain(|e| e.rel == rel);
     }
 
     println!(
-        "{:<40} {:<20} {:<40} {}",
-        "Source", "Rel", "Destination", "Provenance"
+        "{:<40} {:<20} {:<40} Provenance",
+        "Source", "Rel", "Destination"
     );
     println!("{}", "-".repeat(120));
     for edge in edges {
@@ -550,8 +550,7 @@ async fn cmd_index(repo: &Path, args: IndexArgs) -> Result<(), Box<dyn std::erro
 
     let (config, store) = open_store(repo)?;
     let provider = build_provider(&config).await?;
-    let stats = chizu_index::IndexPipeline::run(repo, &store, &config, provider.as_deref())
-        .await?;
+    let stats = chizu_index::IndexPipeline::run(repo, &store, &config, provider.as_deref()).await?;
 
     println!(
         "Indexed {} files ({} walked)",
@@ -590,23 +589,7 @@ async fn cmd_index(repo: &Path, args: IndexArgs) -> Result<(), Box<dyn std::erro
 async fn build_provider(
     config: &chizu_core::Config,
 ) -> Result<Option<Box<dyn chizu_core::Provider>>, Box<dyn std::error::Error>> {
-    let summary_provider = config.summary.provider.as_ref();
-    let embedding_provider = config.embedding.provider.as_ref();
-
-    let provider_name = match (summary_provider, embedding_provider) {
-        (Some(s), Some(e)) if s == e => Some(s.as_str()),
-        (Some(s), None) => Some(s.as_str()),
-        (None, Some(e)) => Some(e.as_str()),
-        (Some(s), Some(e)) => {
-            return Err(format!(
-                "Different providers for summary ({}) and embedding ({}) are not yet supported. Please use the same provider.",
-                s, e
-            ).into());
-        }
-        (None, None) => None,
-    };
-
-    let Some(name) = provider_name else {
+    let Some(name) = selected_provider_name(config)? else {
         return Ok(None);
     };
 
@@ -629,28 +612,44 @@ async fn build_provider(
     let embedding_dimensions = config.embedding.dimensions;
 
     let provider: Box<dyn chizu_core::Provider> = match provider_config.flavor {
-        chizu_core::ProviderFlavor::OpenAiCompatible => Box::new(
-            chizu_core::OpenAiProvider::new(
+        chizu_core::ProviderFlavor::OpenAiCompatible => {
+            let provider = chizu_core::OpenAiProvider::new(
                 provider_config,
                 completion_model,
                 embedding_model,
                 embedding_dimensions,
             )
-            .map_err(|e| format!("Failed to create provider: {e}"))?,
-        ),
-        chizu_core::ProviderFlavor::AwsBedrock => Box::new(
-            chizu_core::BedrockProvider::new(
+            .map_err(|e| format!("Failed to create provider: {e}"))?;
+            Box::new(provider)
+        }
+        chizu_core::ProviderFlavor::AwsBedrock => {
+            let provider = chizu_core::BedrockProvider::new(
                 provider_config,
                 completion_model,
                 embedding_model,
                 embedding_dimensions,
             )
             .await
-            .map_err(|e| format!("Failed to create Bedrock provider: {e}"))?,
-        ),
+            .map_err(|e| format!("Failed to create Bedrock provider: {e}"))?;
+            Box::new(provider)
+        }
     };
 
     Ok(Some(provider))
+}
+
+fn selected_provider_name(config: &chizu_core::Config) -> Result<Option<&str>, String> {
+    let summary_provider = config.summary.provider.as_deref();
+    let embedding_provider = config.embedding.provider.as_deref();
+
+    match (summary_provider, embedding_provider) {
+        (Some(summary), Some(embedding)) if summary != embedding => Err(format!(
+            "Different providers for summary ({summary}) and embedding ({embedding}) are not yet supported. Please use the same provider."
+        )),
+        (Some(summary), _) => Ok(Some(summary)),
+        (None, Some(embedding)) => Ok(Some(embedding)),
+        (None, None) => Ok(None),
+    }
 }
 
 async fn build_reranker(

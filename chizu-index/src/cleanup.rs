@@ -7,10 +7,10 @@ fn remove_entity_vector(
     sqlite: &SqliteStore,
     entity_id: &str,
 ) -> Result<(), StoreError> {
-    if let Some(meta) = sqlite.get_embedding_meta(entity_id)? {
-        if let Some(key) = meta.usearch_key {
-            store.remove_vector(key)?;
-        }
+    if let Some(meta) = sqlite.get_embedding_meta(entity_id)?
+        && let Some(key) = meta.usearch_key
+    {
+        store.remove_vector(key)?;
     }
     sqlite.delete_embedding_meta(entity_id)?;
     Ok(())

@@ -188,9 +188,10 @@ pub async fn evaluate(
             verbose: false,
         };
 
-        let plan =
-            SearchPipeline::run(store, &bq.text, category, &options, config, provider, reranker)
-                .await?;
+        let plan = SearchPipeline::run(
+            store, &bq.text, category, &options, config, provider, reranker,
+        )
+        .await?;
 
         let results: Vec<String> = plan.entries.iter().map(|e| e.entity_id.clone()).collect();
         let relevant: HashSet<String> = bq.relevant.iter().cloned().collect();

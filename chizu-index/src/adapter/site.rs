@@ -87,10 +87,10 @@ fn detect_site_roots(files: &[WalkedFile], repo_root: &Path) -> Vec<(String, Str
         if name == "config.toml" && parent.as_os_str().is_empty() {
             // Could be Hugo — check for Hugo-specific keys
             let abs_path = repo_root.join(&file.path);
-            if let Ok(content) = std::fs::read_to_string(&abs_path) {
-                if content.contains("baseURL") || content.contains("theme") {
-                    roots.push((parent_str, "hugo-site".to_string()));
-                }
+            if let Ok(content) = std::fs::read_to_string(&abs_path)
+                && (content.contains("baseURL") || content.contains("theme"))
+            {
+                roots.push((parent_str, "hugo-site".to_string()));
             }
         }
     }

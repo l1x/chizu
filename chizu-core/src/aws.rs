@@ -13,9 +13,7 @@ fn is_non_empty(value: Option<&str>) -> Option<&str> {
     })
 }
 
-pub(crate) async fn new_bedrock_runtime_client(
-    config: &ProviderConfig,
-) -> aws_sdk_bedrockruntime::Client {
+fn configured_loader(config: &ProviderConfig) -> aws_config::ConfigLoader {
     let mut loader = aws_config::defaults(BehaviorVersion::latest());
     if let Some(region) = is_non_empty(config.region.as_deref()) {
         loader = loader.region(Region::new(region.to_string()));
@@ -23,10 +21,19 @@ pub(crate) async fn new_bedrock_runtime_client(
     if let Some(profile) = is_non_empty(config.profile.as_deref()) {
         loader = loader.profile_name(profile);
     }
+    loader
+}
 
-    let shared_config = loader.load().await;
+fn endpoint_url(config: &ProviderConfig) -> Option<&str> {
+    is_non_empty(config.endpoint_url.as_deref())
+}
+
+pub(crate) async fn new_bedrock_runtime_client(
+    config: &ProviderConfig,
+) -> aws_sdk_bedrockruntime::Client {
+    let shared_config = configured_loader(config).load().await;
     let mut builder = aws_sdk_bedrockruntime::config::Builder::from(&shared_config);
-    if let Some(endpoint_url) = is_non_empty(config.endpoint_url.as_deref()) {
+    if let Some(endpoint_url) = endpoint_url(config) {
         builder = builder.endpoint_url(endpoint_url);
     }
     aws_sdk_bedrockruntime::Client::from_conf(builder.build())
@@ -35,17 +42,9 @@ pub(crate) async fn new_bedrock_runtime_client(
 pub(crate) async fn new_bedrock_agent_runtime_client(
     config: &ProviderConfig,
 ) -> aws_sdk_bedrockagentruntime::Client {
-    let mut loader = aws_config::defaults(BehaviorVersion::latest());
-    if let Some(region) = is_non_empty(config.region.as_deref()) {
-        loader = loader.region(Region::new(region.to_string()));
-    }
-    if let Some(profile) = is_non_empty(config.profile.as_deref()) {
-        loader = loader.profile_name(profile);
-    }
-
-    let shared_config = loader.load().await;
+    let shared_config = configured_loader(config).load().await;
     let mut builder = aws_sdk_bedrockagentruntime::config::Builder::from(&shared_config);
-    if let Some(endpoint_url) = is_non_empty(config.endpoint_url.as_deref()) {
+    if let Some(endpoint_url) = endpoint_url(config) {
         builder = builder.endpoint_url(endpoint_url);
     }
     aws_sdk_bedrockagentruntime::Client::from_conf(builder.build())

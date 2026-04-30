@@ -60,10 +60,7 @@ impl Provider for DelayedSummaryProvider {
         )
     }
 
-    async fn embed(
-        &self,
-        _texts: &[String],
-    ) -> std::result::Result<Vec<Vec<f32>>, ProviderError> {
+    async fn embed(&self, _texts: &[String]) -> std::result::Result<Vec<Vec<f32>>, ProviderError> {
         Ok(Vec::new())
     }
 }

@@ -58,100 +58,130 @@ impl Config {
     /// Validate the configuration.
     pub fn validate(&self) -> Result<(), ConfigError> {
         self.search.validate_weights()?;
+        self.validate_provider_reference(self.summary.provider.as_ref())?;
+        self.validate_provider_reference(self.embedding.provider.as_ref())?;
+        self.validate_shared_provider_constraint()?;
+        self.validate_summary_config()?;
+        self.validate_embedding_config()?;
+        self.validate_reranker_config()?;
+        self.validate_provider_configs()?;
+        self.validate_visualize_config()?;
+        Ok(())
+    }
 
-        if let Some(ref provider) = self.summary.provider
+    fn validate_provider_reference(&self, provider: Option<&String>) -> Result<(), ConfigError> {
+        if let Some(provider) = provider
             && !self.providers.contains_key(provider)
         {
             return Err(ConfigError::MissingProvider(provider.clone()));
         }
-        if let Some(ref provider) = self.embedding.provider
-            && !self.providers.contains_key(provider)
+
+        Ok(())
+    }
+
+    fn validate_shared_provider_constraint(&self) -> Result<(), ConfigError> {
+        if let (Some(summary), Some(embedding)) = (&self.summary.provider, &self.embedding.provider)
+            && summary != embedding
         {
-            return Err(ConfigError::MissingProvider(provider.clone()));
+            return Err(ConfigError::InvalidParam(format!(
+                "summary provider '{}' and embedding provider '{}' must be the same",
+                summary, embedding
+            )));
         }
 
-        // Summary/embedding must use the same provider (single-provider constraint).
-        if let (Some(s), Some(e)) = (&self.summary.provider, &self.embedding.provider) {
-            if s != e {
+        Ok(())
+    }
+
+    fn validate_summary_config(&self) -> Result<(), ConfigError> {
+        if let Some(t) = self.summary.temperature
+            && !(0.0..=2.0).contains(&t)
+        {
+            return Err(ConfigError::InvalidParam(format!(
+                "summary.temperature must be 0.0..2.0, got {t}"
+            )));
+        }
+
+        if let Some(b) = self.summary.batch_size
+            && b == 0
+        {
+            return Err(ConfigError::InvalidParam(
+                "summary.batch_size must be > 0".into(),
+            ));
+        }
+
+        Ok(())
+    }
+
+    fn validate_embedding_config(&self) -> Result<(), ConfigError> {
+        if let Some(d) = self.embedding.dimensions
+            && d == 0
+        {
+            return Err(ConfigError::InvalidParam(
+                "embedding.dimensions must be > 0".into(),
+            ));
+        }
+
+        if let Some(b) = self.embedding.batch_size
+            && b == 0
+        {
+            return Err(ConfigError::InvalidParam(
+                "embedding.batch_size must be > 0".into(),
+            ));
+        }
+
+        Ok(())
+    }
+
+    fn validate_reranker_config(&self) -> Result<(), ConfigError> {
+        if !self.reranker.enabled {
+            return Ok(());
+        }
+
+        if self.reranker.batch_size == 0 {
+            return Err(ConfigError::InvalidParam(
+                "reranker.batch_size must be > 0".into(),
+            ));
+        }
+        if self.reranker.top_k == 0 {
+            return Err(ConfigError::InvalidParam(
+                "reranker.top_k must be > 0".into(),
+            ));
+        }
+
+        if self.reranker.flavor == RerankerFlavor::AwsBedrock {
+            let provider_name = self.reranker.provider.as_ref().ok_or_else(|| {
+                ConfigError::InvalidParam(
+                    "reranker.provider is required when reranker.flavor = \"aws_bedrock\"".into(),
+                )
+            })?;
+            let provider = self
+                .providers
+                .get(provider_name)
+                .ok_or_else(|| ConfigError::MissingProvider(provider_name.clone()))?;
+            if provider.flavor != ProviderFlavor::AwsBedrock {
                 return Err(ConfigError::InvalidParam(format!(
-                    "summary provider '{}' and embedding provider '{}' must be the same",
-                    s, e
+                    "reranker.provider '{}' must use flavor \"aws_bedrock\"",
+                    provider_name
                 )));
             }
-        }
-
-        if let Some(t) = self.summary.temperature {
-            if !(0.0..=2.0).contains(&t) {
-                return Err(ConfigError::InvalidParam(format!(
-                    "summary.temperature must be 0.0..2.0, got {t}"
-                )));
-            }
-        }
-
-        if let Some(b) = self.summary.batch_size {
-            if b == 0 {
+            if self
+                .reranker
+                .model
+                .as_deref()
+                .unwrap_or_default()
+                .trim()
+                .is_empty()
+            {
                 return Err(ConfigError::InvalidParam(
-                    "summary.batch_size must be > 0".into(),
+                    "reranker.model is required when reranker.flavor = \"aws_bedrock\"".into(),
                 ));
             }
         }
 
-        if let Some(d) = self.embedding.dimensions {
-            if d == 0 {
-                return Err(ConfigError::InvalidParam(
-                    "embedding.dimensions must be > 0".into(),
-                ));
-            }
-        }
+        Ok(())
+    }
 
-        if let Some(b) = self.embedding.batch_size {
-            if b == 0 {
-                return Err(ConfigError::InvalidParam(
-                    "embedding.batch_size must be > 0".into(),
-                ));
-            }
-        }
-
-        if self.reranker.enabled {
-            if self.reranker.batch_size == 0 {
-                return Err(ConfigError::InvalidParam(
-                    "reranker.batch_size must be > 0".into(),
-                ));
-            }
-            if self.reranker.top_k == 0 {
-                return Err(ConfigError::InvalidParam(
-                    "reranker.top_k must be > 0".into(),
-                ));
-            }
-            match self.reranker.flavor {
-                RerankerFlavor::Http => {}
-                RerankerFlavor::AwsBedrock => {
-                    let provider_name = self.reranker.provider.as_ref().ok_or_else(|| {
-                        ConfigError::InvalidParam(
-                            "reranker.provider is required when reranker.flavor = \"aws_bedrock\""
-                                .into(),
-                        )
-                    })?;
-                    let provider = self
-                        .providers
-                        .get(provider_name)
-                        .ok_or_else(|| ConfigError::MissingProvider(provider_name.clone()))?;
-                    if provider.flavor != ProviderFlavor::AwsBedrock {
-                        return Err(ConfigError::InvalidParam(format!(
-                            "reranker.provider '{}' must use flavor \"aws_bedrock\"",
-                            provider_name
-                        )));
-                    }
-                    if self.reranker.model.as_deref().unwrap_or_default().trim().is_empty() {
-                        return Err(ConfigError::InvalidParam(
-                            "reranker.model is required when reranker.flavor = \"aws_bedrock\""
-                                .into(),
-                        ));
-                    }
-                }
-            }
-        }
-
+    fn validate_provider_configs(&self) -> Result<(), ConfigError> {
         for (name, provider) in &self.providers {
             match provider.flavor {
                 ProviderFlavor::OpenAiCompatible => {
@@ -173,6 +203,10 @@ impl Config {
             }
         }
 
+        Ok(())
+    }
+
+    fn validate_visualize_config(&self) -> Result<(), ConfigError> {
         if let Some(template) = &self.visualize.editor_link
             && template.trim().is_empty()
         {
@@ -736,7 +770,10 @@ dimensions = 256
         let config = Config::from_toml(toml).unwrap();
         let bedrock = config.providers.get("bedrock").unwrap();
         assert_eq!(bedrock.flavor, ProviderFlavor::AwsBedrock);
-        assert_eq!(bedrock.api_version.as_deref(), Some("bedrock-runtime-2023-09-30"));
+        assert_eq!(
+            bedrock.api_version.as_deref(),
+            Some("bedrock-runtime-2023-09-30")
+        );
         assert_eq!(bedrock.region.as_deref(), Some("eu-central-1"));
         assert_eq!(bedrock.profile.as_deref(), Some("default"));
     }
@@ -767,9 +804,6 @@ provider = "ollama"
 model = "arn:aws:bedrock:eu-central-1::foundation-model/amazon.rerank-v1:0"
 "#;
         let err = Config::from_toml(toml).unwrap_err();
-        assert!(
-            err.to_string()
-                .contains("must use flavor \"aws_bedrock\"")
-        );
+        assert!(err.to_string().contains("must use flavor \"aws_bedrock\""));
     }
 }

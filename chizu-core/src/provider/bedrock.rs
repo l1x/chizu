@@ -48,9 +48,8 @@ impl BedrockProvider {
     fn collect_text_from_message(message: &Message) -> Result<String, ProviderError> {
         let mut output = String::new();
         for block in message.content() {
-            match block {
-                ContentBlock::Text(text) => output.push_str(text),
-                _ => {}
+            if let ContentBlock::Text(text) = block {
+                output.push_str(text);
             }
         }
 
@@ -89,8 +88,7 @@ impl BedrockProvider {
                     .await
                     .map_err(Self::map_sdk_error)?;
 
-                let json: serde_json::Value =
-                    serde_json::from_slice(response.body().as_ref())?;
+                let json: serde_json::Value = serde_json::from_slice(response.body().as_ref())?;
                 let embedding = json
                     .get("embedding")
                     .or_else(|| json.get("embeddingsByType").and_then(|v| v.get("float")))
@@ -100,9 +98,10 @@ impl BedrockProvider {
                 embedding
                     .iter()
                     .map(|value| {
-                        value.as_f64().map(|v| v as f32).ok_or_else(|| {
-                            ProviderError::Other("invalid embedding value".into())
-                        })
+                        value
+                            .as_f64()
+                            .map(|v| v as f32)
+                            .ok_or_else(|| ProviderError::Other("invalid embedding value".into()))
                     })
                     .collect()
             },

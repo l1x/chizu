@@ -125,7 +125,7 @@ impl Reranker for HttpReranker {
     }
 }
 
-    #[cfg(test)]
+#[cfg(test)]
 mod tests {
     use super::*;
 

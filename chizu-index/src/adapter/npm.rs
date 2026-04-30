@@ -46,7 +46,7 @@ pub fn index_npm_workspace(repo_root: &Path, registry: &ComponentRegistry) -> Re
                 .with_exported(true),
         );
 
-        let deps = merge_deps(&manifest);
+        let deps = merge_deps(manifest);
         for dep_name in deps {
             if let Some(target) = registry.resolve_name(dep_name) {
                 facts.edges.push(Edge::new(

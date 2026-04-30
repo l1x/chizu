@@ -117,14 +117,14 @@ fn resolve_local_dependency(
     dep_name: &str,
     dep: &Dependency,
 ) -> Option<ComponentId> {
-    if let Some(detail) = dep.detail() {
-        if let Some(path_str) = &detail.path {
-            let resolved = normalize_path(&repo_root.join(source_path).join(path_str));
-            // strip_prefix fails if the normalized path escapes repo_root
-            // (e.g., via ../../). In that case we treat it as unresolvable.
-            let rel = resolved.strip_prefix(repo_root).ok()?;
-            return registry.component_for_path(rel).cloned();
-        }
+    if let Some(detail) = dep.detail()
+        && let Some(path_str) = &detail.path
+    {
+        let resolved = normalize_path(&repo_root.join(source_path).join(path_str));
+        // strip_prefix fails if the normalized path escapes repo_root
+        // (e.g., via ../../). In that case we treat it as unresolvable.
+        let rel = resolved.strip_prefix(repo_root).ok()?;
+        return registry.component_for_path(rel).cloned();
     }
     registry.resolve_name(dep_name).cloned()
 }

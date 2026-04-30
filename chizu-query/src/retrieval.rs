@@ -132,29 +132,29 @@ pub async fn retrieve(
     }
 
     // 3. Vector search
-    if let Some(provider) = provider {
-        if let Some(ref _model) = config.embedding.model {
-            let dimensions = config.embedding.dimensions.unwrap_or(768) as usize;
-            let k = config.search.default_limit.max(15) * 3;
+    if let Some(provider) = provider
+        && let Some(ref _model) = config.embedding.model
+    {
+        let dimensions = config.embedding.dimensions.unwrap_or(768) as usize;
+        let k = config.search.default_limit.max(15) * 3;
 
-            let query_embedding = provider
-                .embed(&[query.to_string()])
-                .await
-                .map_err(|e| QueryError::Provider(e.to_string()))?;
+        let query_embedding = provider
+            .embed(&[query.to_string()])
+            .await
+            .map_err(|e| QueryError::Provider(e.to_string()))?;
 
-            if let Some(vector) = query_embedding.into_iter().next() {
-                if vector.len() == dimensions {
-                    let results = store.search_vectors(&vector, k)?;
-                    for (key, distance) in results {
-                        // Map usearch key back to entity_id via embeddings table
-                        if let Some(meta) = store.get_embedding_meta_by_usearch_key(key)? {
-                            let vector_score = 1.0 / (1.0 + distance as f64);
-                            let entry = candidates
-                                .entry(meta.entity_id.clone())
-                                .or_insert_with(|| Candidate::placeholder(&meta.entity_id));
-                            entry.vector_score = vector_score.max(entry.vector_score);
-                        }
-                    }
+        if let Some(vector) = query_embedding.into_iter().next()
+            && vector.len() == dimensions
+        {
+            let results = store.search_vectors(&vector, k)?;
+            for (key, distance) in results {
+                // Map usearch key back to entity_id via embeddings table
+                if let Some(meta) = store.get_embedding_meta_by_usearch_key(key)? {
+                    let vector_score = 1.0 / (1.0 + distance as f64);
+                    let entry = candidates
+                        .entry(meta.entity_id.clone())
+                        .or_insert_with(|| Candidate::placeholder(&meta.entity_id));
+                    entry.vector_score = vector_score.max(entry.vector_score);
                 }
             }
         }

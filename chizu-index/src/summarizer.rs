@@ -166,12 +166,12 @@ impl<'a> Summarizer<'a> {
                     }
                 };
 
-            if let Some(existing) = store.get_summary(&entity.id)? {
-                if existing.source_hash.as_ref() == Some(&prepared.source_hash) {
-                    debug!("Summary for {} is up to date", entity.id);
-                    stats.skipped += 1;
-                    continue;
-                }
+            if let Some(existing) = store.get_summary(&entity.id)?
+                && existing.source_hash.as_ref() == Some(&prepared.source_hash)
+            {
+                debug!("Summary for {} is up to date", entity.id);
+                stats.skipped += 1;
+                continue;
             }
 
             work_items.push(SummaryWork {

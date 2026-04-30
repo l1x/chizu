@@ -58,9 +58,9 @@ fn registry_resolve_name_returns_only_registered_names() {
                 registered_names.push(name.clone());
             }
 
-            if let Some(_id) = registry.resolve_name(&query_name) {
+            if let Some(_id) = registry.resolve_name(query_name) {
                 assert!(
-                    registered_names.contains(&query_name),
+                    registered_names.contains(query_name),
                     "resolve_name returned a result for unregistered name {:?}",
                     query_name
                 );
@@ -79,7 +79,7 @@ fn registry_longest_prefix_wins() {
         let child_id = ComponentId::new("cargo", "crates/child");
 
         // Any file under crates/child/ must resolve to the child component
-        let deep_path = PathBuf::from("crates/child").join(&filename);
+        let deep_path = PathBuf::from("crates/child").join(filename);
         if let Some(found) = registry.component_for_path(&deep_path) {
             assert_eq!(
                 *found, child_id,

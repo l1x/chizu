@@ -57,11 +57,11 @@ impl<'a> Embedder<'a> {
 
         for summary in summaries {
             // Skip if an embedding for this model already exists.
-            if let Some(existing) = meta_map.get(&summary.entity_id) {
-                if existing.model == *model {
-                    stats.skipped += 1;
-                    continue;
-                }
+            if let Some(existing) = meta_map.get(&summary.entity_id)
+                && existing.model == *model
+            {
+                stats.skipped += 1;
+                continue;
             }
 
             let entity = match entity_map.get(&summary.entity_id) {
@@ -105,7 +105,10 @@ impl<'a> Embedder<'a> {
         if let Err(e) = self.process_batch(store, model, dimensions, batch).await {
             error!("Batch embedding failed: {e}; falling back to singles");
             for (id, text) in batch {
-                if let Err(e) = self.process_single(store, model, dimensions, id, text).await {
+                if let Err(e) = self
+                    .process_single(store, model, dimensions, id, text)
+                    .await
+                {
                     error!("Single embedding failed for {id}: {e}");
                     stats.failed += 1;
                 } else {
@@ -218,10 +221,10 @@ fn build_embedding_text(entity: &chizu_core::Entity, summary: &chizu_core::Summa
     if !summary.short_summary.is_empty() {
         parts.push(summary.short_summary.clone());
     }
-    if let Some(ref keywords) = summary.keywords {
-        if !keywords.is_empty() {
-            parts.push(format!("Keywords: {}", keywords.join(", ")));
-        }
+    if let Some(ref keywords) = summary.keywords
+        && !keywords.is_empty()
+    {
+        parts.push(format!("Keywords: {}", keywords.join(", ")));
     }
     parts.join("\n")
 }

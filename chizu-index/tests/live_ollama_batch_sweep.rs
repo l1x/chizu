@@ -204,7 +204,11 @@ async fn run_live(repo_root: &Path, batch_size: usize) -> LiveRun {
     }
 }
 
-async fn run_live_sample(repo_root: &Path, sample_entities: &[Entity], batch_size: usize) -> LiveRun {
+async fn run_live_sample(
+    repo_root: &Path,
+    sample_entities: &[Entity],
+    batch_size: usize,
+) -> LiveRun {
     let mut config = Config::default();
     config.summary.provider = Some("ollama".to_string());
     config.summary.model = Some("llama3:8b".to_string());
